@@ -4,6 +4,22 @@ Comprehensive guides for AI-powered coding assistants, multi-agent orchestration
 
 ---
 
+## ⚠️ AI-Generated Content Disclaimer
+
+> **Important Notice**: This repository contains AI-generated documentation and guides. While we strive for accuracy and completeness, **generated content may contain errors, inaccuracies, or outdated information**.
+>
+> **Status**: 🔄 Active development
+>
+> Please use this guidebook responsibly:
+> - Verify information against official documentation
+> - Test code examples in safe environments
+> - Cross-reference with authoritative sources
+> - Report issues or inaccuracies via GitHub Issues
+>
+> We appreciate your understanding as we develop comprehensive resources for AI-assisted development.
+
+---
+
 ## Overview
 
 This guidebook provides in-depth documentation, best practices, templates, and examples for working with modern AI coding assistants. Whether you're using Claude Code, GitHub Copilot, Gemini CLI, or building multi-agent systems, this repository is your complete reference.
