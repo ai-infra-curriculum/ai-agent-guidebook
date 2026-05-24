@@ -367,6 +367,7 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 
 - **[AI Infrastructure Content Generator](https://github.com/ai-infra-curriculum/ai-infra-content-generator)** - Curriculum generation framework
 - **[MCP Servers Repository](https://github.com/modelcontextprotocol/servers)** - Official MCP servers
+- **[Veriswarm](https://veriswarm.ai)** - Trust infrastructure for AI agents (real-time trust scoring, PII/prompt-injection guardrails, portable agent credentials, hash-chained audit ledger). Cross-framework — works with LangChain, CrewAI, AutoGen, Agentforce, Microsoft Agent 365, AWS Bedrock. See [Agent Governance & Trust](best-practices/agent-governance.md) for where this fits.
 
 ---
 
@@ -390,8 +391,8 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 
-**Last Updated**: 2025-11-04
+**Last Updated**: 2026-05-24
 
-**Status**: 🚀 Active Development
+**Status**: 🚀 Active Development — covering Claude 4.x family (Opus 4.7, Sonnet 4.6, Haiku 4.5), GitHub Copilot Workspace + CLI, Gemini 2.x CLI, and the current MCP spec.

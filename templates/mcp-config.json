@@ -1,0 +1,333 @@
+{
+  "_about": [
+    "MCP server configuration template — drop-in starting point for ~/.config/claude-code/mcp.json",
+    "(or whichever path your runtime expects).",
+    "",
+    "Format note: JSON does not allow comments. Per-server prose is stored in",
+    "  _comments arrays, and Claude Code / your runtime will ignore unknown",
+    "  underscore-prefixed keys. If you prefer real comments, rename the file",
+    "  to .jsonc and ship both — the stripped .json for runtimes that demand it,",
+    "  the .jsonc for humans reading the source of truth.",
+    "",
+    "Secrets: use ${ENV_VAR} syntax. Claude Code expands these at launch from",
+    "  the launching shell's env. Never check in real secrets.",
+    "",
+    "Pattern: comment out servers you don't need rather than deleting them — the",
+    "  next person to onboard will thank you.",
+    "",
+    "Last updated: 2026-05-24"
+  ],
+
+  "mcpServers": {
+
+    "github": {
+      "_comments": [
+        "Repo browsing, PR creation, issue management, releases.",
+        "Token scopes needed: repo, read:org, workflow (if you create Actions runs)."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "GITHUB_DEFAULT_ORG": "${GITHUB_ORG:-}"
+      }
+    },
+
+    "filesystem": {
+      "_comments": [
+        "Read/write within an allow-listed root. Always scope to the narrowest",
+        "directory possible; the agent CAN write here.",
+        "Multiple roots: pass each as a positional arg after the package name."
+      ],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${PROJECT_ROOT:-/workspace}"
+      ]
+    },
+
+    "postgres": {
+      "_comments": [
+        "Read-only by default (use a read replica connection string in prod).",
+        "If you need writes, use a separate server entry with the writable URL",
+        "and have your AGENTS.md scope which agents may call it."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${POSTGRES_URL}"],
+      "env": {
+        "POSTGRES_URL": "${POSTGRES_URL}"
+      }
+    },
+
+    "sqlite": {
+      "_comments": [
+        "Local-only DB exploration. Useful for analytics on small extracts",
+        "and as a scratch store for agent state during a session."
+      ],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "${SQLITE_DB_PATH:-./.claude/scratch.db}"
+      ]
+    },
+
+    "kubernetes": {
+      "_comments": [
+        "kubectl wrapper. Read-only verbs only by default; if you allow apply/delete,",
+        "scope by RBAC on the service account that owns the KUBECONFIG, NOT by trusting",
+        "the agent. Cluster admin via agent = bad day waiting to happen."
+      ],
+      "command": "npx",
+      "args": ["-y", "@containers/kubernetes-mcp-server"],
+      "env": {
+        "KUBECONFIG": "${KUBECONFIG:-${HOME}/.kube/config}",
+        "K8S_DEFAULT_NAMESPACE": "${K8S_DEFAULT_NAMESPACE:-default}",
+        "K8S_READ_ONLY": "${K8S_READ_ONLY:-true}"
+      }
+    },
+
+    "docker": {
+      "_comments": [
+        "Local container ops: build, run, exec, logs. Mounts $DOCKER_HOST socket.",
+        "On macOS with Docker Desktop, $DOCKER_HOST is usually unset and the",
+        "socket lives at /var/run/docker.sock — leave the env var blank and it",
+        "will fall back to that."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-docker"],
+      "env": {
+        "DOCKER_HOST": "${DOCKER_HOST:-}"
+      }
+    },
+
+    "terraform": {
+      "_comments": [
+        "Terraform plan/validate/state-read. Apply is intentionally gated behind",
+        "an env flag — leave TF_AGENT_ALLOW_APPLY unset for read-only mode."
+      ],
+      "command": "npx",
+      "args": ["-y", "@hashicorp/terraform-mcp-server"],
+      "env": {
+        "TF_VAR_environment": "${TF_VAR_environment:-dev}",
+        "TF_AGENT_ALLOW_APPLY": "${TF_AGENT_ALLOW_APPLY:-false}",
+        "TF_LOG": "${TF_LOG:-WARN}"
+      }
+    },
+
+    "helm": {
+      "_comments": [
+        "helm lint, template, list, status, history. Upgrades gated by",
+        "HELM_AGENT_ALLOW_UPGRADE — same posture as terraform.",
+        "Operates against the same KUBECONFIG as the kubernetes entry."
+      ],
+      "command": "npx",
+      "args": ["-y", "@cncf/helm-mcp-server"],
+      "env": {
+        "KUBECONFIG": "${KUBECONFIG:-${HOME}/.kube/config}",
+        "HELM_AGENT_ALLOW_UPGRADE": "${HELM_AGENT_ALLOW_UPGRADE:-false}"
+      }
+    },
+
+    "prometheus": {
+      "_comments": [
+        "Range and instant queries against a Prometheus-compatible endpoint.",
+        "Read-only by definition (Prometheus has no write API)."
+      ],
+      "command": "npx",
+      "args": ["-y", "@prometheus-mcp/server"],
+      "env": {
+        "PROMETHEUS_URL": "${PROMETHEUS_URL}",
+        "PROMETHEUS_BEARER_TOKEN": "${PROMETHEUS_BEARER_TOKEN:-}"
+      }
+    },
+
+    "puppeteer": {
+      "_comments": [
+        "Headless browser. Useful for visual regression, screenshots, and scraping",
+        "JS-rendered pages. Sandbox carefully — the agent can navigate anywhere."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "env": {
+        "PUPPETEER_HEADLESS": "${PUPPETEER_HEADLESS:-true}"
+      }
+    },
+
+    "slack": {
+      "_comments": [
+        "Post messages, read channel history, manage threads.",
+        "Bot token needs: chat:write, channels:history, channels:read.",
+        "For posts only (no reading) you can drop the history scopes."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
+        "SLACK_TEAM_ID": "${SLACK_TEAM_ID:-}",
+        "SLACK_DEFAULT_CHANNEL": "${SLACK_DEFAULT_CHANNEL:-#general}"
+      }
+    },
+
+    "notion": {
+      "_comments": [
+        "Read and write Notion pages, databases, and comments.",
+        "Integration token needs to be invited to each database/page individually",
+        "(Notion's permission model is per-resource, not workspace-wide)."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-notion"],
+      "env": {
+        "NOTION_TOKEN": "${NOTION_TOKEN}"
+      }
+    },
+
+    "linear": {
+      "_comments": [
+        "Issue tracking. Create/update issues, comment, assign, transition state.",
+        "Personal API key works for personal use; OAuth for shared agent installs."
+      ],
+      "command": "npx",
+      "args": ["-y", "@linear/mcp-server"],
+      "env": {
+        "LINEAR_API_KEY": "${LINEAR_API_KEY}",
+        "LINEAR_DEFAULT_TEAM": "${LINEAR_DEFAULT_TEAM:-}"
+      }
+    },
+
+    "atlassian": {
+      "_comments": [
+        "Jira + Confluence. Search, read, comment, transition.",
+        "Cloud only out of the box; on-prem requires the bridge variant."
+      ],
+      "command": "npx",
+      "args": ["-y", "@atlassian/mcp-server"],
+      "env": {
+        "ATLASSIAN_DOMAIN": "${ATLASSIAN_DOMAIN}",
+        "ATLASSIAN_EMAIL": "${ATLASSIAN_EMAIL}",
+        "ATLASSIAN_API_TOKEN": "${ATLASSIAN_API_TOKEN}"
+      }
+    },
+
+    "context7": {
+      "_comments": [
+        "Library documentation lookup. Searches a corpus of vendor docs",
+        "indexed by package + version. Massively reduces hallucinated API usage.",
+        "Free tier is generous; no key needed for low-volume use."
+      ],
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY:-}"
+      }
+    },
+
+    "sentry": {
+      "_comments": [
+        "Read issues, events, releases, and project stats from Sentry.",
+        "Auth token scopes: project:read, event:read, org:read.",
+        "Write actions (resolve issue, etc.) require additional scopes."
+      ],
+      "command": "npx",
+      "args": ["-y", "@sentry/mcp-server"],
+      "env": {
+        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}",
+        "SENTRY_ORG": "${SENTRY_ORG}",
+        "SENTRY_DEFAULT_PROJECT": "${SENTRY_DEFAULT_PROJECT:-}"
+      }
+    },
+
+    "stripe": {
+      "_comments": [
+        "Read customers, charges, subscriptions, balance, webhooks.",
+        "USE A RESTRICTED KEY scoped to read-only resources for agent use.",
+        "The agent should never see a full secret key."
+      ],
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp-server"],
+      "env": {
+        "STRIPE_API_KEY": "${STRIPE_RESTRICTED_KEY}",
+        "STRIPE_ACCOUNT": "${STRIPE_ACCOUNT:-}"
+      }
+    },
+
+    "brave-search": {
+      "_comments": [
+        "Web search via the Brave Search API. Useful for current-events lookup",
+        "and library/vendor doc discovery when context7 misses.",
+        "Rate limits apply per the Brave plan you're on."
+      ],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      }
+    },
+
+    "veriswarm": {
+      "_comments": [
+        "Veriswarm — agent governance: trust scoring, PII guard, audit ledger. Free tier available.",
+        "65+ tools spanning real-time trust scoring, tool-call interception,",
+        "portable JWT credentials, and a hash-chained audit ledger.",
+        "Cross-framework. One option among several for governance layers; see the",
+        "examples/code-review and examples/devops-automation AGENTS.md for the",
+        "hook points where this typically fits."
+      ],
+      "command": "npx",
+      "args": ["-y", "@veriswarm/mcp-server"],
+      "env": {
+        "VERISWARM_API_KEY": "${VERISWARM_API_KEY}",
+        "VERISWARM_ENV": "${VERISWARM_ENV:-prod}",
+        "VERISWARM_DEFAULT_POLICY": "${VERISWARM_DEFAULT_POLICY:-standard}"
+      }
+    },
+
+    "memory": {
+      "_comments": [
+        "Persistent knowledge graph across sessions. Good for long-running",
+        "projects with carry-over context (curriculum generation, big refactors).",
+        "Memory path should be on durable storage, not /tmp."
+      ],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory",
+        "--memory-path",
+        "${MEMORY_PATH:-./.claude/memory}"
+      ]
+    },
+
+    "dbt": {
+      "_comments": [
+        "dbt parse/compile/list/build/test. Honors DBT_PROFILES_DIR.",
+        "Pair with the postgres or snowflake entry for the warehouse layer."
+      ],
+      "command": "npx",
+      "args": ["-y", "@dbt-labs/dbt-mcp-server"],
+      "env": {
+        "DBT_PROFILES_DIR": "${DBT_PROFILES_DIR:-${HOME}/.dbt}",
+        "DBT_PROJECT_DIR": "${DBT_PROJECT_DIR:-${PWD}}",
+        "DBT_TARGET": "${DBT_TARGET:-dev}"
+      }
+    },
+
+    "snowflake": {
+      "_comments": [
+        "Snowflake query execution. Prefer key-pair auth over passwords.",
+        "Scope the role to read-only for agent use; create a separate writable",
+        "entry if you need INSERT/UPDATE."
+      ],
+      "command": "npx",
+      "args": ["-y", "@snowflake/mcp-server"],
+      "env": {
+        "SNOWFLAKE_ACCOUNT": "${SNOWFLAKE_ACCOUNT}",
+        "SNOWFLAKE_USER": "${SNOWFLAKE_USER}",
+        "SNOWFLAKE_PRIVATE_KEY_PATH": "${SNOWFLAKE_PRIVATE_KEY_PATH}",
+        "SNOWFLAKE_WAREHOUSE": "${SNOWFLAKE_WAREHOUSE:-AGENT_WH_XS}",
+        "SNOWFLAKE_ROLE": "${SNOWFLAKE_ROLE:-AGENT_RO}",
+        "SNOWFLAKE_DATABASE": "${SNOWFLAKE_DATABASE:-ANALYTICS}"
+      }
+    }
+  }
+}

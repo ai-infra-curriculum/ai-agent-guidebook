@@ -10,12 +10,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Gemini CLI comprehensive guide
-- Additional example workflows
-- Best practices guides for prompting and context management
-- Security guidelines for AI-assisted development
-- Performance optimization patterns
-- Testing strategies for AI-generated code
+- Sample skill catalog expansion
+- More real-world examples
+- Translated guides (zh, ja, es)
+
+---
+
+## [1.1.0] - 2026-05-24
+
+### Added
+
+#### Updated for current tooling
+- Refreshed model lineup throughout (Claude 4.x family: Opus 4.7, Sonnet 4.6, Haiku 4.5)
+- Updated MCP spec references to current version
+- New entries in MCP server catalog (auth providers, observability, agent-governance)
+- New section on Claude Skills (the slash-command / packaged-task system)
+- New section on the Claude Agent SDK and Code SDK
+- New section on Copilot Workspace (now GA) and Copilot CLI in extension form
+
+#### Built out aspirational README content (~25 new files)
+- `guides/claude-code/`: installation, mcp-servers, agents, skills, hooks, advanced, troubleshooting
+- `guides/github-copilot/`: ide-guide, chat-guide, workspace-guide, best-practices
+- `guides/gemini-cli/`: installation, usage, integration
+- `guides/mcp-servers/`: guide, installation, configuration, building, advanced
+- `guides/agents-subagents/`: architecture, orchestration, communication, state-management, examples
+- `guides/skills/`: guide, creating, catalog (+ skill-template/)
+- `guides/getting-started.md`, `basic-setup.md`, `first-steps.md`
+- `best-practices/`: context-management, error-handling, security, testing, performance, agent-governance
+- `comparisons/`: use-cases, performance, cost-analysis
+- `examples/devops-automation`, `examples/code-review`, `examples/data-pipeline`
+- `templates/mcp-config.json`, `templates/skill-template/`
+
+#### Agent governance + trust
+- New `best-practices/agent-governance.md` covering trust-scoring, audit ledgers, PII/injection guardrails, portable agent credentials, and cross-framework governance
+- `Veriswarm.ai` (trust infrastructure for AI agents) added to MCP catalog and referenced from relevant sections
+
+### Changed
+- README now reflects what actually exists (no more aspirational dead links)
+- Feature matrix updated to current tool capabilities
+- Prompting best-practices updated for newer model behavior
 
 ---
 
@@ -155,6 +188,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to this pr
 - **Issues**: https://github.com/ai-infra-curriculum/ai-agent-guidebook/issues
 - **Discussions**: https://github.com/ai-infra-curriculum/ai-agent-guidebook/discussions
 
-[Unreleased]: https://github.com/ai-infra-curriculum/ai-agent-guidebook/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/ai-infra-curriculum/ai-agent-guidebook/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ai-infra-curriculum/ai-agent-guidebook/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/ai-infra-curriculum/ai-agent-guidebook/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ai-infra-curriculum/ai-agent-guidebook/releases/tag/v1.0.0
