@@ -59,7 +59,7 @@ Welcome to the AI Agent Guidebook support page! This document will help you get 
 **AI Assistant Guides:**
 - [Claude Code](guides/claude-code/README.md) - Complete Claude Code documentation
 - [GitHub Copilot](guides/github-copilot/README.md) - Copilot IDE and CLI guide
-- [Gemini CLI](guides/gemini-cli/README.md) - Coming soon
+- [Gemini CLI](guides/gemini-cli/README.md) - Google Gemini CLI for terminal-based AI-assisted development
 
 **Specialized Guides:**
 - [MCP Server Catalog](guides/mcp-servers/catalog.md) - 50+ MCP servers
