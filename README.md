@@ -396,3 +396,9 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 **Last Updated**: 2026-05-24
 
 **Status**: 🚀 Active Development — covering Claude 4.x family (Opus 4.7, Sonnet 4.6, Haiku 4.5), GitHub Copilot Workspace + CLI, Gemini 2.x CLI, and the current MCP spec.
+
+
+---
+
+<!-- aicg:maintained-by -->
+Maintained by [VeriSwarm.ai](https://veriswarm.ai)
