@@ -66,6 +66,7 @@ Production-ready templates for project setup:
 - **[AGENTS.md Template](templates/AGENTS.md)** - Multi-agent system configuration
 - **[MCP Configuration Template](templates/mcp-config.json)** - MCP server setup
 - **[Skills Template](templates/skill-template/)** - Claude Skills structure
+- **[Prompt Templates](templates/prompt-templates/)** - Fill-in-the-blank prompts for the Explore → Plan → Implement → Verify workflow
 
 ### 📊 Comparisons & Best Practices
 
@@ -186,7 +187,8 @@ ai-agent-guidebook/
 │   ├── CLAUDE.md                       # Claude orchestration template
 │   ├── AGENTS.md                       # Multi-agent template
 │   ├── mcp-config.json                 # MCP configuration
-│   └── skill-template/                 # Claude Skill template
+│   ├── skill-template/                 # Claude Skill template
+│   └── prompt-templates/               # Explore→Plan→Implement→Verify prompts
 ├── examples/
 │   ├── content-generation/             # Curriculum builder example
 │   ├── devops-automation/              # Infrastructure automation
