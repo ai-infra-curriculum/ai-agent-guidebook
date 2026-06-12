@@ -2,7 +2,7 @@
 
 The full shape of an MCP config file, how scoping works, how to allow/deny individual tools, how to run multiple instances of the same server safely, and the configuration pitfalls that bite people in production.
 
-> **Last updated**: 2026-05-24 · Tracks MCP spec **2025-06-18**.
+> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
 
 ---
 
@@ -27,12 +27,12 @@ Every host's config converges on the same shape under different keys. Conceptual
 
 ```
 mcpServers.<name>:
-  ├── transport: stdio | http             (defaults to stdio)
+  ├── type: stdio | http | sse            (defaults to stdio; key is "type")
   ├── command + args + env                (stdio)
   ├── url + headers                       (http)
   ├── disabled                            (boolean, default false)
   ├── autoApprove / permissions           (allowlists / denylists)
-  ├── timeout / startupTimeout            (ms)
+  ├── timeout                             (ms, host-dependent)
   └── cwd                                 (working directory for stdio)
 ```
 
@@ -55,7 +55,7 @@ A minimal HTTP entry:
 {
   "mcpServers": {
     "context7": {
-      "transport": "http",
+      "type": "http",
       "url": "https://mcp.context7.com/mcp",
       "headers": { "Authorization": "Bearer ${CONTEXT7_API_KEY}" }
     }
@@ -67,9 +67,9 @@ A minimal HTTP entry:
 
 ## Field reference
 
-### `transport`
+### `type`
 
-`"stdio"` (default) or `"http"`. Some hosts also accept `"sse"` for the legacy split SSE transport — prefer `"http"` (Streamable HTTP, introduced in spec revision 2025-03-26) when the server supports it.
+`"stdio"` (default), `"http"`, or `"sse"` (legacy split SSE transport). In Claude Code and Claude Desktop config files the key is **`type`** — e.g. `"type": "http"`. Prefer `"http"` (Streamable HTTP, introduced in spec revision 2025-03-26) over `"sse"` when the server supports it. A few other hosts historically used a `transport` key; check your host's docs.
 
 ### `command` + `args` (stdio only)
 
@@ -101,7 +101,7 @@ Endpoint for Streamable HTTP servers. `headers` is the most common place to atta
 
 ```json
 {
-  "transport": "http",
+  "type": "http",
   "url": "https://mcp.internal.example.com/mcp",
   "headers": {
     "Authorization": "Bearer ${INTERNAL_MCP_TOKEN}",
@@ -118,9 +118,9 @@ Boolean. Set `true` to keep the entry in the file but stop the host from launchi
 
 Lists of tool names that the host will run without prompting. The exact shape varies by host (see [Tool allow / deny lists](#tool-allow--deny-lists)).
 
-### `timeout` / `startupTimeout`
+### `timeout`
 
-Milliseconds. Some hosts let you tune the per-call timeout and the initialization timeout independently. Default startup is typically 30–60s; per-call timeouts default to 60–120s.
+Milliseconds, host-dependent. Some hosts support a per-server `timeout` field. In Claude Code, startup and tool-call timeouts are tuned via environment variables instead: `MCP_TIMEOUT` (server startup, ms) and `MCP_TOOL_TIMEOUT` (tool execution, ms). Default startup is typically 30–60s; per-call timeouts default to 60–120s.
 
 ### Host-specific keys
 
@@ -140,9 +140,10 @@ Most hosts support at least two scopes. The conventions:
 
 | Scope | Lives at | Travels with | Use for |
 |---|---|---|---|
-| **Project** | `<repo>/.mcp.json`, `<repo>/.cursor/mcp.json`, etc. | The repo | Servers specific to this codebase (project DB, project filesystem path, project-specific internal MCP) |
-| **User** | `~/.claude/settings.json`, `~/.cursor/mcp.json`, etc. | The developer's machine | Personal preferences (your GitHub account, your Linear workspace, your Notion) |
-| **System** / **Enterprise** | `/etc/claude/managed.json` (Claude Code), MDM-deployed JSON (Cursor enterprise) | The fleet | Org-mandated servers and policies, deny-by-default lists |
+| **Local** (Claude Code default) | `~/.claude.json`, keyed to the current project | The developer's machine, this project only | Personal servers for one codebase; not shared with the team |
+| **Project** | `<repo>/.mcp.json`, `<repo>/.cursor/mcp.json`, etc. | The repo | Servers specific to this codebase that the whole team should run |
+| **User** | `~/.claude.json` (Claude Code; `~/.claude/settings.json` holds permissions, never MCP servers), `~/.cursor/mcp.json`, etc. | The developer's machine, all projects | Personal preferences (your GitHub account, your Linear workspace, your Notion) |
+| **System** / **Enterprise** | `managed-mcp.json` at `/Library/Application Support/ClaudeCode/` (macOS) or `/etc/claude-code/` (Linux), with `allowedMcpServers` / `deniedMcpServers` policies; MDM-deployed JSON (Cursor enterprise) | The fleet | Org-mandated servers and policies, deny-by-default lists |
 
 Precedence (highest → lowest) on most hosts:
 
@@ -264,13 +265,11 @@ Common when one server can front multiple targets — filesystem (different root
     },
     "pg-staging": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
-      "env": { "POSTGRES_CONNECTION_STRING": "${PG_STAGING_URL}" }
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_STAGING_URL}"]
     },
     "pg-prod-readonly": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
-      "env": { "POSTGRES_CONNECTION_STRING": "${PG_PROD_READONLY_URL}" }
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_PROD_READONLY_URL}"]
     }
   }
 }
@@ -305,27 +304,27 @@ if [[ "$ENABLE_PROD_MCP" != "1" ]]; then
   echo "prod MCP disabled" >&2
   exit 1
 fi
-exec npx -y @modelcontextprotocol/server-postgres "$@"
+exec npx -y @modelcontextprotocol/server-postgres "$PG_PROD_URL"
 ```
 
 ```json
 {
   "pg-prod": {
     "command": "/Users/me/scripts/mcp-pg-prod.sh",
-    "env": { "POSTGRES_CONNECTION_STRING": "${PG_PROD_URL}" }
+    "env": { "PG_PROD_URL": "${PG_PROD_URL}" }
   }
 }
 ```
 
 ### 2. Per-profile config files
 
-Keep `~/.claude/settings.work.json` and `~/.claude/settings.personal.json` and symlink the active one:
+Keep `~/.claude.work.json` and `~/.claude.personal.json` and symlink the active one (Claude Code's user-scoped MCP servers live in `~/.claude.json`):
 
 ```bash
-ln -sf settings.work.json ~/.claude/settings.json
+ln -sf ~/.claude.work.json ~/.claude.json
 ```
 
-A `claude-profile work` shell alias makes this ergonomic.
+A `claude-profile work` shell alias makes this ergonomic. (Note `~/.claude.json` also holds other per-project state, so prefer project-scoped `.mcp.json` files where the split is really about projects rather than identities.)
 
 ### 3. Direnv-managed `.envrc`
 
@@ -353,13 +352,9 @@ Most hosts now issue tool calls **in parallel** by default when the model emits 
 2. **Resource contention**: a Postgres server hit with 8 parallel queries may exhaust the underlying pool. Configure the pool with at least as many connections as the host's max parallel calls.
 3. **Rate limits**: 8 parallel GitHub API calls trip the secondary rate limit much faster than 8 sequential calls. Hosted MCPs usually back off correctly; self-hosted ones often don't.
 
-Hosts expose knobs:
+Some hosts and frameworks expose knobs (e.g. the OpenAI Agents SDK accepts `parallel_tool_calls=False` to force sequential calls); Claude Code does not currently expose a parallelism setting — the model decides when to batch independent calls.
 
-- **Claude Code**: `--max-parallel-tool-calls N` (CLI flag) or `maxParallelToolCalls` in settings. Default 4.
-- **Cursor**: configurable in Settings → Agent → "Parallel tool calls".
-- **OpenAI Agents SDK**: `parallel_tool_calls=False` to force sequential.
-
-If a server misbehaves under parallel load, the quick fix is to drop max parallel to 1 for that server's session. The right fix is to file an issue against the server.
+If a server misbehaves under parallel load, the practical mitigations are server-side: size connection pools for concurrent calls, add per-session locking around non-reentrant operations, and back off on upstream rate limits. The right fix is to file an issue against the server.
 
 ---
 
@@ -371,22 +366,17 @@ Defaults are usually fine; the cases where you'll tune:
 - **Slow-starting servers** (Docker images pulling on first launch, JVM warmup): bump startup timeout to 90–120s.
 - **Hosted servers behind a slow network**: bump HTTP request timeout and consider retries.
 
-Claude Code:
+Claude Code tunes these via environment variables rather than per-server config fields:
 
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp"],
-      "timeout": 300000,
-      "startupTimeout": 120000
-    }
-  }
-}
+```bash
+# Server startup timeout (ms)
+MCP_TIMEOUT=120000 claude
+
+# Tool execution timeout (ms) — for long-running tools like browser automation
+MCP_TOOL_TIMEOUT=300000 claude
 ```
 
-For HTTP servers, hosts usually expose a request timeout and a per-tool override under the same key.
+Other hosts may support a per-server `timeout` field (milliseconds) in the server entry; check your host's docs. For HTTP servers, hosts usually expose a request timeout and a per-tool override under the same key.
 
 ---
 
@@ -444,72 +434,59 @@ A removed-but-still-configured server quietly stays in the host's tool catalog, 
 
 ## Reference: full annotated config
 
-A realistic Claude Code `~/.claude/settings.json` covering most of the patterns above:
+Claude Code splits this across two files: MCP server definitions live in the project's `.mcp.json` (or `~/.claude.json` for user scope), and tool permissions live in `.claude/settings.json` (or `~/.claude/settings.json`). Both are plain JSON — no comments allowed.
+
+A realistic project `.mcp.json` covering most of the patterns above:
 
 ```json
 {
   "mcpServers": {
-    // Local stdio: filesystem rooted in the user's code directory
     "fs": {
       "command": "/opt/homebrew/bin/npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-filesystem@2025.11.0",
+        "@modelcontextprotocol/server-filesystem",
         "/Users/me/code"
       ]
     },
-
-    // Local stdio: Postgres against staging
     "pg-staging": {
       "command": "/opt/homebrew/bin/npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres@1.4.0"],
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_STAGING_URL}"],
       "env": {
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:${PATH}",
-        "POSTGRES_CONNECTION_STRING": "${PG_STAGING_URL}"
-      },
-      "timeout": 120000
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:${PATH}"
+      }
     },
-
-    // Local stdio via uvx: git server
     "git": {
       "command": "/opt/homebrew/bin/uvx",
-      "args": ["mcp-server-git==2025.11.0", "--repository", "/Users/me/code/project"]
+      "args": ["mcp-server-git", "--repository", "/Users/me/code/project"]
     },
-
-    // Docker-isolated: kubernetes
     "k8s": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "-v", "/Users/me/.kube:/home/mcp/.kube:ro",
-        "quay.io/containers/kubernetes-mcp-server:0.6.0"
-      ],
-      "startupTimeout": 90000
+        "quay.io/manusa/kubernetes_mcp_server"
+      ]
     },
-
-    // Hosted HTTP: GitHub (OAuth handled by Claude Code on first connect)
     "github": {
-      "transport": "http",
+      "type": "http",
       "url": "https://api.githubcopilot.com/mcp/"
     },
-
-    // Hosted HTTP with bearer token: Context7 docs lookup
     "context7": {
-      "transport": "http",
+      "type": "http",
       "url": "https://mcp.context7.com/mcp",
       "headers": {
         "Authorization": "Bearer ${CONTEXT7_API_KEY}"
       }
-    },
-
-    // Staged for rollout but not active yet
-    "linear": {
-      "transport": "http",
-      "url": "https://mcp.linear.app/mcp",
-      "disabled": true
     }
-  },
+  }
+}
+```
 
+And the matching `.claude/settings.json` permissions:
+
+```json
+{
   "permissions": {
     "allow": [
       "mcp__fs__read_file",
@@ -537,18 +514,16 @@ A realistic Claude Code `~/.claude/settings.json` covering most of the patterns 
       "mcp__github__delete_repository",
       "mcp__github__merge_pull_request"
     ]
-  },
-
-  "maxParallelToolCalls": 4
+  }
 }
 ```
 
 Notes on the above:
 
 - Absolute paths for `command` to survive GUI launches.
-- Versions pinned for production-relevant servers (`fs`, `pg-staging`, `git`, `k8s`).
-- Postgres read-only at staging; no prod connection at all — prod access lives in a separate profile that requires an explicit shell switch.
+- The Postgres reference server is archived — shown here for the positional-connection-string pattern; substitute a maintained server (Postgres MCP Pro, Neon, Supabase) for new setups. Staging only; no prod connection at all — prod access lives in a separate profile that requires an explicit shell switch.
 - GitHub via hosted MCP — no token in the config file.
+- Slow servers (the Docker-pulled `k8s` image, long Playwright runs) are handled with `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env vars at launch, not per-server fields.
 - Allow / ask / deny tiered by destructiveness; wildcards used only on namespaces where everything is genuinely read-only.
 
 This is roughly the shape you want every team to be running by the time MCP is wired into critical workflows.

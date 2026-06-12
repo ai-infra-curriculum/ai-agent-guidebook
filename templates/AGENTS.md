@@ -1,6 +1,35 @@
-# Multi-Agent System Configuration
+# Multi-Agent System Design
 
-Configuration for specialized agents and orchestration patterns.
+Design document for this project's multi-agent architecture: agent roles, responsibilities, communication patterns, and orchestration workflows.
+
+---
+
+## What AGENTS.md Is — and Isn't
+
+`AGENTS.md` is the cross-tool **instructions file standard**. Claude Code, GitHub Copilot, Gemini CLI, OpenAI Codex, Cursor, and other coding agents read it as project memory/context — the same way they read `CLAUDE.md`, `.cursorrules`, or custom instructions. Everything in this template (agent roles, workflows, message formats) is design documentation that informs how the model approaches multi-agent work in your project.
+
+**This file does not register, configure, or define dispatchable agents.** In Claude Code, actual subagents live in `.claude/agents/*.md` — one file per agent, with YAML frontmatter:
+
+```markdown
+---
+name: code-reviewer
+description: Reviews code for quality, security, and maintainability. Use proactively after writing or modifying code.
+tools: Read, Grep, Glob, Bash
+---
+
+You are a senior code reviewer. When invoked, analyze the recent changes,
+check for bugs, security issues, and style violations, and report findings
+by severity.
+```
+
+- `name` — the identifier used to invoke the agent
+- `description` — tells Claude *when* to delegate to this agent
+- `tools` — optional allowlist; omit to inherit all tools
+- The markdown body is the subagent's system prompt
+
+You can also create and manage subagents interactively with the `/agents` command. Project-level agents go in `.claude/agents/`; user-level agents in `~/.claude/agents/`.
+
+**Recommended pattern:** document each agent's role and its place in the workflow here, and keep the matching dispatchable definition in `.claude/agents/<name>.md`.
 
 ---
 
@@ -387,6 +416,8 @@ Output: migrations/001_create_auth_tables.sql
 ---
 
 ## Agent Communication Protocol
+
+> **Note:** The JSON formats below are illustrative design artifacts — a convention for how agents structure handoffs in their prompts and outputs. They are not parsed configuration; no tool consumes them mechanically.
 
 ### Message Format
 
@@ -851,9 +882,9 @@ Track agent performance:
 
 ## Custom Agent Creation
 
-### Define Custom Agent
+### 1. Document the role here
 
-Add to this AGENTS.md file:
+Add a section to this AGENTS.md describing the new agent's purpose, capabilities, tools, and when to use it (follow the format of agents 1-8 above). Every tool that reads AGENTS.md picks up this design context.
 
 ```markdown
 ### 9. Custom Agent Name
@@ -873,15 +904,30 @@ Add to this AGENTS.md file:
 **Output Format**: Expected outputs
 ```
 
-### Register with Claude Code
+### 2. Define the dispatchable subagent in .claude/agents/
 
-Claude Code automatically reads AGENTS.md and recognizes custom agents.
+This is the step that actually makes the agent invocable in Claude Code — documenting it in AGENTS.md alone does not register anything:
 
-### Use Custom Agent
+```markdown
+<!-- .claude/agents/custom-agent-name.md -->
+---
+name: custom-agent-name
+description: What this agent does and when Claude should delegate to it
+tools: Read, Grep, Glob, Bash
+---
+
+System prompt describing the agent's role, constraints, and output format.
+```
+
+Or run `/agents` and create it interactively.
+
+### 3. Use the custom agent
 
 ```
 "Use the custom-agent-name to perform specific task"
 ```
+
+Claude Code matches requests against each subagent's `description` and delegates accordingly — explicitly when named, or automatically when the description fits the task.
 
 ---
 
@@ -890,8 +936,9 @@ Claude Code automatically reads AGENTS.md and recognizes custom agents.
 ### Agent Not Spawning
 
 **Check:**
+- A matching subagent file exists in `.claude/agents/` (or `~/.claude/agents/`) with valid YAML frontmatter — AGENTS.md alone does not register agents
+- The `description` field clearly states when the agent should be used
 - Agent name is correct
-- AGENTS.md is in project root
 - Task description is clear
 
 ### Agent Timeout
@@ -919,10 +966,10 @@ Claude Code automatically reads AGENTS.md and recognizes custom agents.
 
 ## Resources
 
-- [Claude Code Agent Documentation](https://docs.claude.com/claude-code/agents)
-- [Multi-Agent Architecture Guide](../../guides/agents-subagents/architecture.md)
-- [Orchestration Patterns](../../guides/agents-subagents/orchestration.md)
-- [Agent Communication](../../guides/agents-subagents/communication.md)
+- [Claude Code Subagents Documentation](https://docs.claude.com/en/docs/claude-code/sub-agents)
+- [Multi-Agent Architecture Guide](../guides/agents-subagents/architecture.md)
+- [Orchestration Patterns](../guides/agents-subagents/orchestration.md)
+- [Agent Communication](../guides/agents-subagents/communication.md)
 
 ---
 
@@ -949,8 +996,6 @@ Claude Code automatically reads AGENTS.md and recognizes custom agents.
 
 ---
 
-**Last Updated**: 2025-11-04
-
-**Compatible With**: Claude Code 1.0+
+**Last Updated**: 2026-06-11
 
 **Related**: [CLAUDE.md](CLAUDE.md) for project configuration

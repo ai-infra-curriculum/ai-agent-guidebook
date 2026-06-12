@@ -2,7 +2,7 @@
 
 Testing AI-generated code and the AI workflows themselves. Property-based, differential, golden-file, evals, regression, CI.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -210,7 +210,7 @@ Where `similar` is:
 
 LLMs are non-deterministic by default. Mitigations:
 - Set `temperature=0` for tests.
-- Pin model version (`claude-sonnet-4-6-20251022`, not `claude-sonnet-4-6-latest`).
+- Pin a dated model snapshot (`claude-sonnet-4-6-20251022`), not the rolling alias (`claude-sonnet-4-6`) — aliases move to new snapshots over time. (There is no `-latest` suffix; the alias is just the bare model name.)
 - Use seed parameter where supported (OpenAI).
 - Run N samples and assert against the consensus.
 - For non-text output (JSON), validate schema and key fields, not the full byte string.
@@ -263,8 +263,8 @@ prompts:
   - file://prompts/summarize-v2.md
 providers:
   - anthropic:claude-sonnet-4-6
-  - anthropic:claude-opus-4-7
-  - openai:gpt-5
+  - anthropic:claude-opus-4-8
+  - openai:gpt-5.5
 tests:
   - vars:
       diff: file://fixtures/pr-1234.diff

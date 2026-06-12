@@ -46,7 +46,7 @@ flowchart LR
 ### Code shape
 
 ```python
-def sequential_pipeline(request, agents: list[Agent]) -> Result:
+def sequential_pipeline(request, agents: list[Agent]) -> dict:
     state = {"input": request}
     for agent in agents:
         result = agent.run(state)
@@ -106,7 +106,12 @@ flowchart LR
 ```python
 async def fan_out_fan_in(request, splitter, workers, aggregator) -> Result:
     sub_tasks = splitter.split(request)             # decompose the work
-    futures = [asyncio.create_task(worker.run(t)) for t, worker in zip(sub_tasks, workers)]
+    # strict=True so a task/worker count mismatch fails loudly instead of
+    # zip() silently dropping the extra sub-tasks
+    futures = [
+        asyncio.create_task(worker.run(t))
+        for t, worker in zip(sub_tasks, workers, strict=True)
+    ]
     results = await asyncio.gather(*futures, return_exceptions=True)
     return aggregator.combine(request, results)
 ```

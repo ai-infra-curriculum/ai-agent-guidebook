@@ -1,7 +1,11 @@
 {
   "_about": [
-    "MCP server configuration template — drop-in starting point for ~/.config/claude-code/mcp.json",
-    "(or whichever path your runtime expects).",
+    "MCP server configuration template — drop-in starting point for:",
+    "  - Claude Code: a project-scoped .mcp.json at the repo root (recommended,",
+    "    commit-safe if it contains only ${VAR} placeholders), or user scope via",
+    "    `claude mcp add --scope user` (stored in ~/.claude.json).",
+    "  - Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json",
+    "    (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows).",
     "",
     "Format note: JSON does not allow comments. Per-server prose is stored in",
     "  _comments arrays, and Claude Code / your runtime will ignore unknown",
@@ -12,25 +16,28 @@
     "Secrets: use ${ENV_VAR} syntax. Claude Code expands these at launch from",
     "  the launching shell's env. Never check in real secrets.",
     "",
+    "Hosted servers use {\"type\": \"http\", \"url\": ...} and authenticate via",
+    "  OAuth on first connect — no token in the file at all.",
+    "",
     "Pattern: comment out servers you don't need rather than deleting them — the",
     "  next person to onboard will thank you.",
     "",
-    "Last updated: 2026-05-24"
+    "Last updated: 2026-06-11"
   ],
 
   "mcpServers": {
 
     "github": {
       "_comments": [
-        "Repo browsing, PR creation, issue management, releases.",
-        "Token scopes needed: repo, read:org, workflow (if you create Actions runs)."
+        "GitHub's official hosted MCP server. Repo browsing, PR creation, issue",
+        "management, releases. OAuth handled by the host on first connect — no",
+        "token needed in this file. Self-hosted alternative: the Go binary at",
+        "github/github-mcp-server (Docker: ghcr.io/github/github-mcp-server,",
+        "env GITHUB_PERSONAL_ACCESS_TOKEN). The old npm package",
+        "@modelcontextprotocol/server-github is archived/deprecated."
       ],
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
-        "GITHUB_DEFAULT_ORG": "${GITHUB_ORG:-}"
-      }
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
     },
 
     "filesystem": {
@@ -49,135 +56,83 @@
 
     "postgres": {
       "_comments": [
-        "Read-only by default (use a read replica connection string in prod).",
-        "If you need writes, use a separate server entry with the writable URL",
-        "and have your AGENTS.md scope which agents may call it."
+        "Postgres MCP Pro (crystaldba/postgres-mcp) — maintained replacement for",
+        "the archived @modelcontextprotocol/server-postgres reference server.",
+        "--access-mode=restricted enforces read-only with query safeguards;",
+        "use a read replica connection string in prod. If you need writes, add a",
+        "separate entry with --access-mode=unrestricted and have your AGENTS.md",
+        "scope which agents may call it."
       ],
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${POSTGRES_URL}"],
+      "command": "uvx",
+      "args": ["postgres-mcp", "--access-mode=restricted"],
       "env": {
-        "POSTGRES_URL": "${POSTGRES_URL}"
+        "DATABASE_URI": "${POSTGRES_URL}"
       }
-    },
-
-    "sqlite": {
-      "_comments": [
-        "Local-only DB exploration. Useful for analytics on small extracts",
-        "and as a scratch store for agent state during a session."
-      ],
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sqlite",
-        "${SQLITE_DB_PATH:-./.claude/scratch.db}"
-      ]
     },
 
     "kubernetes": {
       "_comments": [
-        "kubectl wrapper. Read-only verbs only by default; if you allow apply/delete,",
-        "scope by RBAC on the service account that owns the KUBECONFIG, NOT by trusting",
-        "the agent. Cluster admin via agent = bad day waiting to happen."
+        "kubernetes-mcp-server (GitHub: containers/kubernetes-mcp-server).",
+        "Reads the standard KUBECONFIG env var for cluster/context selection.",
+        "--read-only restricts to read verbs; if you drop it and allow",
+        "apply/delete, scope by RBAC on the service account that owns the",
+        "KUBECONFIG, NOT by trusting the agent. Cluster admin via agent = bad",
+        "day waiting to happen."
       ],
       "command": "npx",
-      "args": ["-y", "@containers/kubernetes-mcp-server"],
+      "args": ["-y", "kubernetes-mcp-server@latest", "--read-only"],
       "env": {
-        "KUBECONFIG": "${KUBECONFIG:-${HOME}/.kube/config}",
-        "K8S_DEFAULT_NAMESPACE": "${K8S_DEFAULT_NAMESPACE:-default}",
-        "K8S_READ_ONLY": "${K8S_READ_ONLY:-true}"
-      }
-    },
-
-    "docker": {
-      "_comments": [
-        "Local container ops: build, run, exec, logs. Mounts $DOCKER_HOST socket.",
-        "On macOS with Docker Desktop, $DOCKER_HOST is usually unset and the",
-        "socket lives at /var/run/docker.sock — leave the env var blank and it",
-        "will fall back to that."
-      ],
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-docker"],
-      "env": {
-        "DOCKER_HOST": "${DOCKER_HOST:-}"
+        "KUBECONFIG": "${KUBECONFIG:-${HOME}/.kube/config}"
       }
     },
 
     "terraform": {
       "_comments": [
-        "Terraform plan/validate/state-read. Apply is intentionally gated behind",
-        "an env flag — leave TF_AGENT_ALLOW_APPLY unset for read-only mode."
+        "HashiCorp's official terraform-mcp-server — a Go binary distributed",
+        "via Docker and GitHub releases (NOT npm; the npm package of the same",
+        "name is an unrelated community project). Provides Terraform Registry",
+        "provider/module doc lookup and Terraform-aware assistance."
       ],
-      "command": "npx",
-      "args": ["-y", "@hashicorp/terraform-mcp-server"],
-      "env": {
-        "TF_VAR_environment": "${TF_VAR_environment:-dev}",
-        "TF_AGENT_ALLOW_APPLY": "${TF_AGENT_ALLOW_APPLY:-false}",
-        "TF_LOG": "${TF_LOG:-WARN}"
-      }
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "hashicorp/terraform-mcp-server"]
     },
 
-    "helm": {
+    "playwright": {
       "_comments": [
-        "helm lint, template, list, status, history. Upgrades gated by",
-        "HELM_AGENT_ALLOW_UPGRADE — same posture as terraform.",
-        "Operates against the same KUBECONFIG as the kubernetes entry."
+        "Browser automation via Playwright (Chromium/Firefox/WebKit) using",
+        "accessibility-tree interaction. Useful for visual regression,",
+        "screenshots, and scraping JS-rendered pages. Replaces the archived",
+        "@modelcontextprotocol/server-puppeteer. Sandbox carefully — the agent",
+        "can navigate anywhere."
       ],
       "command": "npx",
-      "args": ["-y", "@cncf/helm-mcp-server"],
-      "env": {
-        "KUBECONFIG": "${KUBECONFIG:-${HOME}/.kube/config}",
-        "HELM_AGENT_ALLOW_UPGRADE": "${HELM_AGENT_ALLOW_UPGRADE:-false}"
-      }
-    },
-
-    "prometheus": {
-      "_comments": [
-        "Range and instant queries against a Prometheus-compatible endpoint.",
-        "Read-only by definition (Prometheus has no write API)."
-      ],
-      "command": "npx",
-      "args": ["-y", "@prometheus-mcp/server"],
-      "env": {
-        "PROMETHEUS_URL": "${PROMETHEUS_URL}",
-        "PROMETHEUS_BEARER_TOKEN": "${PROMETHEUS_BEARER_TOKEN:-}"
-      }
-    },
-
-    "puppeteer": {
-      "_comments": [
-        "Headless browser. Useful for visual regression, screenshots, and scraping",
-        "JS-rendered pages. Sandbox carefully — the agent can navigate anywhere."
-      ],
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-      "env": {
-        "PUPPETEER_HEADLESS": "${PUPPETEER_HEADLESS:-true}"
-      }
+      "args": ["-y", "@playwright/mcp"]
     },
 
     "slack": {
       "_comments": [
-        "Post messages, read channel history, manage threads.",
-        "Bot token needs: chat:write, channels:history, channels:read.",
-        "For posts only (no reading) you can drop the history scopes."
+        "slack-mcp-server (community, maintained) — the old",
+        "@modelcontextprotocol/server-slack reference server is archived.",
+        "Post messages, read channel history, search. Supports xoxp (user) or",
+        "xoxb (bot) tokens; see the package README for scope guidance."
       ],
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "args": ["-y", "slack-mcp-server@latest", "--transport", "stdio"],
       "env": {
-        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
-        "SLACK_TEAM_ID": "${SLACK_TEAM_ID:-}",
-        "SLACK_DEFAULT_CHANNEL": "${SLACK_DEFAULT_CHANNEL:-#general}"
+        "SLACK_MCP_XOXP_TOKEN": "${SLACK_MCP_XOXP_TOKEN}"
       }
     },
 
     "notion": {
       "_comments": [
-        "Read and write Notion pages, databases, and comments.",
-        "Integration token needs to be invited to each database/page individually",
-        "(Notion's permission model is per-resource, not workspace-wide)."
+        "Read and write Notion pages, databases, and comments via the official",
+        "@notionhq/notion-mcp-server. Integration token needs to be invited to",
+        "each database/page individually (Notion's permission model is",
+        "per-resource, not workspace-wide). Hosted alternative with OAuth:",
+        "{\"type\": \"http\", \"url\": \"https://mcp.notion.com/mcp\"}."
       ],
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-notion"],
+      "args": ["-y", "@notionhq/notion-mcp-server"],
       "env": {
         "NOTION_TOKEN": "${NOTION_TOKEN}"
       }
@@ -186,28 +141,20 @@
     "linear": {
       "_comments": [
         "Issue tracking. Create/update issues, comment, assign, transition state.",
-        "Personal API key works for personal use; OAuth for shared agent installs."
+        "Linear's MCP server is hosted-only (no stdio npm package); OAuth on",
+        "first connect."
       ],
-      "command": "npx",
-      "args": ["-y", "@linear/mcp-server"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY}",
-        "LINEAR_DEFAULT_TEAM": "${LINEAR_DEFAULT_TEAM:-}"
-      }
+      "type": "http",
+      "url": "https://mcp.linear.app/mcp"
     },
 
     "atlassian": {
       "_comments": [
-        "Jira + Confluence. Search, read, comment, transition.",
-        "Cloud only out of the box; on-prem requires the bridge variant."
+        "Jira + Confluence (Atlassian's hosted server). Search, read, comment,",
+        "transition. Cloud only; OAuth on first connect."
       ],
-      "command": "npx",
-      "args": ["-y", "@atlassian/mcp-server"],
-      "env": {
-        "ATLASSIAN_DOMAIN": "${ATLASSIAN_DOMAIN}",
-        "ATLASSIAN_EMAIL": "${ATLASSIAN_EMAIL}",
-        "ATLASSIAN_API_TOKEN": "${ATLASSIAN_API_TOKEN}"
-      }
+      "type": "http",
+      "url": "https://mcp.atlassian.com/v1/sse"
     },
 
     "context7": {
@@ -226,40 +173,39 @@
     "sentry": {
       "_comments": [
         "Read issues, events, releases, and project stats from Sentry.",
-        "Auth token scopes: project:read, event:read, org:read.",
-        "Write actions (resolve issue, etc.) require additional scopes."
+        "Auth via SENTRY_ACCESS_TOKEN (a user auth token). Hosted alternative",
+        "with OAuth: {\"type\": \"http\", \"url\": \"https://mcp.sentry.dev/mcp\"}."
       ],
       "command": "npx",
       "args": ["-y", "@sentry/mcp-server"],
       "env": {
-        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}",
-        "SENTRY_ORG": "${SENTRY_ORG}",
-        "SENTRY_DEFAULT_PROJECT": "${SENTRY_DEFAULT_PROJECT:-}"
+        "SENTRY_ACCESS_TOKEN": "${SENTRY_ACCESS_TOKEN}"
       }
     },
 
     "stripe": {
       "_comments": [
-        "Read customers, charges, subscriptions, balance, webhooks.",
-        "USE A RESTRICTED KEY scoped to read-only resources for agent use.",
-        "The agent should never see a full secret key."
+        "Stripe's official @stripe/mcp. Select tool surface with --tools=",
+        "(comma-separated, or 'all'). USE A RESTRICTED KEY scoped to read-only",
+        "resources for agent use; the agent should never see a full secret key.",
+        "Hosted alternative with OAuth: {\"type\": \"http\", \"url\": \"https://mcp.stripe.com\"}."
       ],
       "command": "npx",
-      "args": ["-y", "@stripe/mcp-server"],
+      "args": ["-y", "@stripe/mcp", "--tools=all"],
       "env": {
-        "STRIPE_API_KEY": "${STRIPE_RESTRICTED_KEY}",
-        "STRIPE_ACCOUNT": "${STRIPE_ACCOUNT:-}"
+        "STRIPE_SECRET_KEY": "${STRIPE_RESTRICTED_KEY}"
       }
     },
 
     "brave-search": {
       "_comments": [
-        "Web search via the Brave Search API. Useful for current-events lookup",
-        "and library/vendor doc discovery when context7 misses.",
-        "Rate limits apply per the Brave plan you're on."
+        "Web search via the Brave Search API (official @brave package — the old",
+        "@modelcontextprotocol/server-brave-search is archived). Useful for",
+        "current-events lookup and library/vendor doc discovery when context7",
+        "misses. Rate limits apply per the Brave plan you're on."
       ],
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "args": ["-y", "@brave/brave-search-mcp-server"],
       "env": {
         "BRAVE_API_KEY": "${BRAVE_API_KEY}"
       }
@@ -287,43 +233,48 @@
       "_comments": [
         "Persistent knowledge graph across sessions. Good for long-running",
         "projects with carry-over context (curriculum generation, big refactors).",
-        "Memory path should be on durable storage, not /tmp."
+        "Storage path is set via the MEMORY_FILE_PATH env var (a JSONL file);",
+        "keep it on durable storage, not /tmp."
       ],
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory",
-        "--memory-path",
-        "${MEMORY_PATH:-./.claude/memory}"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "${MEMORY_FILE_PATH:-./.claude/memory.jsonl}"
+      }
     },
 
     "dbt": {
       "_comments": [
-        "dbt parse/compile/list/build/test. Honors DBT_PROFILES_DIR.",
+        "dbt Labs' official dbt-mcp (PyPI). dbt CLI + semantic layer + discovery",
+        "tools. Honors DBT_PROFILES_DIR / DBT_PROJECT_DIR.",
         "Pair with the postgres or snowflake entry for the warehouse layer."
       ],
-      "command": "npx",
-      "args": ["-y", "@dbt-labs/dbt-mcp-server"],
+      "command": "uvx",
+      "args": ["dbt-mcp"],
       "env": {
         "DBT_PROFILES_DIR": "${DBT_PROFILES_DIR:-${HOME}/.dbt}",
-        "DBT_PROJECT_DIR": "${DBT_PROJECT_DIR:-${PWD}}",
-        "DBT_TARGET": "${DBT_TARGET:-dev}"
+        "DBT_PROJECT_DIR": "${DBT_PROJECT_DIR:-${PWD}}"
       }
     },
 
     "snowflake": {
       "_comments": [
-        "Snowflake query execution. Prefer key-pair auth over passwords.",
-        "Scope the role to read-only for agent use; create a separate writable",
-        "entry if you need INSERT/UPDATE."
+        "Snowflake Labs' official snowflake-labs-mcp (PyPI). Cortex + object",
+        "management + SQL tools, configured via a service config YAML.",
+        "Prefer key-pair or PAT auth over passwords. Scope the role to",
+        "read-only for agent use; create a separate writable entry if you",
+        "need INSERT/UPDATE."
       ],
-      "command": "npx",
-      "args": ["-y", "@snowflake/mcp-server"],
+      "command": "uvx",
+      "args": [
+        "snowflake-labs-mcp",
+        "--service-config-file",
+        "${SNOWFLAKE_MCP_CONFIG:-./snowflake-mcp.yaml}"
+      ],
       "env": {
         "SNOWFLAKE_ACCOUNT": "${SNOWFLAKE_ACCOUNT}",
         "SNOWFLAKE_USER": "${SNOWFLAKE_USER}",
-        "SNOWFLAKE_PRIVATE_KEY_PATH": "${SNOWFLAKE_PRIVATE_KEY_PATH}",
+        "SNOWFLAKE_PRIVATE_KEY_FILE": "${SNOWFLAKE_PRIVATE_KEY_PATH}",
         "SNOWFLAKE_WAREHOUSE": "${SNOWFLAKE_WAREHOUSE:-AGENT_WH_XS}",
         "SNOWFLAKE_ROLE": "${SNOWFLAKE_ROLE:-AGENT_RO}",
         "SNOWFLAKE_DATABASE": "${SNOWFLAKE_DATABASE:-ANALYTICS}"

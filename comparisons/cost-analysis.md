@@ -2,7 +2,7 @@
 
 Cost breakdown across AI coding tools. Per-token pricing, subscription vs API, free tiers, hidden costs, engineer-hour framing.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -38,40 +38,44 @@ Each model has different operating characteristics:
 
 ## API Pricing
 
-### Anthropic (May 2026)
+### Anthropic (June 2026)
 
 | Model | Input $/Mtok | Output $/Mtok | Cache hit | Cache write (5m / 1h) |
 |-------|--------------|---------------|-----------|------------------------|
 | Haiku 4.5 | $1.00 | $5.00 | $0.10 | $1.25 / $2.00 |
 | Sonnet 4.6 | $3.00 | $15.00 | $0.30 | $3.75 / $6.00 |
-| Opus 4.7 (≤200K context) | $15.00 | $75.00 | $1.50 | $18.75 / $30.00 |
-| Opus 4.7 (>200K context, 1M tier) | $30.00 | $150.00 | $3.00 | $37.50 / $60.00 |
+| Opus 4.8 (also 4.7/4.6/4.5) | $5.00 | $25.00 | $0.50 | $6.25 / $10.00 |
+| Fable 5 | $10.00 | $50.00 | $1.00 | $12.50 / $20.00 |
+
+Fable 5, Opus 4.8/4.7/4.6, and Sonnet 4.6 include the full 1M context window at standard pricing — there is no >200K surcharge. (The $30/$150 rate exists only as Opus fast-mode pricing.) Legacy Opus 4.1/4 are deprecated at $15/$75.
 
 Batch API: 50% discount, ~24h turnaround.
 
-### OpenAI (May 2026)
+### OpenAI (June 2026)
 
 | Model | Input $/Mtok | Output $/Mtok | Cached input |
 |-------|--------------|---------------|--------------|
-| GPT-5 Nano | $0.10 | $0.40 | $0.05 |
-| GPT-5 Mini | $0.25 | $2.00 | $0.125 |
-| GPT-5 | $1.25 | $10.00 | $0.625 |
-| GPT-5 Codex | $1.25 | $10.00 | $0.625 |
-| o3 | $2.00 | $8.00 | $1.00 |
-| o3-mini | $1.10 | $4.40 | $0.55 |
+| GPT-5.4 Nano | $0.20 | $1.25 | $0.02 |
+| GPT-5.4 Mini | $0.75 | $4.50 | $0.075 |
+| GPT-5.4 | $2.50 | $15.00 | $0.25 |
+| GPT-5.5 | $5.00 | $30.00 | $0.50 |
+
+Cached input is 90% off across the lineup. GPT-5.5 and GPT-5.4 are the current flagships; the original GPT-5 family and o3 are previous-gen.
 
 Batch API: 50% discount, 24h.
 
-### Google (May 2026)
+### Google (June 2026)
 
 | Model | Input $/Mtok | Output $/Mtok | Context cache |
 |-------|--------------|---------------|---------------|
-| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | implicit free |
-| Gemini 2.5 Flash | $0.30 | $2.50 | implicit free |
-| Gemini 2.5 Pro (≤200K) | $1.25 | $10.00 | implicit free |
-| Gemini 2.5 Pro (>200K) | $2.50 | $15.00 | implicit free |
+| Gemini 3.1 Pro (≤200K) | $2.00 | $12.00 | cached input $0.20 (90% off) |
+| Gemini 3.1 Pro (>200K) | $4.00 | $18.00 | 90% off on cached input |
+| Gemini 2.5 Flash-Lite (previous gen) | $0.10 | $0.40 | implicit free |
+| Gemini 2.5 Flash (previous gen) | $0.30 | $2.50 | implicit free |
+| Gemini 2.5 Pro (previous gen, ≤200K) | $1.25 | $10.00 | implicit free |
+| Gemini 2.5 Pro (previous gen, >200K) | $2.50 | $15.00 | implicit free |
 
-Explicit Context Caching: small write fee + storage cost; ~85% off on hit.
+Gemini 3.1 Pro carries a 1M context window. Gemini 3.5 Flash shipped May 2026 as the current fast tier — check current rates before committing volume. Explicit Context Caching: small write fee + storage cost.
 
 ### Others
 
@@ -87,29 +91,31 @@ Explicit Context Caching: small write fee + storage cost; ~85% off on hit.
 
 ## Subscription Pricing
 
-### GitHub Copilot (May 2026)
+### GitHub Copilot (June 2026)
 
 | Plan | Price | Includes |
 |------|-------|----------|
 | Free | $0 | 2K completions/mo, 50 chat msgs/mo |
-| Pro | $10/mo or $100/yr | Unlimited completions, GPT-5 chat, agent mode |
-| Pro+ | $39/mo | + premium models, Workspace |
+| Pro | $10/mo or $100/yr | Unlimited completions, chat, agent mode, coding agent |
+| Pro+ | $39/mo | + larger AI Credit allowance, premium models |
 | Business | $19/user/mo | Org policies, content exclusions, audit |
 | Enterprise | $39/user/mo | + custom models, knowledge bases, fine-tuning |
 
-### Cursor (May 2026)
+As of June 1, 2026, metered usage is billed via **GitHub AI Credits**, which replaced the premium-requests system. Each plan includes a credit allowance; overages draw on credits. (Copilot Workspace was sunset May 30, 2025 — the coding agent is its successor for spec-to-PR flows.)
+
+### Cursor (June 2026)
 
 | Plan | Price | Includes |
 |------|-------|----------|
-| Free / Hobby | $0 | 50 slow premium requests/mo, 2K completions |
-| Pro | $20/mo | 500 fast premium requests/mo, unlimited slow, GPT-5 / Sonnet / Gemini |
-| Ultra | $200/mo | 1000+ fast requests, priority access, all models |
+| Free / Hobby | $0 | Limited model usage, 2K completions |
+| Pro | $20/mo | Included usage allowance for frontier models (GPT-5.5 / Sonnet 4.6 / Gemini 3.1 Pro) |
+| Ultra | $200/mo | ~20x Pro's usage allowance, priority access, all models |
 | Business | $40/user/mo | Org SSO, admin controls, privacy mode default |
 | Enterprise | Custom | Volume + procurement |
 
-"Premium request" = full-quality model call (Sonnet 4.6 / GPT-5 / Gemini 2.5 Pro). Composer agent runs typically consume 3-15 premium requests per task.
+Cursor moved from counted "fast premium requests" to **usage-based pricing** in mid-2025: plans include a usage allowance priced at model API rates, and agent runs draw it down. Heavy Composer/agent use burns through the Pro allowance quickly.
 
-### Sourcegraph Cody (May 2026)
+### Sourcegraph Cody (June 2026)
 
 | Plan | Price | Includes |
 |------|-------|----------|
@@ -117,7 +123,7 @@ Explicit Context Caching: small write fee + storage cost; ~85% off on hit.
 | Pro | $9/user/mo | Unlimited completions, Sonnet 4.6, Gemini 2.5 Pro |
 | Enterprise | Custom | Multi-repo, BYOK, self-host, audit |
 
-### JetBrains AI Assistant (May 2026)
+### JetBrains AI Assistant (June 2026)
 
 | Plan | Price | Includes |
 |------|-------|----------|
@@ -125,7 +131,7 @@ Explicit Context Caching: small write fee + storage cost; ~85% off on hit.
 | Pro | $10/user/mo | Multi-model, integrated with IDE |
 | Enterprise | Custom | |
 
-### Codeium / Windsurf (May 2026)
+### Windsurf (formerly Codeium; acquired by Cognition) (June 2026)
 
 | Plan | Price | Includes |
 |------|-------|----------|
@@ -134,7 +140,7 @@ Explicit Context Caching: small write fee + storage cost; ~85% off on hit.
 | Teams | $35/user/mo | Admin, BYOK |
 | Enterprise | Custom | Self-host option |
 
-### Claude Code (May 2026)
+### Claude Code (June 2026)
 
 Claude Code is the CLI; there's no Claude Code subscription. You pay either:
 
@@ -151,15 +157,15 @@ The Max 5x ($100/mo) tier hits the sweet spot for heavy individual users — equ
 
 ## Free Tiers
 
-Useful free tiers as of May 2026:
+Useful free tiers as of June 2026:
 
 | Tool | Free quota | Limitations |
 |------|------------|-------------|
 | GitHub Copilot Free | 2K completions/mo + 50 chat | Recent change; was unlimited for OSS maintainers |
-| Cursor Free | 50 slow / 2K completions / mo | Slow tier uses GPT-4o-mini class |
+| Cursor Free | Limited usage / 2K completions / mo | Free tier uses smaller-model class |
 | Cody Free | 200 completes/day + 20 chats/day | |
-| Codeium Free | Unlimited completions | Premium models limited |
-| Gemini CLI | 60 requests / min on free Vertex tier | Plus generous AI Studio free tier |
+| Windsurf Free | Unlimited completions | Premium models limited |
+| Gemini CLI | 60 req/min + 1,000 req/day with a personal Google account (Code Assist license) | Plus generous AI Studio free tier |
 | Anthropic API | $5 trial credit | One-time |
 | OpenAI API | none typically; $5 trial sometimes | |
 | Tabnine Free | Local AI completions only | |
@@ -183,8 +189,8 @@ Per-developer monthly cost ranges based on usage patterns:
 
 ### Heavy individual user (daily multi-hour AI sessions, agent work)
 
-- Copilot Pro: $10 (but Pro is rate-limited under load; Pro+ at $39 better)
-- Cursor Ultra: $200 (or Pro $20 if you stay under 500 premium req/mo)
+- Copilot Pro: $10 (but Pro's AI Credit allowance runs out under load; Pro+ at $39 better)
+- Cursor Ultra: $200 (or Pro $20 if you stay within the included usage allowance)
 - Claude Code via Claude.ai Max 5x: $100
 - Claude Code via API: $50-300
 
@@ -398,12 +404,12 @@ Beyond the scope of public pricing. Negotiate enterprise contracts with each ven
 
 ## Caveats
 
-- **Prices move.** Cuts in Q1 2026 dropped Sonnet 4.6 input from $5 → $3. Expect further movement.
-- **New tiers appear.** GPT-5 Mini and Gemini 2.5 Flash-Lite were created to address cost-sensitive workloads.
+- **Prices move.** The big recent cut was Opus: $15/$75 dropped to $5/$25 with Opus 4.5 in November 2025. (Sonnet input has been $3 since Sonnet 3.5.) Expect further movement.
+- **New tiers appear.** GPT-5.4 Mini/Nano and the Gemini Flash tiers exist to address cost-sensitive workloads.
 - **Provider credits / discounts.** Negotiate. Most providers offer 10-30% off at $50K+ annual.
 - **Region pricing.** Vertex AI region pricing varies slightly; EU sometimes higher.
 - **Currency.** All USD. EUR / GBP pricing typically tracks with FX adjustment.
-- **Per-seat sub tools change quotas.** Cursor's "premium request" definition has shifted multiple times in 2024-2025. Read the fine print before committing a large team.
+- **Per-seat sub tools change quotas.** Cursor's pricing model shifted multiple times in 2024-2025 (counted premium requests → usage-based), and GitHub moved Copilot metering to AI Credits in June 2026. Read the fine print before committing a large team.
 
 The number that matters is **cost per delivered task or feature**, not the API rate card. A $0.50 task with Opus that ships in 5 minutes beats a $0.05 task with Haiku that takes 45 minutes of human follow-up to fix.
 

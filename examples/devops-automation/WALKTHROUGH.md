@@ -53,10 +53,9 @@ export SLACK_DEPLOYS_WEBHOOK=https://hooks.slack.com/services/...
 Launch Claude Code:
 
 ```bash
-claude code \
-  --agents examples/devops-automation/AGENTS.md \
-  --mcp .deploy/mcp-config.json \
-  --working-dir $(pwd)
+# Run from the repo root — CLAUDE.md, AGENTS.md, and .claude/agents/ are
+# picked up automatically. Load the example's MCP servers explicitly:
+claude --mcp-config .deploy/mcp-config.json
 ```
 
 ---

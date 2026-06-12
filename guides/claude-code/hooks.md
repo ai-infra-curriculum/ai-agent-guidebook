@@ -22,18 +22,20 @@ Hooks let you run shell commands at specific points in Claude Code's lifecycle: 
 
 ## Hook Lifecycle Events
 
-Six event types, fired in the order shown when relevant.
+The six core event types, fired in the order shown when relevant.
 
 | Event | When it fires | Can block? | Common use |
 |-------|---------------|------------|------------|
 | `SessionStart` | When `claude` launches a session | No | Inject context, set env, log |
 | `UserPromptSubmit` | After the user submits a prompt, before the model sees it | Yes | Inject context, sanitize input, log |
 | `PreToolUse` | Before a tool executes | Yes | Validate args, deny, modify |
-| `PostToolUse` | After a tool returns | No (return value ignored) | Format, lint, log, side-effects |
+| `PostToolUse` | After a tool returns | No (the tool already ran; JSON output can still feed feedback to Claude) | Format, lint, log, side-effects |
 | `Stop` | When the assistant turn ends | Yes (can force another iteration) | Verify build, gate completion |
 | `SessionEnd` | When the session terminates | No | Cleanup, final logging |
 
-"Can block" means: a nonzero exit code (specifically 2; see below) aborts the action and surfaces the hook's stderr to the model.
+More events exist beyond these — `SubagentStart`/`SubagentStop`, `PermissionRequest`, `Notification`, `PreCompact`/`PostCompact`, and others; see the official hooks reference for the full list.
+
+"Can block" means: exit code 2 (see below) aborts the action and surfaces the hook's stderr to the model.
 
 ---
 
@@ -41,7 +43,7 @@ Six event types, fired in the order shown when relevant.
 
 Hooks live in `settings.json` (user-global at `~/.claude/settings.json`, project-local at `<repo>/.claude/settings.json`). Project hooks merge with global hooks — both run.
 
-Canonical shape:
+Canonical shape — note the nesting: each event holds an array of matcher groups, and each group holds a `hooks` array of hook definitions:
 
 ```json
 {
@@ -49,73 +51,71 @@ Canonical shape:
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "pnpm prettier --write \"$CLAUDE_FILE_PATH\"",
-        "description": "Format edited files"
-      },
-      {
-        "matcher": "Edit",
-        "command": "pnpm eslint --fix \"$CLAUDE_FILE_PATH\"",
-        "description": "Lint edited files"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh" }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Write",
-        "command": ".claude/hooks/guard-large-writes.sh",
-        "description": "Block oversized writes"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-large-writes.sh" }
+        ]
       },
       {
         "matcher": "Bash",
-        "command": ".claude/hooks/scan-bash.sh",
-        "description": "Block destructive bash"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/scan-bash.sh" }
+        ]
       }
     ],
     "Stop": [
       {
-        "command": "pnpm tsc --noEmit --pretty false",
-        "description": "Type-check at end of turn"
+        "hooks": [
+          { "type": "command", "command": "pnpm tsc --noEmit --pretty false" }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "command": ".claude/hooks/inject-ticket-context.sh",
-        "description": "Pull Linear ticket context if user mentions LIN-xxx"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-ticket-context.sh" }
+        ]
       }
     ],
     "SessionStart": [
       {
-        "command": "echo \"Session $(date) in $(pwd)\" >> ~/.claude/session-log"
+        "hooks": [
+          { "type": "command", "command": "echo \"Session $(date) in $(pwd)\" >> ~/.claude/session-log" }
+        ]
       }
     ]
   }
 }
 ```
 
-Each event has an array of hook objects. All hooks for an event run in order. If any blocking-capable hook exits 2, subsequent hooks in the array still run (they see the same input) — but the action is aborted.
+A flat `{"matcher": ..., "command": ...}` entry is **not** valid — the inner `hooks` array with `"type": "command"` is required. All hooks for an event run in order. If any blocking-capable hook exits 2, subsequent hooks in the array still run (they see the same input) — but the action is aborted.
 
 ---
 
 ## Hook Command Shape
 
-`command` is a shell string executed via `/bin/sh -c` (POSIX `sh`, not bash). To use bash features, invoke bash explicitly:
+Each hook definition is an object: `"type": "command"` plus the `command` string to execute. Optional fields include `timeout` (seconds) and `shell` to pick the interpreter.
 
 ```json
-{ "command": "bash -c '[[ \"$X\" == foo ]] && echo bar'" }
+{ "type": "command", "command": "bash -c '[[ \"$X\" == foo ]] && echo bar'", "timeout": 30 }
 ```
 
-Working directory is the directory `claude` was launched from. Useful env vars:
+Working directory is the directory `claude` was launched from. There is no per-tool environment variable surface — **the event payload arrives as JSON on stdin** (see [Input Format](#input-format)), and `jq` is the standard way to pull fields out. The documented variables you can rely on:
 
 | Variable | Meaning |
 |----------|---------|
-| `CLAUDE_TOOL_NAME` | Name of the tool being called (PreToolUse, PostToolUse) |
-| `CLAUDE_FILE_PATH` | Path to file the tool is acting on (Write, Edit, Read) |
-| `CLAUDE_COMMAND` | Shell command being executed (Bash tool) |
-| `CLAUDE_SESSION_ID` | Stable ID for the current session |
-| `CLAUDE_AGENT_TYPE` | Which agent is making the call (`general-purpose`, etc.) |
-| `CLAUDE_PROJECT_DIR` | Project root if launched inside one |
-| `CLAUDE_PROMPT` | The user prompt (UserPromptSubmit only) |
+| `CLAUDE_PROJECT_DIR` | Absolute path to the project root — use it to reference hook scripts (`$CLAUDE_PROJECT_DIR/.claude/hooks/...`) |
+| `CLAUDE_PLUGIN_ROOT` | Plugin installation directory (plugin-provided hooks) |
+| `CLAUDE_ENV_FILE` | File to write persistent env vars to (`SessionStart`-family events only) |
 
-The full request is also piped to stdin as JSON for hooks that want to parse structurally — more reliable than env vars for nested data.
+Note in particular: there is no `$CLAUDE_FILE_PATH`, `$FILE_PATH`, or `$CLAUDE_COMMAND`. Read `tool_input.file_path` or `tool_input.command` from stdin instead.
 
 ---
 
@@ -125,29 +125,29 @@ Hooks receive a JSON object on stdin describing the event:
 
 ```json
 {
-  "event": "PreToolUse",
+  "hook_event_name": "PreToolUse",
   "session_id": "01HFEXAMPLE...",
-  "agent_type": "general-purpose",
-  "tool": {
-    "name": "Edit",
-    "input": {
-      "file_path": "/repo/src/auth.ts",
-      "old_string": "...",
-      "new_string": "..."
-    }
+  "transcript_path": "/Users/you/.claude/projects/<project>/<session>.jsonl",
+  "cwd": "/repo",
+  "permission_mode": "default",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/repo/src/auth.ts",
+    "old_string": "...",
+    "new_string": "..."
   }
 }
 ```
 
-For `PostToolUse`, the object also includes `tool.output`. For `UserPromptSubmit`, `prompt`. For `Stop`, `assistant_message`.
+For `PostToolUse`, the object also includes the tool's result. For `UserPromptSubmit`, a `prompt` field. Subagent events carry `agent_type`.
 
-A hook can either inspect env vars (simple cases) or read stdin (structured cases):
+Parse stdin with `jq`:
 
 ```bash
 #!/usr/bin/env bash
 # .claude/hooks/guard-large-writes.sh
 input=$(cat)
-content=$(echo "$input" | jq -r '.tool.input.content // ""')
+content=$(echo "$input" | jq -r '.tool_input.content // ""')
 lines=$(echo "$content" | wc -l)
 if (( lines > 800 )); then
   echo "[hook] BLOCKED: file would be $lines lines (limit 800)" >&2
@@ -163,15 +163,17 @@ Hook exit code semantics differ by event type, but the common rules:
 
 | Exit | Meaning |
 |------|---------|
-| 0 | Success. The action proceeds. stdout is discarded. |
-| 2 | Block. The action is aborted; stderr is surfaced to the model. Only effective for blocking-capable events (PreToolUse, UserPromptSubmit, Stop). |
-| Other nonzero | Logged as an error. Action proceeds. stderr captured in `~/.claude/logs/hooks.log`. |
+| 0 | Success. The action proceeds. stdout is parsed for optional JSON output (and injected as context for `UserPromptSubmit` and `SessionStart`). |
+| 2 | Block. The action is aborted; stderr is surfaced as the reason. Only effective for blocking-capable events (PreToolUse, UserPromptSubmit, Stop, and others). |
+| Other nonzero | Non-blocking error. Action proceeds; stderr is shown in the transcript and debug log. |
 
-For `UserPromptSubmit` and `PreToolUse`, exit 2 prevents the model from seeing the prompt / executing the tool, and feeds the hook's stderr back to the model as the reason. The model then decides how to react — often by trying a different approach.
+For `PreToolUse`, exit 2 prevents the tool from executing and feeds the hook's stderr back to the model as the reason. The model then decides how to react — often by trying a different approach. For `UserPromptSubmit`, exit 2 blocks the prompt and erases it.
 
 For `Stop`, exit 2 forces another assistant turn, with the hook's stderr as additional context. Useful for "build is broken, keep working."
 
-`PostToolUse` and `SessionStart`/`SessionEnd` cannot block. Exit codes are advisory only — they appear in logs but do not affect flow.
+`PostToolUse` and `SessionStart`/`SessionEnd` cannot block (the tool already ran / there is nothing to abort). A `PostToolUse` hook can still return JSON output with feedback for Claude, but exit codes do not change flow.
+
+Hooks can also emit structured JSON on stdout (exit 0) for finer control — e.g. `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "..."}}` — see the official hooks reference for the full schema.
 
 For `UserPromptSubmit` and `SessionStart`, stdout (not stderr) on exit 0 is injected as additional context for the model. This is how you do dynamic context injection — see the ticket-context example below.
 
@@ -185,18 +187,19 @@ The `matcher` field on a hook entry restricts when it fires. Forms:
 |------|---------|
 | `"Write"` | Only the `Write` tool |
 | `"Write\|Edit"` | `Write` or `Edit` |
-| `".*"` or omitted | All tool calls (for tool-related events) |
+| `"*"`, `""`, or omitted | All tool calls (for tool-related events) |
 | `"Bash"` | Any `Bash` invocation |
 | `"mcp__github__.*"` | All GitHub MCP tools (regex on tool name) |
 
-`matcher` is regex against `CLAUDE_TOOL_NAME`. No matching needed for events that aren't tool-scoped (`SessionStart`, `UserPromptSubmit`).
+For tool events, `matcher` is matched against the tool name — exact strings and pipe-separated lists match literally; anything with other characters is treated as a regular expression. Omit the matcher for events that aren't tool-scoped (`UserPromptSubmit`, `Stop`).
 
 Path filtering is your job inside the hook:
 
 ```bash
 # .claude/hooks/format-ts.sh
-case "$CLAUDE_FILE_PATH" in
-  *.ts|*.tsx) pnpm prettier --write "$CLAUDE_FILE_PATH" ;;
+file_path=$(cat | jq -r '.tool_input.file_path // ""')
+case "$file_path" in
+  *.ts|*.tsx) pnpm prettier --write "$file_path" ;;
   *) exit 0 ;;
 esac
 ```
@@ -213,7 +216,9 @@ esac
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": ".claude/hooks/format.sh"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh" }
+        ]
       }
     ]
   }
@@ -223,11 +228,12 @@ esac
 ```bash
 #!/usr/bin/env bash
 # .claude/hooks/format.sh
-case "$CLAUDE_FILE_PATH" in
-  *.ts|*.tsx|*.js|*.jsx) pnpm prettier --write "$CLAUDE_FILE_PATH" 2>/dev/null ;;
-  *.py)                  uv run ruff format "$CLAUDE_FILE_PATH" 2>/dev/null ;;
-  *.go)                  gofmt -w "$CLAUDE_FILE_PATH" 2>/dev/null ;;
-  *.rs)                  rustfmt "$CLAUDE_FILE_PATH" 2>/dev/null ;;
+file_path=$(cat | jq -r '.tool_input.file_path // ""')
+case "$file_path" in
+  *.ts|*.tsx|*.js|*.jsx) pnpm prettier --write "$file_path" 2>/dev/null ;;
+  *.py)                  uv run ruff format "$file_path" 2>/dev/null ;;
+  *.go)                  gofmt -w "$file_path" 2>/dev/null ;;
+  *.rs)                  rustfmt "$file_path" 2>/dev/null ;;
   *) ;;
 esac
 exit 0
@@ -243,7 +249,9 @@ Notes: silence stderr (`2>/dev/null`) for formatters that complain about partial
     "PreToolUse": [
       {
         "matcher": "Write",
-        "command": ".claude/hooks/guard-large-writes.sh"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-large-writes.sh" }
+        ]
       }
     ]
   }
@@ -253,7 +261,7 @@ Notes: silence stderr (`2>/dev/null`) for formatters that complain about partial
 ```bash
 #!/usr/bin/env bash
 input=$(cat)
-content=$(echo "$input" | jq -r '.tool.input.content // ""')
+content=$(echo "$input" | jq -r '.tool_input.content // ""')
 lines=$(printf '%s' "$content" | wc -l)
 if (( lines > 800 )); then
   echo "Blocked: write would be $lines lines (cap 800). Split the file." >&2
@@ -268,7 +276,7 @@ The model receives "Blocked: write would be 1247 lines (cap 800). Split the file
 ```bash
 #!/usr/bin/env bash
 # .claude/hooks/scan-bash.sh
-cmd="$CLAUDE_COMMAND"
+cmd=$(cat | jq -r '.tool_input.command // ""')
 
 # Hard blocks
 if echo "$cmd" | grep -qE '\brm\s+-rf\s+/($|\s)'; then
@@ -293,7 +301,7 @@ exit 0
 ```bash
 #!/usr/bin/env bash
 # .claude/hooks/inject-ticket-context.sh
-prompt="$CLAUDE_PROMPT"
+prompt=$(cat | jq -r '.prompt // ""')
 ticket=$(echo "$prompt" | grep -oE '\b(LIN|JIRA)-[0-9]+\b' | head -1)
 [[ -z "$ticket" ]] && exit 0
 
@@ -316,7 +324,9 @@ exit 0
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "command": ".claude/hooks/pre-commit-gate.sh"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-gate.sh" }
+        ]
       }
     ]
   }
@@ -325,7 +335,8 @@ exit 0
 
 ```bash
 #!/usr/bin/env bash
-case "$CLAUDE_COMMAND" in
+cmd=$(cat | jq -r '.tool_input.command // ""')
+case "$cmd" in
   "git commit"*)
     pnpm typecheck >/dev/null 2>&1 || {
       echo "Blocked: TypeScript errors. Run 'pnpm typecheck' and fix." >&2
@@ -347,7 +358,9 @@ exit 0
   "hooks": {
     "Stop": [
       {
-        "command": ".claude/hooks/verify-build.sh"
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/verify-build.sh" }
+        ]
       }
     ]
   }
@@ -373,8 +386,9 @@ Exit 2 here triggers another assistant turn. Use sparingly — it can create inf
 ```bash
 #!/usr/bin/env bash
 # .claude/hooks/session-start.sh
+session_id=$(cat | jq -r '.session_id // "unknown"')
 {
-  echo "[$(date)] Session $CLAUDE_SESSION_ID in $(pwd)"
+  echo "[$(date)] Session $session_id in $(pwd)"
   echo "  Node: $(node --version 2>/dev/null || echo missing)"
   echo "  Git branch: $(git branch --show-current 2>/dev/null || echo none)"
   echo "  Git status: $(git status --porcelain | wc -l) modified files"
@@ -417,11 +431,10 @@ Rules of thumb:
 - **Background long work.** If the hook needs to do something expensive, fork it: `nohup command >/dev/null 2>&1 &; exit 0`. You lose the ability to block on it.
 - **Cache aggressively.** If you call an external API, cache by file content hash.
 
-Profile your hooks:
+Profile your hooks by running a session with debug output, which logs each hook execution:
 
 ```bash
-tail -f ~/.claude/logs/hooks.log
-# Each entry includes wall-clock duration
+claude --debug
 ```
 
 ---
@@ -432,8 +445,8 @@ Hooks run as you, with your shell. They have full filesystem and network access.
 
 - **Project-local hooks are a supply-chain vector.** A malicious PR can add `.claude/settings.json` with a hook that exfiltrates `~/.ssh/`. Review `.claude/settings.json` diffs in PRs the same way you review `package.json` postinstall scripts.
 - **Pin hook scripts in version control.** Don't `curl | bash` from a hook.
-- **Quote variables.** `"$CLAUDE_FILE_PATH"` not `$CLAUDE_FILE_PATH`. Paths with spaces, semicolons, or backticks will otherwise be interpreted as shell.
-- **Disable untrusted project hooks.** On first session in an unfamiliar repo, set `permissionMode: ask` and review `.claude/settings.json` before letting hooks fire.
+- **Quote variables.** `"$file_path"` not `$file_path` after extracting from stdin. Paths with spaces, semicolons, or backticks will otherwise be interpreted as shell.
+- **Review untrusted project hooks.** On first session in an unfamiliar repo, review `.claude/settings.json` before accepting the workspace trust prompt and letting hooks fire.
 
 Claude Code will prompt before executing project-local hooks the first time you open a repo, but the prompt is approve-once, remember-forever. Read what you approve.
 
@@ -443,11 +456,9 @@ Claude Code will prompt before executing project-local hooks the first time you 
 
 ### "My hook doesn't fire"
 
-```bash
-tail -f ~/.claude/logs/hooks.log
-```
+Run `/hooks` in-session to confirm the hook is registered, and launch with `claude --debug` to watch hook executions live.
 
-If the hook doesn't appear, the `matcher` doesn't match. Test the regex:
+If the hook never appears, the `matcher` doesn't match. Test the regex:
 
 ```bash
 echo "Edit" | grep -E "Write|Edit"
@@ -475,7 +486,7 @@ For `UserPromptSubmit` and `SessionStart`, stdout on exit 0 is injected. For blo
 
 ### "Hook works manually but fails when fired"
 
-Almost always the environment. `claude` runs hooks with a minimal env. Source your shell rc explicitly if needed:
+Almost always the environment. Hooks inherit the environment of the `claude` process, which can differ from your interactive shell (especially when Claude Code is launched from an IDE). Source your shell rc explicitly if needed:
 
 ```bash
 #!/usr/bin/env bash
@@ -495,7 +506,8 @@ A `Stop` hook with exit 2 that the agent can't satisfy creates an infinite loop.
 
 ```bash
 # Count how many times we've exited 2 this session
-counter="/tmp/build-fail-$CLAUDE_SESSION_ID"
+session_id=$(cat | jq -r '.session_id // "default"')
+counter="/tmp/build-fail-$session_id"
 count=$(cat "$counter" 2>/dev/null || echo 0)
 if (( count >= 3 )); then
   echo "Build still failing after 3 retries. Giving up." >&2
@@ -507,7 +519,7 @@ exit 2
 
 ### "Hooks slow down every action noticeably"
 
-Profile. The log records wall-clock. If a hook takes >500ms, either narrow its `matcher`, move it to a less-frequent event, or background it.
+Profile with `claude --debug`. If a hook takes >500ms, either narrow its `matcher`, move it to a less-frequent event, or background it.
 
 ---
 

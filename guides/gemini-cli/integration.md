@@ -1,109 +1,95 @@
 # Gemini CLI Integration
 
-Programmatic use of the `gemini` CLI: scripts, JSON mode, pipelines with `jq` / `fzf`, CI, and when to switch to the `@google/genai` SDK.
+Programmatic use of the `gemini` CLI: headless mode, JSON output, shell pipelines with `jq`, CI via the official GitHub Action, and when to switch to the `@google/genai` SDK.
 
 ---
 
 ## Table of Contents
 
 - [Why Use the CLI From Scripts](#why-use-the-cli-from-scripts)
-- [JSON and JSONL Output](#json-and-jsonl-output)
+- [Headless Mode and JSON Output](#headless-mode-and-json-output)
 - [Shell Pipelines](#shell-pipelines)
 - [Combining with `jq`](#combining-with-jq)
-- [Combining with `fzf`](#combining-with-fzf)
 - [CI Usage](#ci-usage)
 - [Error Handling and Exit Codes](#error-handling-and-exit-codes)
 - [Cost and Rate-Limit Patterns](#cost-and-rate-limit-patterns)
 - [Governance in LLM Pipelines](#governance-in-llm-pipelines)
 - [CLI vs `@google/genai` SDK](#cli-vs-googlegenai-sdk)
+- [Pattern Cookbook](#pattern-cookbook)
 
 ---
 
 ## Why Use the CLI From Scripts
 
-The `gemini` CLI is designed to be scriptable as a first-class concern, not as an afterthought. Compared to writing direct SDK code, scripting the CLI gets you:
+Compared to writing direct SDK code, scripting the CLI gets you:
 
 - **Zero boilerplate.** No client setup, no model object, no auth init.
 - **Trivial cross-language reuse.** Bash, Python, Ruby, anything — same interface.
-- **Free streaming, retries, file handling.** The CLI implements them once.
+- **Agentic tools for free.** File reading, shell execution, Google Search grounding, and MCP servers come along when you want them.
 - **Easy human pairing.** A script you run today can be re-run by a teammate by hand tomorrow.
 
 Compared to the SDK, you give up:
 
-- Per-token streaming hooks (the CLI streams to stdout, but you can't react mid-stream as easily).
-- Function-calling control (the CLI exposes it, but the SDK gives finer control).
-- Lowest possible latency (fork overhead is ~50–200 ms).
+- Fine-grained streaming and function-calling control.
+- Lowest possible latency (process startup overhead).
+- Embeddings, fine-tuning, and other API surface the CLI doesn't expose.
 
-The CLI is the right tool for orchestration, batch jobs, dev tools, and anything where the *use case* is more important than squeezing the last 100 ms of latency.
+The CLI is the right tool for orchestration, batch jobs, dev tooling, and CI checks; the SDK is the right tool for applications.
 
 ---
 
-## JSON and JSONL Output
+## Headless Mode and JSON Output
 
-### `--json`
+Headless mode activates when you pass `-p` / `--prompt`, or automatically in non-TTY environments (pipes, CI).
 
-Single-shot, machine-readable output:
-
-```bash
-gemini --json "list three programming languages and a one-line description of each, as JSON: { languages: [{name, description}] }"
-```
-
-Output (one JSON object on stdout):
-
-```json
-{
-  "languages": [
-    {"name": "Python", "description": "Versatile interpreted language popular for scripting, data, and ML."},
-    {"name": "Rust", "description": "Systems language with memory safety without a garbage collector."},
-    {"name": "Go", "description": "Concurrent, compiled language designed for simplicity at scale."}
-  ]
-}
-```
-
-Notes:
-
-- `--json` instructs Gemini to format its response as JSON. The CLI then validates and emits a single object. Invalid JSON from the model is retried up to 2 times before erroring.
-- For tasks where structured output is critical, *also* describe the JSON shape in your prompt — `--json` is a hint, not a schema enforcement.
-
-### `--jsonl` (event stream)
-
-Per-event line-delimited JSON, useful for tailing long generations or capturing usage info:
+### Plain text (default)
 
 ```bash
-gemini --jsonl "explain the CAP theorem in 3 paragraphs"
+gemini -p "explain the CAP theorem in one paragraph"
 ```
 
-Output:
+### `--output-format json`
 
-```jsonl
-{"type":"start","model":"gemini-2.5-flash","session_id":"2026-05-23-a4f2"}
-{"type":"chunk","text":"The CAP theorem..."}
-{"type":"chunk","text":" states that a distributed system..."}
-{"type":"chunk","text":" can only guarantee..."}
-{"type":"end","usage":{"input_tokens":18,"output_tokens":312,"total_tokens":330},"finish_reason":"stop"}
-```
-
-Event types:
-
-| Type | Fields | When |
-|------|--------|------|
-| `start` | `model`, `session_id` | First line |
-| `chunk` | `text` | For each streamed token batch |
-| `tool_call` | `name`, `arguments` | If function calling is enabled |
-| `tool_result` | `name`, `result` | After tool execution |
-| `error` | `code`, `message` | On any error |
-| `end` | `usage`, `finish_reason` | Last line on success |
-
-### JSON Schema mode (when supported)
-
-For strict schema validation, pass a schema:
+A single JSON envelope on stdout — the reliable choice for scripts:
 
 ```bash
-gemini --json --schema schema.json \
-  -f data.csv "extract the top 5 customers by revenue from this CSV"
+gemini -p "explain the CAP theorem in one paragraph" --output-format json
 ```
 
-Where `schema.json` is a standard JSON Schema. The model is constrained to outputs matching the schema, with auto-retry on validation failure.
+The envelope contains:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `response` | string | The model's final answer |
+| `stats` | object | Token usage and API latency metrics |
+| `error` | object (optional) | `type` / `message` / code details when the run failed |
+
+Extract just the answer:
+
+```bash
+gemini -p "..." --output-format json | jq -r '.response'
+```
+
+> Note: `--output-format json` changes the **CLI's output envelope** — it does not force the model to answer in JSON. If you need the *answer itself* to be structured, also say so in the prompt ("respond with only a JSON array of {name, purpose}") and parse `.response`.
+
+### `--output-format stream-json`
+
+Newline-delimited JSON events, useful for monitoring long agentic runs in real time:
+
+```bash
+gemini -p "audit this repo for risky patterns" --output-format stream-json
+```
+
+Event types include:
+
+| Type | When |
+|------|------|
+| `init` | First line — session ID and model metadata |
+| `message` | User and assistant message chunks |
+| `tool_use` | A tool call request with its arguments |
+| `tool_result` | Output from an executed tool |
+| `error` | Non-fatal warnings and system errors |
+| `result` | Last line — final outcome with aggregated stats and per-model token usage |
 
 ---
 
@@ -114,143 +100,90 @@ The CLI follows Unix conventions: reads stdin, writes stdout, errors to stderr.
 ### Reading from stdin
 
 ```bash
-cat README.md | gemini "translate this to French"
+cat README.md | gemini -p "translate this to French"
 
-echo "what's the molecular weight of caffeine?" | gemini
+git diff main...HEAD | gemini -p "review this diff"
 
-curl -s https://api.example.com/spec | gemini "is this REST API well-designed?"
+curl -s https://api.example.com/spec | gemini -p "is this REST API well-designed?"
 ```
 
 ### Writing to a file
 
 ```bash
-gemini -f src/ "produce API documentation" > docs/api.md
+gemini -p "@src/ produce API documentation for these modules" > docs/api.md
 ```
 
-### Streaming to a tool
+### Feeding downstream tools
 
 ```bash
-gemini --no-stream "produce 200 lines of test data as TSV" | head -50
-
-gemini -f log.txt "extract error timestamps, one per line" \
+gemini -p "@log.txt extract error timestamps, one per line" \
   | sort -u \
   | tee unique-errors.txt
 ```
 
 ### Capturing both output and metadata
 
-Combine `--jsonl` with `tee` and `jq`:
-
 ```bash
-gemini --jsonl "long analysis" \
-  | tee analysis.jsonl \
-  | jq -r 'select(.type=="chunk") | .text' \
-  | tee analysis.txt > /dev/null
-
-# Now analysis.txt has the response, analysis.jsonl has the metadata.
+out=$(gemini -p "long analysis" --output-format json)
+echo "$out" | jq -r '.response' > analysis.txt
+echo "$out" | jq '.stats' > analysis-stats.json
 ```
 
 ---
 
 ## Combining with `jq`
 
-`jq` plus `--jsonl` is the bread and butter of CLI pipelines.
-
-### Extract just the text
+### Extract the response text
 
 ```bash
-gemini --jsonl "what is the speed of light?" \
-  | jq -rs 'map(select(.type=="chunk") | .text) | add'
+gemini -p "what is the speed of light?" --output-format json | jq -r '.response'
 ```
 
 ### Pull token usage
 
 ```bash
-gemini --jsonl -f huge-file.md "summarize this" \
-  | jq -s 'map(select(.type=="end")) | .[0].usage'
+gemini -p "@huge-file.md summarize this" --output-format json | jq '.stats'
 ```
 
-Output:
+### Parse a structured answer
 
-```json
-{
-  "input_tokens": 412318,
-  "output_tokens": 312,
-  "total_tokens": 412630
-}
-```
-
-### Cost calculator
+Ask for JSON in the prompt, then parse the `response` field:
 
 ```bash
-COST_PER_M_INPUT=1.25   # adjust for your model
-COST_PER_M_OUTPUT=5.00
-
-gemini --jsonl -f src/ "audit for bugs" \
-  | jq -s --argjson in "$COST_PER_M_INPUT" --argjson out "$COST_PER_M_OUTPUT" '
-      map(select(.type=="end"))
-      | .[0].usage
-      | {
-          input_tokens,
-          output_tokens,
-          input_cost: (.input_tokens / 1000000 * $in),
-          output_cost: (.output_tokens / 1000000 * $out),
-          total_cost: ((.input_tokens / 1000000 * $in) + (.output_tokens / 1000000 * $out))
-        }'
+gemini -p "list 5 npm testing packages. respond with ONLY a JSON array of {name, purpose}" \
+  --output-format json \
+  | jq -r '.response' \
+  | jq -r '.[] | "\(.name) — \(.purpose)"'
 ```
 
-### Parse `--json` responses
+(Models sometimes wrap JSON in Markdown fences; strip them with `sed '/^```/d'` if needed, or tighten the prompt.)
+
+### Tail an agentic run
 
 ```bash
-gemini --json "list 5 npm packages for testing, as JSON: [{name, purpose}]" \
-  | jq '.[] | "\(.name) — \(.purpose)"'
-```
-
----
-
-## Combining with `fzf`
-
-Interactive filtering of Gemini output.
-
-### Pick a file to analyze
-
-```bash
-file=$(fd . src --type f | fzf --prompt='File to review> ')
-[ -n "$file" ] && gemini -f "$file" "review for bugs"
-```
-
-### Pick from generated suggestions
-
-```bash
-gemini --json "suggest 10 ways to refactor this function: $(cat fn.py); reply with a JSON array of {title, description, code}" \
-  | jq -r '.[] | "\(.title)\t\(.description)"' \
-  | fzf -d $'\t' --with-nth=1 --preview='echo {2}'
-```
-
-### Interactive grep with reasoning
-
-```bash
-rg --vimgrep 'TODO' | fzf --preview '
-    line=$(echo {} | cut -d: -f2)
-    file=$(echo {} | cut -d: -f1)
-    gemini -f "$file" --no-stream "explain the TODO on or near line $line and suggest a resolution"
-'
-```
-
-### Pick a model interactively
-
-```bash
-model=$(gemini models list --json | jq -r '.[].name' | fzf --prompt='Model> ')
-[ -n "$model" ] && gemini -m "$model"
+gemini -y -p "fix the failing tests" --output-format stream-json \
+  | jq -rc 'select(.type=="tool_use") | "TOOL: \(.)"'
 ```
 
 ---
 
 ## CI Usage
 
-The CLI works well in CI when configured correctly.
+### The official GitHub Action (recommended)
 
-### GitHub Actions example
+[`google-github-actions/run-gemini-cli`](https://github.com/google-github-actions/run-gemini-cli) runs Gemini CLI inside workflows for PR review, issue triage, and on-demand collaboration (mention `@gemini-cli` in a comment):
+
+```yaml
+# .github/workflows/gemini.yml (excerpt)
+- uses: google-github-actions/run-gemini-cli@v0
+  with:
+    gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+    prompt: "Review this pull request for bugs and missing tests."
+```
+
+It supports API-key auth (AI Studio) and Workload Identity Federation for Vertex AI. The easiest setup path: run `/setup-github` inside the Gemini CLI REPL — it scaffolds the workflows for you.
+
+### Manual workflow
 
 ```yaml
 # .github/workflows/ai-review.yml
@@ -278,7 +211,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           git diff origin/${{ github.base_ref }}...HEAD \
-            | gemini -m gemini-2.5-flash --non-interactive --no-stream \
+            | gemini -m gemini-2.5-flash -p "review this diff for bugs and risky patterns" \
             > /tmp/review.md
 
       - name: Post as PR comment
@@ -290,51 +223,52 @@ jobs:
 
 ### Tips for CI
 
-- Use `--non-interactive` and `--no-stream` for clean logs.
-- Set `GEMINI_LOG_LEVEL=warn` to reduce noise.
-- Cache the npm install (or pin to a Docker image with the CLI baked in).
-- Store the API key in your secret store, never in repo.
-- Prefer service accounts (Vertex AI) over personal API keys for org-owned automation.
+- Authenticate with `GEMINI_API_KEY` (or Vertex AI service credentials) — OAuth login is interactive and not CI-friendly.
+- The CLI auto-detects non-TTY environments and behaves headlessly; `--output-format json` keeps logs parseable.
+- Set `GEMINI_CLI_TRUST_WORKSPACE=true` if folder-trust prompts block headless runs.
+- Cache the npm install, or bake the CLI into a runner image.
+- Store keys in your secret store, never in the repo.
+- Prefer Vertex AI / Workload Identity over personal API keys for org-owned automation.
 
 ### GitLab / CircleCI / Buildkite
 
 Same pattern: install via npm or Homebrew, set the env var, pipe input, capture output. The CLI does not need a TTY.
 
-### Self-hosted runners
-
-If your runners can't reach the public internet, use a proxy (`HTTPS_PROXY`) or run Vertex AI from inside Google Cloud where network egress is internal.
-
 ---
 
 ## Error Handling and Exit Codes
 
+Documented exit codes:
+
 | Exit code | Meaning |
 |-----------|---------|
 | `0` | Success |
-| `1` | Generic error (unclassified) |
-| `2` | Invalid arguments / usage |
-| `3` | Authentication failure |
-| `4` | Rate limit / quota exhausted |
-| `5` | Network / connectivity error |
-| `6` | Model error (content policy, invalid request) |
-| `7` | Context window exceeded |
-| `8` | Timeout |
-| `130` | Interrupted (Ctrl-C) |
+| `1` | General error or API failure |
+| `42` | Input error (invalid prompt or arguments) |
+| `53` | Turn limit exceeded |
 
 ### Patterns
 
 ```bash
-if ! output=$(gemini -f code.py "review" 2>/tmp/err); then
+if ! output=$(gemini -p "@code.py review" 2>/tmp/err); then
   rc=$?
-  case $rc in
-    4) echo "Rate limited; backing off"; sleep 60; ;;
-    7) echo "Too big; chunking required"; exit 1 ;;
-    *) echo "Failed (code $rc): $(cat /tmp/err)"; exit $rc ;;
-  esac
+  echo "gemini failed (code $rc): $(cat /tmp/err)" >&2
+  exit "$rc"
+fi
+```
+
+For machine-readable failure details, prefer `--output-format json` and inspect the `error` field:
+
+```bash
+result=$(gemini -p "..." --output-format json) || true
+if echo "$result" | jq -e '.error' >/dev/null; then
+  echo "Error: $(echo "$result" | jq -r '.error.message')" >&2
 fi
 ```
 
 ### Retries with backoff
+
+Useful around rate limits (the free tier is 60 requests/min):
 
 ```bash
 gemini_with_retry() {
@@ -344,55 +278,44 @@ gemini_with_retry() {
     if gemini "$@"; then
       return 0
     fi
-    rc=$?
-    if [ $rc -ne 4 ] && [ $rc -ne 5 ] && [ $rc -ne 8 ]; then
-      return $rc
-    fi
     sleep $((2 ** attempt))
     attempt=$((attempt + 1))
   done
   return 1
 }
-```
 
-The CLI already retries some classes of errors internally (transient 5xx, throttling). The wrapper above is for end-to-end resilience.
+gemini_with_retry -p "summarize @README.md"
+```
 
 ---
 
 ## Cost and Rate-Limit Patterns
 
-### Pre-check token count
-
-```bash
-tokens=$(gemini tokens -f src/ | awk '{print $1}')
-if [ "$tokens" -gt 800000 ]; then
-  echo "Input too large ($tokens tokens). Aborting."
-  exit 1
-fi
-gemini -f src/ "review for bugs"
-```
-
 ### Use Flash for the first pass
 
 ```bash
-# Cheap summary
-summary=$(gemini -m gemini-2.5-flash -f src/ --no-stream \
-  "produce a 200-line structured summary of this codebase")
+# Cheap summary with Flash
+summary=$(gemini -m gemini-2.5-flash -p \
+  "@src/ produce a structured summary: per-file purpose, key types, key functions")
 
 # Expensive deep dive only on the summary
-echo "$summary" | gemini -m gemini-2.5-pro \
+echo "$summary" | gemini -m gemini-3-flash-preview -p \
   "identify the three biggest architectural risks based on this summary"
 ```
+
+### Watch usage
+
+In interactive sessions, `/stats` (and `/stats model`) shows token consumption. In headless runs, read `.stats` from the JSON envelope and log it per call.
 
 ### Rate-limit-aware fan-out
 
 ```bash
 # Process files in parallel but cap concurrency
 find . -name '*.py' | xargs -P 4 -I {} \
-  sh -c 'gemini -f "{}" --no-stream "one-line summary" >> summaries.txt'
+  sh -c 'gemini -m gemini-2.5-flash -p "@{} one-line summary" >> summaries.txt'
 ```
 
-`-P 4` keeps you under most rate-limit ceilings. Increase only after watching for 429s.
+`-P 4` keeps you under most rate-limit ceilings (the free tier allows 60 requests/min). Increase only after watching for 429s.
 
 ---
 
@@ -416,49 +339,47 @@ The choice matters less than having a choice — even a homegrown pre-call / pos
 
 ## CLI vs `@google/genai` SDK
 
-The CLI is built on top of the `@google/genai` JavaScript SDK (Python and Go SDKs exist as siblings). When should you reach for the SDK directly?
+For programmatic access, the current SDK is the unified **Google GenAI SDK**: [`@google/genai`](https://www.npmjs.com/package/@google/genai) for JavaScript/TypeScript, [`google-genai`](https://pypi.org/project/google-genai/) for Python, plus Go and Java siblings. It works against both the Gemini API (AI Studio keys) and Vertex AI.
+
+> ⚠️ **Do not use the old `google-generativeai` Python SDK** (`import google.generativeai as genai`). It reached end-of-life on **November 30, 2025** and its repository is archived. Tutorials built on it — and on retired model names like `gemini-pro` — will not work. Migrate to `google-genai` / `@google/genai`.
 
 ### Choose the CLI when
 
 - The use case fits a shell pipeline.
 - You want zero infrastructure: no `package.json`, no virtual env.
+- You want the agentic loop (file edits, shell, MCP tools) for free.
 - Cross-language teammates need to run / debug the same thing.
-- Latency is fine in the seconds range.
 - You're scripting dev tools, CI checks, batch jobs.
 
 ### Choose the SDK when
 
 - You need per-token streaming hooks (e.g., update a UI as tokens arrive).
 - You're implementing function calling with bespoke tool execution.
-- You need sub-second latency from a server.
-- You want full control over retries, batching, request shaping.
+- You need strict structured output via `responseSchema`.
+- You need sub-second latency from a server, or embeddings/other API surface.
 - You're building an application — not a script.
 
 ### Side-by-side feature comparison
 
-| Feature | CLI | SDK |
-|---------|-----|-----|
-| Auth (API key / Vertex) | Yes | Yes |
-| Streaming output | Yes (to stdout) | Yes (callback-driven) |
-| Multimodal input | Yes | Yes |
-| Sessions / history | Yes (file-backed) | Manual (you store) |
-| Function calling | Yes (basic) | Yes (full control) |
-| Files API | Yes | Yes |
-| Embeddings | No (not exposed) | Yes |
-| Fine-tuning | No | Yes |
-| Code execution (sandboxed) | No | Yes (Vertex) |
-| Batch API | No | Yes (Vertex) |
-| Token counting | Yes | Yes |
-| JSON-mode output | Yes | Yes |
-| MCP servers | Yes (experimental) | Yes |
+| Feature | CLI | SDK (`@google/genai`) |
+|---------|-----|----------------------|
+| Auth (API key / Vertex) | Yes (plus OAuth login) | Yes |
+| Streaming output | Yes (to stdout, `stream-json`) | Yes (callback/iterator-driven) |
+| Agentic tools (files, shell, search) | Yes, built in | You build them |
+| MCP servers | Yes | Via your own integration |
+| Sessions / checkpoints | Yes (built in) | Manual (you store history) |
+| Function calling | Internal to the agent | Yes (full control) |
+| Structured output (`responseSchema`) | No (prompt-level only) | Yes |
+| Embeddings | No | Yes |
+| JSON output envelope | Yes (`--output-format json`) | n/a (you get objects) |
 
 ### Same task, two ways
 
 **CLI:**
 
 ```bash
-gemini -f spec.md -m gemini-2.5-pro --json \
-  "extract all API endpoints as JSON: [{method, path, description}]"
+gemini -p "@spec.md extract all API endpoints. respond with ONLY a JSON array of {method, path, description}" \
+  --output-format json | jq -r '.response'
 ```
 
 **SDK (JavaScript):**
@@ -500,7 +421,7 @@ The SDK is more code but gives you precise schema enforcement and is straightfor
 
 ### Hybrid: shell out from app code
 
-You can use the CLI's `mcp` subcommand to expose Gemini as a tool to other agents (Claude Code, IDE assistants). And you can shell out to the CLI from SDK or application code for one-off batch operations. Prefer safe spawn primitives (e.g. `child_process.spawn` with an args array, or `execFile` rather than `exec`) so that nothing from a prompt or filename can be misinterpreted by the shell. Spawning the CLI is a perfectly legitimate pattern when you want SDK control over surrounding logic but CLI simplicity for the model call itself.
+You can shell out to the CLI from SDK or application code for one-off batch operations. Prefer safe spawn primitives (e.g. `child_process.spawn` with an args array, or `execFile` rather than `exec`) so that nothing from a prompt or filename can be misinterpreted by the shell. Spawning the CLI is a perfectly legitimate pattern when you want SDK control over surrounding logic but CLI simplicity (and its built-in agent tooling) for the model call itself.
 
 ---
 
@@ -512,12 +433,13 @@ You can use the CLI's `mcp` subcommand to expose Gemini as a tool to other agent
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Watch nginx logs; on each error block, send to Gemini for classification.
+# Watch nginx logs; on each error line, send to Gemini for classification.
 tail -F /var/log/nginx/error.log \
   | grep --line-buffered -E '(error|crit|alert)' \
   | while read -r line; do
-      classification=$(echo "$line" | gemini --json --no-stream -m gemini-2.5-flash \
-        "classify this log line. JSON: {severity, category, recommended_action}")
+      classification=$(echo "$line" | gemini -m gemini-2.5-flash -p \
+        "classify this log line. respond with ONLY JSON: {severity, category, recommended_action}" \
+        --output-format json | jq -r '.response')
       echo "$(date -Iseconds)|$line|$classification" >> /var/log/triage.log
     done
 ```
@@ -529,8 +451,7 @@ tail -F /var/log/nginx/error.log \
 # On every push to main, regenerate API docs.
 set -euo pipefail
 
-gemini -f 'src/api/**/*.ts' -m gemini-2.5-pro --no-stream \
-  "regenerate the API reference Markdown for these handlers, matching the format of docs/api.md exactly" \
+gemini -p "@src/api/ regenerate the API reference Markdown for these handlers, matching the format of docs/api.md exactly. Output only the Markdown." \
   > docs/api.md
 
 if ! git diff --quiet docs/api.md; then
@@ -543,7 +464,7 @@ fi
 
 ```bash
 git log v1.0.0..HEAD --pretty=format:'%h %s' \
-  | gemini --no-stream -m gemini-2.5-flash \
+  | gemini -m gemini-2.5-flash -p \
       "produce a CHANGELOG.md section for v1.1.0, grouped by Features / Fixes / Internal. Use the commit messages below."
 ```
 
@@ -554,8 +475,9 @@ gh pr list --json number,title,body --limit 50 \
   | jq -c '.[]' \
   | while read -r pr; do
       number=$(echo "$pr" | jq -r .number)
-      classification=$(echo "$pr" | gemini --json --no-stream \
-        "classify this PR. JSON: {area, risk, reviewer_focus}")
+      classification=$(echo "$pr" | gemini -p \
+        "classify this PR. respond with ONLY JSON: {area, risk, reviewer_focus}" \
+        --output-format json | jq -r '.response')
       echo "PR #$number: $classification"
     done
 ```
@@ -564,6 +486,10 @@ gh pr list --json number,title,body --limit 50 \
 
 ## Next Steps
 
-- [Installation](installation.md) — setup
-- [Usage](usage.md) — command reference
+- [Installation](installation.md) — setup and authentication
+- [Usage](usage.md) — REPL, slash commands, flags
 - [Main Gemini CLI README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

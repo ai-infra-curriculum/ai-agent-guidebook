@@ -1,18 +1,21 @@
-# GitHub Copilot Workspace Guide
+# Copilot Coding Agent (successor to Copilot Workspace)
 
-Guide to **Copilot Workspace** — GitHub's task-oriented development environment that takes an issue and walks it from spec to PR. Generally available since early 2026.
+Guide to the **Copilot coding agent** (also called the Copilot *cloud agent* in current GitHub docs) — the asynchronous agent that takes a GitHub issue or task and produces a pull request.
+
+> **What happened to Copilot Workspace?** The Copilot Workspace technical preview was **sunset on May 30, 2025** and never reached general availability. Its issue-to-PR workflow lives on in the Copilot coding agent, which is the de facto successor and is available on all paid Copilot plans. This file keeps its old name (`workspace-guide.md`) so existing links don't break, but everything below covers the coding agent.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [How Workspace Works](#how-workspace-works)
+- [How the Coding Agent Works](#how-the-coding-agent-works)
 - [Getting Started](#getting-started)
-- [The Four-Phase Workflow](#the-four-phase-workflow)
-- [When to Use Workspace vs Inline Copilot](#when-to-use-workspace-vs-inline-copilot)
-- [Editing the Spec and Plan](#editing-the-spec-and-plan)
-- [Cost Considerations](#cost-considerations)
+- [Configuring the Agent Environment](#configuring-the-agent-environment)
+- [Custom Instructions](#custom-instructions)
+- [MCP Servers](#mcp-servers)
+- [When to Use the Coding Agent](#when-to-use-the-coding-agent)
+- [Plans and Billing](#plans-and-billing)
 - [Limitations](#limitations)
 - [Tips and Patterns](#tips-and-patterns)
 - [Troubleshooting](#troubleshooting)
@@ -21,37 +24,24 @@ Guide to **Copilot Workspace** — GitHub's task-oriented development environmen
 
 ## Overview
 
-Copilot Workspace is GitHub's answer to "agent-style" development. Where inline Copilot completes the line you're writing and chat answers a question, Workspace takes an entire task — usually framed as a GitHub issue — and produces a PR.
+The coding agent is Copilot working **asynchronously, in the cloud, like a teammate**. You hand it a task — typically a GitHub issue — and it researches your repository, creates an implementation plan, makes changes on a branch, runs your tests and linters, and opens a draft pull request for your review. You stay in the loop through normal PR review: leave comments, and the agent revises.
 
-The pitch: instead of opening an issue, switching to your editor, picking up the threads, and iterating, you stay in the Workspace UI from idea to merge.
-
-> **GA status**: Workspace exited Technical Preview in early 2026 and is now bundled with **Copilot Pro+** and **Copilot Business / Enterprise** plans. Pro and free tiers do not include it.
+Where inline Copilot completes the line you're typing and chat answers questions, the coding agent owns an entire unit of work end to end.
 
 ---
 
-## How Workspace Works
+## How the Coding Agent Works
 
-Workspace runs in the browser at `https://github.com/copilot/workspaces` and is also accessible via "Open in Workspace" buttons throughout GitHub.com.
+When you give the agent a task, it:
 
-Under the hood, it provisions a hosted dev container, indexes your repo, and runs through four explicit phases — each editable by you — before producing a branch + PR.
+1. Spins up an **ephemeral development environment powered by GitHub Actions**.
+2. Clones the repo and explores the code.
+3. Plans and implements the change on a new branch.
+4. Runs automated tests and linters available in the environment.
+5. Opens (or updates) a **draft pull request** with a description of what it did and why.
+6. Responds to your PR review comments with further commits.
 
-### Architectural Phases
-
-```
-Issue / task
-   ↓
-[Specification]   ← human-editable
-   ↓
-[Plan]            ← human-editable, multi-file
-   ↓
-[Implementation]  ← generated diffs, file-by-file
-   ↓
-[Validation]      ← run tests / build, fix failures
-   ↓
-PR
-```
-
-The key idea is that **the spec and plan are first-class artifacts you edit before code is written**. You're not approving a finished PR diff — you're approving the *intent* and *file list* upfront, which dramatically reduces wasted generation.
+All of its work is auditable: session logs show the agent's reasoning and the commands it ran, and the PR is the single artifact you approve or reject. The agent cannot bypass branch protections or repository rulesets — its work always lands through a PR that a human merges.
 
 ---
 
@@ -59,343 +49,194 @@ The key idea is that **the spec and plan are first-class artifacts you edit befo
 
 ### Prerequisites
 
-- Copilot Pro+, Business, or Enterprise subscription.
-- Repository on GitHub.com (or GHEC with Copilot enabled).
-- Write access to the target repo (or fork-and-PR flow).
+- Any **paid Copilot plan** (Pro, Pro+, Business, Enterprise). On Business and Enterprise, an administrator must enable the coding agent first.
+- The repository must be hosted on GitHub.com.
 
-### Three Ways to Open a Workspace
+### Ways to Hand the Agent a Task
 
-**1. From an issue**
+**1. Assign an issue to Copilot**
 
-Open any issue → click the **"Open in Workspace"** button at the top right. Workspace ingests the issue title, body, comments, and labels as task context.
+On any issue, choose **Copilot** as the assignee (the same way you'd assign a person). The agent reacts with 👀, starts working, and links a draft PR to the issue.
 
-**2. From a brainstorm**
+**2. The agents panel**
 
-Visit <https://github.com/copilot/workspaces/new> → pick a repo → type a freeform task description ("Add a `/health` endpoint that returns JSON status of the database connection"). Workspace will create the issue implicitly.
+Go to <https://github.com/copilot/agents> to start tasks from a prompt, watch running sessions, and review past sessions across your repositories. An agents/task interface is also reachable from the Copilot chat surface on GitHub.com.
 
-**3. From a PR**
+**3. Mention `@copilot` in a pull request**
 
-Open a PR → "Edit in Workspace". Useful for addressing review comments or extending an existing PR.
+Comment on an existing PR — e.g. *"@copilot fix the failing CI check"* or *"@copilot address the review comments above"* — and the agent pushes follow-up commits.
 
-### First-Time Setup per Repo
+**4. Delegate from your editor or CLI**
 
-The first time you open Workspace on a repo, it indexes the codebase and detects:
-- Primary language(s)
-- Test runner (Jest, Vitest, pytest, go test, cargo test, etc.)
-- Build commands (`npm run build`, `mvn package`, etc.)
-- Common entry points
+VS Code's Copilot chat and the Copilot CLI (`--cloud` sessions) can hand tasks off to the cloud agent, letting you fire-and-forget work that doesn't need your local machine.
 
-You'll see a brief "preparing your workspace" screen. Subsequent opens are fast (cached index).
+**5. Automations**
 
-If detection is wrong, edit `.github/copilot-workspace.yml` in your repo:
+Tasks can be triggered on a schedule or by events, and security campaigns can assign alert remediation to Copilot.
+
+### Writing Tasks the Agent Does Well With
+
+Treat the issue body like a brief for a new teammate:
+
+- **Acceptance criteria.** What does "done" look like?
+- **Pointers.** Which directories, files, or services are involved.
+- **Constraints and non-goals.** "Don't change the public API." "No new dependencies."
+- **How to verify.** The test command, or steps to reproduce a bug.
+
+Vague issues produce vague PRs. The single highest-leverage improvement is a better issue description.
+
+---
+
+## Configuring the Agent Environment
+
+The agent's ephemeral environment starts mostly bare. Preinstall your toolchain with a workflow file at `.github/workflows/copilot-setup-steps.yml` on the **default branch**. The file must contain a single job named exactly `copilot-setup-steps`:
 
 ```yaml
-# .github/copilot-workspace.yml
-build:
-  command: "pnpm build"
-test:
-  command: "pnpm test --run"
-  watchPaths:
-    - "src/**"
-    - "test/**"
-languages:
-  - typescript
+name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
 ```
+
+Within that job you can customize `steps`, `permissions`, `runs-on` (including larger runners, e.g. `ubuntu-4-core`), `services`, `snapshot`, and `timeout-minutes` (max 59). The agent is compatible with Ubuntu x64 and Windows 64-bit runners.
+
+Because it's a regular workflow triggered on `workflow_dispatch` and on changes to itself, you can run it manually to validate the setup before the agent needs it.
 
 ---
 
-## The Four-Phase Workflow
+## Custom Instructions
 
-### Phase 1: Specification
+The agent reads repository instruction files, which is where you encode conventions you'd otherwise repeat in every issue:
 
-Workspace reads the issue and writes a short **current vs proposed** spec.
+- **`.github/copilot-instructions.md`** — repository-wide instructions (build/test commands, architecture overview, style rules).
+- **`.github/instructions/NAME.instructions.md`** — path-specific instructions with an `applyTo` frontmatter pattern.
+- **`AGENTS.md`** — the cross-tool agent instructions format; also read by other agentic tools (Copilot CLI, Claude Code, etc.), so one file serves several assistants.
 
-**Example:**
-
-> **Current behavior:** `/api/users` returns a flat list of user objects, no pagination. Large customers see 10s+ response times.
->
-> **Proposed behavior:** `/api/users` accepts `?page` and `?per_page` query params (defaults: page=1, per_page=50, max per_page=200). Response wraps the user array in `{ data: [...], meta: { page, per_page, total } }`. Existing callers without query params see paginated defaults.
-
-**Your job:** read this carefully. The spec is the source of truth for everything that follows. Common edits:
-- Add constraints ("must be backward compatible for clients that don't pass query params" → already there in this example).
-- Tighten ambiguity ("define 'large customers' as >5k users").
-- Reject scope ("don't change the auth flow as part of this").
-
-Hit **Regenerate** if the spec misses the point entirely. Otherwise edit in place — Workspace re-runs the next phase with your edits.
-
-### Phase 2: Plan
-
-Workspace produces a **per-file plan**: which files to change, and what each change does.
-
-**Example:**
-
-```
-src/api/users.controller.ts
-  - Add pagination params to GET handler
-  - Validate per_page <= 200
-  - Wrap response in { data, meta } envelope
-
-src/api/users.service.ts
-  - Add findPaginated(page, perPage) method
-  - Use LIMIT/OFFSET against existing users table
-
-src/api/users.types.ts
-  - Add PaginatedResponse<T> type
-  - Update UserListResponse to extend it
-
-test/api/users.test.ts
-  - Add pagination tests (defaults, custom values, max enforcement)
-  - Update existing test that asserts flat array shape
-```
-
-**Your job:** sanity-check the file list. You want to catch:
-- Files Workspace plans to touch that it shouldn't (e.g., it's about to refactor an unrelated module).
-- Files it's missing (e.g., the OpenAPI spec that needs updating too).
-- A test plan that's clearly thin.
-
-Add files via "Add file", remove files, or edit any line. Then proceed to implementation.
-
-### Phase 3: Implementation
-
-Workspace generates the actual diff, file by file, against the plan you approved.
-
-Each file shows the proposed change as a reviewable diff. You can:
-- **Accept** a file's changes wholesale.
-- **Reject** and regenerate that file only.
-- **Edit inline** — Workspace ships a Monaco editor; tweak directly.
-- **Add a follow-up instruction** — "in users.service.ts, also add a count query for the meta.total field."
-
-This phase is where Workspace earns its keep over chat-based workflows: the per-file structure forces small, reviewable units instead of a single 800-line diff.
-
-### Phase 4: Validation
-
-Workspace runs your configured test and build commands in the dev container.
-
-If everything passes → push branch → open PR.
-
-If something fails:
-- Workspace shows the failure output inline.
-- Click **"Fix with Copilot"** to attempt an automated fix.
-- Or jump back to Phase 3 to edit manually.
-
-The fix loop is bounded — Workspace will try, then surface the failure for you if it can't.
-
-After PR is opened, you can keep iterating from Workspace (push more commits) or close it and continue in your IDE.
+A good instructions file for the coding agent covers: how to build and test, repository layout, conventions ("we use `Result` types, never bare exceptions"), and what the agent must not touch.
 
 ---
 
-## When to Use Workspace vs Inline Copilot
+## MCP Servers
+
+The agent supports Model Context Protocol servers so it can reach data sources and tools beyond the repository. The **GitHub** and **Playwright** MCP servers are enabled by default; additional servers are configured per repository in the repo's Copilot settings. This is the same MCP ecosystem used by Copilot in VS Code and the Copilot CLI.
+
+---
+
+## When to Use the Coding Agent
 
 | Situation | Best surface |
 |-----------|--------------|
-| Adding a single function or fixing a single bug | Inline ghost-text + inline chat |
-| Refactor within one file | Inline chat |
-| Refactor across 2–10 files in one repo | VS Code Edits mode |
-| Implementing a well-scoped feature from an issue | **Workspace** |
-| Triaging a bug report into a fix | **Workspace** |
-| Adding a small endpoint or CLI command | **Workspace** |
-| Large architectural changes (migrate framework, rewrite module) | Workspace can start the work, but plan to drop into IDE |
-| Anything requiring research / external context | Chat with `@github` / `@perplexity`, then Workspace |
-| Exploratory coding / prototyping | IDE — Workspace's plan-first structure slows exploration down |
-| Long-running async tasks (batch jobs, training runs) | Neither — write a script, use `gh workflow run` |
+| Single function or one-file bug fix | Inline Copilot / inline chat |
+| Refactor across a handful of files, interactively | VS Code Edits or agent mode |
+| Well-scoped issue → PR (bug fix, small feature, test coverage, docs) | **Coding agent** |
+| Batch chores (dependency bumps, lint cleanups, TODO sweeps) | **Coding agent** |
+| Addressing review comments while you work on something else | **Coding agent** (`@copilot` in the PR) |
+| Large architectural change needing judgment at every step | IDE, with agent help on sub-tasks |
+| Exploratory prototyping | IDE — async turnaround slows exploration down |
 
-**Heuristic:** if you can phrase the work as "given this issue, produce a PR", it's a Workspace candidate. If you're still figuring out what you want to build, stay in chat or the IDE.
+**Heuristic:** if you can phrase the work as "given this issue, produce a PR" and you're willing to review rather than co-write, hand it to the coding agent.
 
 ---
 
-## Editing the Spec and Plan
+## Plans and Billing
 
-This is the part most users miss. The spec and plan are *not* throwaway — they're how you steer the generation.
-
-### Editing the Spec Productively
-
-- **Be specific about scope.** "Add pagination" is ambiguous; "Add cursor-based pagination with `?cursor` and `?limit` params, max limit 200" is not.
-- **Call out non-goals.** "Don't change the database schema." "Don't introduce a new dependency." "Don't update the OpenAPI spec — I'll do that separately."
-- **Specify the public-API contract.** Request and response shapes, status codes, error formats.
-- **Mention conventions Workspace can't infer.** "We use `Result<T, E>` for fallible operations; throw only for programmer errors."
-
-### Editing the Plan Productively
-
-- **Trim files.** If Workspace plans to touch `package.json` to add a dep but you don't want a new dep, remove that file from the plan.
-- **Add files.** If you know the change needs to update a docs file or migration script, add it.
-- **Edit per-file descriptions.** Tighten each bullet so the implementation phase has clear marching orders.
-- **Reorder.** Workspace generates files in plan order; put foundational files (types, interfaces) first.
-
-### When to Regenerate vs Edit
-
-- **Regenerate** if the model misunderstood the task at a conceptual level. Fix the issue body or spec, then regenerate.
-- **Edit** for everything else. Editing is fast and preserves all your earlier decisions.
-
----
-
-## Cost Considerations
-
-Workspace burns premium requests at a higher rate than chat.
-
-### What Counts
-
-Each phase generation (spec, plan, per-file implementation, validation fix) is one or more premium requests. A typical Workspace run for a small feature uses **10–30 premium requests**.
-
-For Pro+ subscribers (1,500 premium requests/month), that's 50–150 Workspace runs per month. For Business / Enterprise with custom budgets, your admin controls the per-seat quota.
-
-### Optimizing Cost
-
-- **Spend time in spec/plan, not in implementation.** A solid spec means fewer per-file regenerations downstream.
-- **Don't open Workspace for trivial tasks.** Use chat or inline edits — same outcome, cheaper.
-- **Use the cheaper model for the spec phase** if available; switch to the higher-quality model only for implementation.
-- **Avoid the "fix with Copilot" loop on flaky tests.** If a test fails for environmental reasons, fix it locally first.
-
-### Where to Track Usage
-
-<https://github.com/settings/copilot/usage> shows your current month's premium-request burn, broken down by tool (chat vs Workspace vs Edits).
+- Included with **all paid Copilot plans**; Business/Enterprise require admin enablement.
+- Each session consumes **GitHub Actions minutes** (for the ephemeral environment) and **GitHub AI Credits** (for model usage). Since June 1, 2026, AI Credits are Copilot's usage-based billing unit — see the [main README](README.md#pricing).
+- Within your plan's included Actions minutes and AI Credits, coding-agent use incurs no extra cost; beyond that, normal overage billing applies. Admins can set budgets.
 
 ---
 
 ## Limitations
 
-### Long-Running Tasks
-
-Workspace's dev container has a wall-clock budget (currently ~30 minutes per validation run). Tasks that involve:
-- Building a large Docker image
-- Running a slow integration suite
-- Training a model
-- Compiling a large C++ project
-
-…will time out. Either configure a faster `test.command` (subset of suite) or split the task.
-
-### Complex Refactors
-
-Workspace is excellent at *additive* and *local* work. It struggles with:
-- Sweeping rename or extract operations across 50+ files.
-- Migrations that need careful per-file judgment (e.g., "rewrite all callers of the deprecated API, but keep the old behavior for cases X and Y").
-- Anything requiring deep type-system reasoning that the test suite doesn't catch.
-
-For these, use Workspace to *propose a plan*, then execute key pieces manually.
-
-### Monorepos
-
-Workspace handles monorepos but plan generation can spread across the wrong package if the issue is ambiguous. Constrain in the spec: *"Changes should be scoped to `packages/auth/`"*.
-
-### Stateful Setup
-
-If your tests require a running database, a seeded fixture, or a third-party service (Stripe test mode, AWS LocalStack), you need to configure those in the dev container. Workspace supports a `.devcontainer/devcontainer.json` — same format as Codespaces. Anything that runs in Codespaces will run in Workspace.
-
-### Private Dependencies
-
-Workspace pulls packages from public registries by default. For private npm / PyPI / Maven repos, configure credentials via repo or org secrets (visible to Workspace as env vars).
-
-### Repos Not on GitHub.com
-
-Workspace requires the repo to be on GitHub.com or a GHEC instance with Copilot enabled. Self-hosted GitHub Enterprise Server support is on the roadmap as of 2026 but not GA.
+- **59-minute hard cap** per session (`timeout-minutes` cannot exceed it). Very slow builds or test suites need trimming or splitting.
+- **One repository per session.** Cross-repo changes require separate tasks.
+- **Cannot bypass protections.** Branch protections and rulesets apply; the agent's work always goes through a PR.
+- **Content exclusion is not applied.** The coding agent (like Copilot CLI and IDE agent mode) does **not** honor Copilot content-exclusion settings — don't rely on exclusions to hide sensitive files from it.
+- **GitHub.com-hosted repos only.**
+- Works best on well-tested codebases: the agent validates its own work with your test suite, so thin test coverage means weaker self-correction.
 
 ---
 
 ## Tips and Patterns
 
-### Pattern: Issue Templates Designed for Workspace
+### Pattern: Issue Templates Built for the Agent
 
-Create an issue template that captures the context Workspace needs:
+An issue template with required "Acceptance criteria", "Constraints / non-goals", and "How to verify" fields measurably improves the agent's first-attempt quality — the same way it helps human contributors.
 
-```yaml
-# .github/ISSUE_TEMPLATE/feature.yml
-name: Feature for Copilot Workspace
-description: Frame a feature so Workspace can implement it cleanly
-body:
-  - type: textarea
-    attributes:
-      label: User-facing behavior
-      description: What should the user be able to do after this is shipped?
-    validations:
-      required: true
-  - type: textarea
-    attributes:
-      label: Constraints
-      description: What must stay the same? What's out of scope?
-  - type: textarea
-    attributes:
-      label: Files we expect to change
-      description: Optional — narrows the search
-```
+### Pattern: Review Like a Senior, Not a Spectator
 
-Issues filed via this template produce noticeably better Workspace plans.
+Review the agent's PR as you would a new teammate's: read the description, check the diff against the issue, run the code if CI doesn't exercise it. Push back with PR comments — *"@copilot this breaks backward compatibility for clients that omit the query param; keep the old default"* — instead of fixing it silently, so the session log captures the correction.
 
-### Pattern: Two-Pass Workspace
+### Pattern: Batch the Boring Work
 
-For larger features:
+File a handful of small chore issues (bump a dependency, delete dead code path, add missing tests for module X), assign them all to Copilot, and review the resulting PRs in one sitting.
 
-1. **First pass:** open Workspace, let it produce a plan. *Don't implement.* Save the plan as a checklist in the issue.
-2. **Second pass:** for each plan item, open a fresh Workspace narrowly scoped to that item.
+### Pattern: Setup Steps as a Living Contract
 
-This gives you smaller PRs and tighter review loops, at the cost of more orchestration overhead.
+Whenever the agent's session fails on a missing tool, fix it in `copilot-setup-steps.yml` rather than working around it in the issue text. The setup file compounds; per-issue workarounds don't.
 
-### Pattern: Use Workspace as a Code-Reading Tool
+### Pattern: One Source of Truth for Conventions
 
-Open Workspace, type *"Explain how authentication works in this repo and produce a Markdown summary in docs/auth.md"*. The spec→plan→implementation flow produces a documentation PR you can review like any other.
-
-### Pattern: PR Hand-Off
-
-You don't have to merge from Workspace. A common flow:
-
-1. Run Workspace through implementation.
-2. Push the branch.
-3. `gh pr checkout` locally.
-4. Finish polish in your IDE.
-5. Push and merge.
-
-This is the right pattern when you trust Workspace for the structural change but want your IDE for the last 10%.
-
-### Pattern: Workspace + Edits Mode
-
-For features that span multiple repos or PRs:
-
-1. Workspace handles the first PR (the bulk).
-2. While reviewing, list follow-ups.
-3. Use VS Code's Edits mode to make the follow-up changes locally on a second branch.
+Put conventions in `.github/copilot-instructions.md` or `AGENTS.md` once. If you find yourself repeating an instruction in issue bodies, it belongs in the instructions file.
 
 ---
 
 ## Troubleshooting
 
-### Workspace Won't Open / Spinning Forever
+### Copilot Doesn't Appear as an Assignee
 
-- Most often a slow first-time index for a large repo. Wait 2–5 minutes.
-- If it never resolves, check repo size — Workspace currently caps at ~10 GB cloned size.
-- Verify the repo has Copilot enabled (`Settings` → `Copilot` on the repo or org).
+- The repo isn't covered by a paid Copilot plan, or an org/enterprise admin hasn't enabled the coding agent.
+- Check policy settings (org **Settings → Copilot**) and your plan.
 
-### Spec / Plan Are Way Off
+### The Agent's PR Fails CI on Missing Tools
 
-- The issue body is too vague. Open the issue, expand it, and regenerate.
-- The repo lacks a README or other top-level context Workspace can use to anchor itself.
-- Specify the relevant area in the spec: *"This is a backend change in `services/orders/`."*
+- The ephemeral environment lacks your toolchain. Add installs to `.github/workflows/copilot-setup-steps.yml` (job name must be exactly `copilot-setup-steps`, file must be on the default branch).
+- Validate by running the workflow manually via `workflow_dispatch`.
 
-### Implementation Phase Generates Garbage
+### Sessions Time Out
 
-- The plan was too vague — go back, add per-file detail.
-- The model picked is wrong for the task (e.g., chose a small model for a complex change). Switch in the model selector.
-- Try one file at a time: clear all proposed changes, then accept-and-regenerate one file, refine, move on.
+- 59 minutes is a hard limit. Cache dependencies in setup steps, point the agent at a faster test subset, or split the task into smaller issues.
 
-### Validation Always Fails
+### The PR Misses the Point
 
-- `test.command` is wrong — check `.github/copilot-workspace.yml`.
-- Tests depend on infrastructure not present in the dev container — add a `.devcontainer/` config.
-- Genuinely flaky tests — skip validation by opening the PR directly and running CI.
+- The issue was underspecified. Tighten acceptance criteria and constraints, then re-assign or comment `@copilot` with the correction.
+- Move recurring corrections into repository custom instructions.
 
-### Premium Requests Burned Through
+### Firewall / Network Errors in the Session Log
 
-- Check usage at <https://github.com/settings/copilot/usage>.
-- For the rest of the cycle, switch to chat / IDE Edits which use less.
-- Pro+ users can buy additional request packs; Business admins can raise per-seat limits.
-
-### Can't Push Branch
-
-- Repository requires branch protection / signed commits. Workspace can be configured to sign with a GitHub App identity; ask your admin.
-- Personal access token expired. Re-authorize Workspace from <https://github.com/copilot/workspaces/settings>.
+- The agent's environment restricts outbound network access by default. Admins can configure the allowlist in the repository's Copilot coding agent settings.
 
 ---
 
 ## Related Guides
 
-- [Copilot Chat Guide](chat-guide.md) — the precursor surface for many Workspace tasks
-- [Copilot IDE Guide](ide-guide.md) — Edits mode is the in-IDE analog to Workspace
-- [Copilot Best Practices](best-practices.md) — how to review Workspace output critically
+- [Copilot Chat Guide](chat-guide.md) — the interactive surface for smaller tasks
+- [Copilot IDE Guide](ide-guide.md) — Edits and agent mode are the in-IDE analogs
+- [Copilot CLI Guide](cli-guide.md) — the terminal agent, including cloud-delegated sessions
+- [Copilot Best Practices](best-practices.md) — reviewing agent output critically
 - [Main Copilot README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

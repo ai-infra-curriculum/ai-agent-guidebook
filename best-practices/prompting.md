@@ -387,7 +387,9 @@ Target audience: Frontend developers integrating with our API"
 
 ```
 "Use the same pattern as before"
-// AI doesn't remember previous sessions
+// Don't assume cross-session memory. Modern tools persist some context
+// (CLAUDE.md, memory files, rules), but only what was written down —
+// not your unrecorded chat history
 
 "Fix it like we discussed"
 // Be explicit every time
@@ -554,4 +556,4 @@ Explain your changes."
 
 ---
 
-**Last Updated**: 2025-11-04
+**Last Updated**: 2026-06-11

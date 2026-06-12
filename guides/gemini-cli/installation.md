@@ -1,8 +1,6 @@
 # Gemini CLI Installation
 
-Install and configure the official `gemini` CLI for the Gemini 2.5 model family.
-
-> **Note**: This guide covers the **official `@google/gemini-cli`** released in 2025 — a standalone Node.js binary. It is distinct from the older "Python SDK with a custom wrapper" pattern shown in the [main README](README.md), which remains valid but is now the lower-level option.
+Install and configure the official `@google/gemini-cli` — Google's open-source agentic CLI for the Gemini models.
 
 ---
 
@@ -12,7 +10,7 @@ Install and configure the official `gemini` CLI for the Gemini 2.5 model family.
 - [Prerequisites](#prerequisites)
 - [Install via npm](#install-via-npm)
 - [Install via Homebrew](#install-via-homebrew)
-- [Install via asdf](#install-via-asdf)
+- [Other Install Paths](#other-install-paths)
 - [Authentication](#authentication)
 - [Initial Configuration](#initial-configuration)
 - [Verifying the Install](#verifying-the-install)
@@ -23,41 +21,47 @@ Install and configure the official `gemini` CLI for the Gemini 2.5 model family.
 
 ## What You're Installing
 
-The `gemini` CLI is a single executable that gives you:
+The `gemini` command is a Node.js-based agent that gives you:
 
-- Interactive REPL-style sessions (`gemini`)
-- One-shot prompts (`gemini "explain this regex"`)
-- File-aware prompts (`gemini -f src/app.ts "review this"`)
-- Image, PDF, and audio input
-- Streaming responses
-- Multi-turn sessions with persistent history
-- JSON-mode output for scripting
-- Model selection across the Gemini 2.5 family (Pro, Flash, Flash-Thinking)
+- An interactive, agentic REPL (`gemini`) that can read/edit files and run shell commands with your approval
+- One-shot headless prompts (`gemini -p "explain this regex"`) with stdin piping
+- File and directory context via `@path` references in prompts (including images and PDFs)
+- Hierarchical project context via `GEMINI.md` files
+- MCP server support, extensions, and custom slash commands
+- JSON output modes for scripting (`--output-format json` / `stream-json`)
+- Session checkpointing and resuming
 
-The CLI sits on top of the [Google GenAI SDK](https://github.com/googleapis/js-genai) and works with both **Google AI Studio** API keys (free tier available) and **Vertex AI** service accounts (production / enterprise).
+It works with three authentication methods: **Login with Google** (OAuth, free tier), a **Gemini API key** from Google AI Studio, and **Vertex AI** for Google Cloud projects.
+
+> ⚠️ **Consumer-tier transition**: Google has announced that the "Login with Google" consumer tiers (free Code Assist for individuals, Google AI Pro/Ultra) stop being served on **June 18, 2026**, as Gemini CLI transitions to Antigravity CLI. Paid API keys and Code Assist Standard/Enterprise licenses are unaffected. See the [main README](README.md#important-consumer-tier-transition).
 
 ---
 
 ## Prerequisites
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Node.js | 18.x | 20.x LTS or newer |
-| npm (or pnpm/yarn) | 9.x | Latest |
-| Operating system | macOS 12+, Linux (glibc 2.31+), Windows 10+ | — |
-| Disk space | ~150 MB | — |
+| Requirement | Minimum |
+|-------------|---------|
+| Node.js | **20.x or newer** |
+| npm | Ships with Node |
+| Operating system | macOS, Linux, or Windows |
+
+Check your Node version:
+
+```bash
+node --version   # must be >= 20
+```
 
 For Vertex AI authentication you additionally need:
-- A Google Cloud project with the Vertex AI API enabled.
-- `gcloud` CLI installed (for ADC), or a downloaded service-account JSON key.
+- A Google Cloud project with the Vertex AI API enabled
+- The `gcloud` CLI (for Application Default Credentials) or a service-account key
 
-For Google AI Studio you only need an API key — no Cloud project required.
+For Login with Google or an AI Studio API key, no Cloud project is required.
 
 ---
 
 ## Install via npm
 
-The canonical install path.
+The canonical install path:
 
 ```bash
 # Global install
@@ -67,41 +71,18 @@ npm install -g @google/gemini-cli
 gemini --version
 ```
 
-If you don't want to install globally:
+No install at all — run directly:
 
 ```bash
-# One-off invocation
-npx @google/gemini-cli "summarize the README"
+npx @google/gemini-cli
 ```
 
-### Per-project install
-
-For repos that want a pinned version:
+### Release channels
 
 ```bash
-cd my-project
-npm install --save-dev @google/gemini-cli
-
-# Invoke via the bin
-npx gemini --version
-
-# Or add to package.json scripts
-```
-
-```json
-{
-  "scripts": {
-    "ai": "gemini",
-    "ai:review": "gemini -f src/ \"review for bugs\""
-  }
-}
-```
-
-### pnpm / yarn equivalents
-
-```bash
-pnpm add -g @google/gemini-cli
-yarn global add @google/gemini-cli
+npm install -g @google/gemini-cli@latest    # stable (default)
+npm install -g @google/gemini-cli@preview   # weekly preview
+npm install -g @google/gemini-cli@nightly   # nightly builds
 ```
 
 ---
@@ -114,256 +95,211 @@ For macOS and Linuxbrew:
 brew install gemini-cli
 ```
 
-This pulls a pre-built binary that doesn't require a Node runtime — handy if you don't otherwise use Node.
-
-Upgrade:
+Upgrade / uninstall:
 
 ```bash
 brew upgrade gemini-cli
-```
-
-Uninstall:
-
-```bash
 brew uninstall gemini-cli
 ```
 
-> The Homebrew formula tracks the latest stable release. For pre-release / beta versions, install via `npm install -g @google/gemini-cli@next` instead.
-
 ---
 
-## Install via asdf
-
-If you manage versions with [asdf](https://asdf-vm.com/):
+## Other Install Paths
 
 ```bash
-# Install the plugin
-asdf plugin add gemini-cli https://github.com/asdf-community/asdf-gemini-cli.git
-
-# List available versions
-asdf list-all gemini-cli
-
-# Install latest
-asdf install gemini-cli latest
-asdf global gemini-cli latest
-
-# Verify
-gemini --version
+# MacPorts (macOS)
+sudo port install gemini-cli
 ```
 
-For per-project pinning, create a `.tool-versions` file in your repo:
-
-```
-gemini-cli 1.4.0
-```
+In restricted environments (no system Node), you can create a Node environment with a manager such as Anaconda/conda, nvm, or fnm, then `npm install -g @google/gemini-cli` inside it.
 
 ---
 
 ## Authentication
 
-The CLI supports two authentication paths. Pick one — you can switch later.
+Gemini CLI supports three authentication methods. You can switch between them at any time with the `/auth` command inside the REPL. Credentials are cached under `~/.gemini/`.
 
-### Option A: Google AI Studio (API key)
+### Option A: Login with Google (OAuth) — default
 
-Easiest. Free tier is generous (rate-limited, not capability-limited).
-
-1. Visit <https://aistudio.google.com/app/apikey>.
-2. Click **Create API key**.
-3. (Optional) Restrict the key to specific IPs / referrers in the AI Studio console.
-4. Copy the key.
-
-Set the key via environment variable:
+The easiest path. Just run the CLI:
 
 ```bash
-# Add to ~/.zshrc or ~/.bashrc
+gemini
+```
+
+On first run it opens a browser window for Google sign-in. With a personal Google account this grants a free Gemini Code Assist license for individuals:
+
+- **60 requests per minute**
+- **1,000 requests per day**
+
+at no cost. (Note the June 18, 2026 consumer-tier cutoff above.)
+
+If you have a Gemini Code Assist **Standard or Enterprise** license through Google Cloud, also set your project:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+gemini
+```
+
+### Option B: Gemini API key (Google AI Studio)
+
+For higher or controllable limits, usage-based billing, and scripting/CI:
+
+1. Create a key at <https://aistudio.google.com/app/apikey>.
+2. Export it:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc for persistence
 export GEMINI_API_KEY="your-api-key-here"
 
-# Reload
-source ~/.zshrc
+gemini
 ```
 
-Or use the CLI's built-in setup:
+You can also place the key in a `.env` file — the CLI loads `.env` files from the current directory (walking up to the project root or home directory), and `~/.gemini/.env`. Never commit API keys to a repository.
+
+### Option C: Vertex AI (Google Cloud)
+
+For production workloads, org billing, region pinning, and audit logging:
 
 ```bash
-gemini auth login
-# Follow prompts to paste the key
-```
-
-The CLI stores the key at `~/.config/gemini/credentials.json` with `0600` permissions.
-
-### Option B: Vertex AI (service account)
-
-For production workloads, regulated environments, or anyone who wants their usage tied to a Google Cloud billing account.
-
-**Prerequisites:**
-
-1. A Google Cloud project with billing enabled.
-2. Vertex AI API enabled:
-
-   ```bash
-   gcloud services enable aiplatform.googleapis.com --project=YOUR_PROJECT
-   ```
-
-3. A service account with the `Vertex AI User` role (`roles/aiplatform.user`).
-
-**Three sub-options for credentials:**
-
-**B1. Application Default Credentials (recommended for dev)**
-
-```bash
+# Enable the API and set up Application Default Credentials
+gcloud services enable aiplatform.googleapis.com --project=YOUR_PROJECT
 gcloud auth application-default login
+
+# Tell the CLI to use Vertex AI
+export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT="your-project-id"
-export GEMINI_USE_VERTEX="true"
-export GEMINI_LOCATION="us-central1"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+
+gemini
 ```
 
-**B2. Service account JSON key (CI, automation)**
-
-Download a key:
-
-```bash
-gcloud iam service-accounts keys create ~/keys/gemini-sa.json \
-  --iam-account=gemini-cli@YOUR_PROJECT.iam.gserviceaccount.com
-```
-
-Then:
+For non-interactive environments (CI, servers), use a service account:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="$HOME/keys/gemini-sa.json"
+export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT="your-project-id"
-export GEMINI_USE_VERTEX="true"
-export GEMINI_LOCATION="us-central1"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 ```
 
-**B3. Workload Identity (GKE / Cloud Run)**
+The service account needs the `Vertex AI User` role (`roles/aiplatform.user`). On GKE/Cloud Run, prefer Workload Identity over key files.
 
-When running on Google Cloud compute, prefer Workload Identity. No keys to manage:
+### Choosing a method
 
-```bash
-export GEMINI_USE_VERTEX="true"
-export GEMINI_LOCATION="us-central1"
-# GOOGLE_CLOUD_PROJECT is auto-detected from the metadata server
-```
-
-### Choosing AI Studio vs Vertex AI
-
-| Aspect | AI Studio | Vertex AI |
-|--------|-----------|-----------|
-| Setup time | 1 minute | 10–30 minutes |
-| Billing | Optional, simple | Required GCP billing |
-| Free tier | Yes | No (but credits often available) |
-| Data residency / region pinning | Limited | Yes (`GEMINI_LOCATION`) |
-| Per-request quota | Shared, lower | Per-project, higher |
-| Audit logs | No | Yes (via Cloud Logging) |
-| Best for | Personal use, prototypes | Production, regulated, multi-tenant |
-
-You can have both configured and switch with `--auth vertex` / `--auth aistudio` at the CLI.
+| Aspect | Login with Google | API key (AI Studio) | Vertex AI |
+|--------|-------------------|---------------------|-----------|
+| Setup time | Seconds | 1 minute | 10–30 minutes |
+| Free tier | Yes (60 RPM / 1,000 RPD) | Yes (limited) | No |
+| Works headless / in CI | Awkward | Yes | Yes |
+| Region pinning / audit logs | No | No | Yes |
+| Best for | Personal interactive use | Scripts, CI, higher limits | Production, enterprise |
 
 ---
 
 ## Initial Configuration
 
-The CLI reads configuration from (in order of precedence):
+### settings.json
 
-1. Command-line flags
-2. Environment variables
-3. `./.gemini/config.yaml` (per-project)
-4. `~/.config/gemini/config.yaml` (per-user)
+Gemini CLI reads JSON settings from several layers. Precedence, lowest to highest:
 
-### Minimal user config
+1. Built-in defaults
+2. System defaults file (e.g. `/etc/gemini-cli/system-defaults.json` on Linux)
+3. **User settings**: `~/.gemini/settings.json`
+4. **Project settings**: `.gemini/settings.json` (in your repo)
+5. System overrides file
+6. Environment variables (including `.env` files)
+7. Command-line flags
 
-`~/.config/gemini/config.yaml`:
+A minimal user `~/.gemini/settings.json`:
 
-```yaml
-default_model: gemini-2.5-flash
-temperature: 0.4
-max_output_tokens: 8192
-
-# Where to keep session histories
-session_dir: ~/.local/state/gemini/sessions
-
-# Auto-load these files on every prompt (useful for repo-wide style guides)
-context_files: []
-
-# Pretty-print streamed Markdown in the terminal
-render_markdown: true
+```json
+{
+  "ui": {
+    "theme": "GitHub"
+  },
+  "general": {
+    "vimMode": false
+  },
+  "context": {
+    "fileName": "GEMINI.md"
+  }
+}
 ```
 
-### Per-project config
+A project `.gemini/settings.json` is the natural home for team-shared MCP servers and tool policies — commit it (minus secrets) so the whole team gets consistent defaults. Edit settings interactively with the `/settings` command.
 
-For a repo that wants its own defaults — model choice, context files, etc.:
+### GEMINI.md context files
 
-`./.gemini/config.yaml`:
+Project instructions live in `GEMINI.md` files, loaded hierarchically:
 
-```yaml
-default_model: gemini-2.5-pro
+- **Global**: `~/.gemini/GEMINI.md` — your personal defaults for all projects
+- **Project**: `GEMINI.md` at the repo root (the CLI searches upward until it hits the `.git` boundary or your home directory)
+- **Subdirectory**: `GEMINI.md` files deeper in the tree for component-specific context
 
-context_files:
-  - ./CONTRIBUTING.md
-  - ./docs/architecture.md
+Generate a starter file for the current project:
 
-# Apply this system prompt to every interactive session
-system_prompt: |
-  You are assisting on a TypeScript backend.
-  Prefer functional patterns, avoid classes except for entities.
-  All HTTP calls use the project's `httpx` wrapper at src/lib/http.
+```text
+gemini
+> /init
 ```
 
-Commit `.gemini/config.yaml` (minus secrets) so the whole team gets consistent defaults.
+Inspect what is loaded with `/memory show`, reload with `/memory refresh`.
 
-### Environment variables
+### .geminiignore
+
+Exclude paths from file discovery and `@` references — same syntax as `.gitignore`:
+
+```
+# .geminiignore
+node_modules/
+dist/
+*.lock
+secrets/
+```
+
+The CLI also respects `.gitignore` by default.
+
+### Key environment variables
 
 | Variable | Purpose |
 |----------|---------|
 | `GEMINI_API_KEY` | AI Studio API key |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service-account JSON (Vertex) |
-| `GOOGLE_CLOUD_PROJECT` | GCP project ID (Vertex) |
-| `GEMINI_USE_VERTEX` | `true` to force Vertex AI auth |
-| `GEMINI_LOCATION` | Vertex region (e.g. `us-central1`, `europe-west4`) |
-| `GEMINI_DEFAULT_MODEL` | Override the configured default model |
-| `GEMINI_HTTP_PROXY` | HTTP/HTTPS proxy URL |
-| `GEMINI_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `GEMINI_MODEL` | Override the default model |
+| `GOOGLE_GENAI_USE_VERTEXAI` | `true` to route through Vertex AI |
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID (Vertex / Code Assist licenses) |
+| `GOOGLE_CLOUD_LOCATION` | Vertex region (e.g. `us-central1`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account JSON key |
+| `GEMINI_SANDBOX` | Enable/choose the tool-execution sandbox |
+| `GEMINI_SYSTEM_MD` | Path to a custom system prompt file |
+| `GEMINI_CLI_TRUST_WORKSPACE` | `true` to bypass folder-trust prompts in headless environments |
 
 ---
 
 ## Verifying the Install
 
-### Smoke test
-
 ```bash
 gemini --version
-# → @google/gemini-cli x.y.z
+# → prints the installed version (e.g. 0.46.0)
 
-gemini auth status
-# → Authenticated via AI Studio (or Vertex AI, project: ...)
-
-gemini "say hello in five languages"
-# → Streamed response
+gemini -p "hello"
+# → a short response from the model (verifies auth + connectivity)
 ```
 
-### Capability check
+Then try an interactive session in a project:
 
 ```bash
-gemini models list
-# Shows: gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-thinking, ...
-
-gemini -m gemini-2.5-flash "what's 2+2"
-# → 4
+cd my-project
+gemini
 ```
 
-### Test image input
-
-```bash
-gemini -i ~/Desktop/screenshot.png "what's in this image?"
+```text
+> @README.md summarize this in 3 bullets
+> /stats        # token usage for the session
+> /quit
 ```
 
-### Test file input
-
-```bash
-gemini -f README.md "summarize this in 3 bullets"
-```
-
-If all of these succeed, you're done.
+If all of these work, you're done.
 
 ---
 
@@ -373,14 +309,10 @@ If all of these succeed, you're done.
 
 ```bash
 # npm
-npm update -g @google/gemini-cli
+npm install -g @google/gemini-cli@latest
 
 # Homebrew
 brew upgrade gemini-cli
-
-# asdf
-asdf install gemini-cli latest
-asdf global gemini-cli latest
 ```
 
 Check current vs latest:
@@ -398,16 +330,12 @@ npm uninstall -g @google/gemini-cli
 
 # Homebrew
 brew uninstall gemini-cli
-
-# asdf
-asdf uninstall gemini-cli
 ```
 
-Remove config and credentials:
+Remove cached credentials, settings, and session data:
 
 ```bash
-rm -rf ~/.config/gemini
-rm -rf ~/.local/state/gemini
+rm -rf ~/.gemini
 ```
 
 ---
@@ -416,87 +344,64 @@ rm -rf ~/.local/state/gemini
 
 ### `command not found: gemini` after npm install
 
-Your npm global `bin` directory isn't on `PATH`. Find it:
+Your npm global `bin` directory isn't on `PATH`:
 
 ```bash
 npm config get prefix
 # → e.g. /Users/you/.npm-global
-```
 
-Add `<prefix>/bin` to your PATH:
-
-```bash
 echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
 ### EACCES permission errors during npm install
 
-Don't fix this with `sudo` — fix the permission model:
+Don't reach for `sudo` — fix the permission model:
 
 ```bash
-# Configure npm to use a user-owned prefix
 mkdir -p ~/.npm-global
 npm config set prefix ~/.npm-global
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
 source ~/.zshrc
 
-# Reinstall
 npm install -g @google/gemini-cli
 ```
 
-Or use a Node version manager (asdf, fnm, nvm) which sidesteps this entirely.
+Or use a Node version manager (nvm, fnm, asdf), which sidesteps this entirely.
 
 ### Node version too old
 
-```bash
-gemini --version
-# → Error: Node.js 18.x or newer required (you have 16.20.0)
-```
-
-Upgrade Node via your preferred manager:
+Gemini CLI requires Node.js **20+**. Upgrade via your preferred manager:
 
 ```bash
-# asdf
-asdf install nodejs 20.11.0
-asdf global nodejs 20.11.0
-
 # nvm
 nvm install 20
 nvm use 20
 ```
 
-### "Could not load the default credentials" (Vertex)
+### OAuth login loops or fails
 
-Three causes:
+- Browser-based login needs a browser on the same machine (or a flow that lets you paste a code). On remote/headless machines, prefer an API key or Vertex AI instead.
+- Stale credentials live under `~/.gemini/` — remove them and re-run `gemini` to retry, or use `/auth` to switch methods.
+
+### "Could not load the default credentials" (Vertex)
 
 1. `GOOGLE_APPLICATION_CREDENTIALS` points at a file that doesn't exist or isn't readable.
 2. You ran `gcloud auth login` instead of `gcloud auth application-default login` (different credential stores).
-3. Workload Identity isn't set up on your cluster / runtime.
+3. Workload Identity isn't set up on your cluster/runtime.
 
 Diagnose:
 
 ```bash
 gcloud auth application-default print-access-token
-# Should print a token. If it doesn't, the ADC isn't there.
-
 ls -la "$GOOGLE_APPLICATION_CREDENTIALS"
-# Should exist and be readable
 ```
 
-### API key works on AI Studio website but not CLI
+### API key set but not picked up
 
-The CLI looks for `GEMINI_API_KEY`. If you only set `GOOGLE_API_KEY` (older SDK convention), the CLI doesn't pick it up unless you alias:
-
-```bash
-export GEMINI_API_KEY="$GOOGLE_API_KEY"
-```
-
-Or set both.
+The CLI reads `GEMINI_API_KEY`. Confirm it's exported in the shell that launches `gemini`, and check `.env` files — project `.env` files in the directory tree are loaded automatically and may override your shell.
 
 ### TLS errors behind a corporate proxy
-
-Set the proxy variables:
 
 ```bash
 export HTTPS_PROXY="http://proxy.corp:8080"
@@ -510,40 +415,18 @@ If your proxy uses a self-signed CA, add it to Node's trust store:
 export NODE_EXTRA_CA_CERTS="/etc/ssl/certs/corp-ca.pem"
 ```
 
-### Rate-limit errors immediately on first request
+### Immediate 429s on the free tier
 
-If you set up AI Studio billing and instantly get 429s, double-check the API key isn't restricted to a different application or IP. Restrictions are configured per-key at <https://aistudio.google.com/app/apikey>.
-
-### "Project not authorized to use Vertex AI"
-
-Enable the API:
-
-```bash
-gcloud services enable aiplatform.googleapis.com --project=YOUR_PROJECT
-```
-
-And grant the service account the right role:
-
-```bash
-gcloud projects add-iam-policy-binding YOUR_PROJECT \
-  --member="serviceAccount:gemini-cli@YOUR_PROJECT.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
-```
-
-### Install hangs on `node-gyp`
-
-The official npm package ships pre-built — `node-gyp` should not run. If it does, you may have a corrupted install. Clear and retry:
-
-```bash
-npm uninstall -g @google/gemini-cli
-npm cache clean --force
-npm install -g @google/gemini-cli
-```
+You've hit the 60 requests/min or 1,000 requests/day caps, or your account's quota was consumed by other tooling. Switch to an API key or Vertex AI for independent quota.
 
 ---
 
 ## Next Steps
 
-- [Gemini CLI Usage](usage.md) — command reference, flags, modes
-- [Gemini CLI Integration](integration.md) — scripting, pipes, CI, SDK comparison
+- [Gemini CLI Usage](usage.md) — REPL, slash commands, flags, models
+- [Gemini CLI Integration](integration.md) — scripting, JSON output, CI, SDK comparison
 - [Main Gemini CLI README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

@@ -86,12 +86,12 @@ description: |
   `govulncheck`, "check vulnerabilities", or modifies a dependency lockfile.
   Skip for projects that don't have a lockfile.
 version: 1.0.0
+allowed-tools:
+  - Read
+  - Bash
+  - Grep
+  - Edit
 metadata:
-  allowed-tools:
-    - Read
-    - Bash
-    - Grep
-    - Edit
   category: security
   tags: [audit, security, dependencies, npm, pip, go]
   author: platform-team
@@ -105,7 +105,7 @@ metadata:
 
 **Strongly recommended:**
 
-- `metadata.allowed-tools` — narrow as possible.
+- `allowed-tools` — a **top-level** frontmatter field (not nested under `metadata:`, where it would be inert and unenforced); narrow as possible.
 - `version` — semver; bump on behavior changes.
 - `category` and `tags` — for discoverability.
 
@@ -336,7 +336,7 @@ Examples are particularly powerful for output formatting consistency.
 
 ## 6. The `allowed-tools` Decision
 
-Every skill should set `metadata.allowed-tools`. This is defense-in-depth, not red tape.
+Every skill should set `allowed-tools` (a top-level frontmatter field). This is defense-in-depth, not red tape.
 
 ### 6.1 Start narrow
 
@@ -440,7 +440,8 @@ When a skill outgrows its initial scope.
 
 ```
 my-plugin/
-├── plugin.json                  # plugin manifest
+├── .claude-plugin/
+│   └── plugin.json              # plugin manifest
 ├── README.md                    # docs for installers
 ├── skills/
 │   ├── audit-dependencies/
@@ -449,11 +450,10 @@ my-plugin/
 │   │   └── SKILL.md
 │   └── ...
 ├── agents/                      # optional bundled agents
-├── hooks/                       # optional bundled hooks
-└── mcp/                         # optional MCP server configs
+└── hooks/                       # optional bundled hooks
 ```
 
-The plugin manifest declares what the plugin contains; the client loader registers everything in it.
+The manifest at `.claude-plugin/plugin.json` declares the plugin's identity. The `skills/`, `agents/`, and `hooks/` directories are **auto-discovered** by the client loader — you don't enumerate skills in the manifest.
 
 ### 9.2 Manifest
 
@@ -462,25 +462,20 @@ The plugin manifest declares what the plugin contains; the client loader registe
   "name": "platform-team-toolkit",
   "version": "2.4.1",
   "description": "Internal platform team's standard set of skills.",
-  "author": "platform-team@company.com",
-  "license": "MIT",
-  "skills": [
-    "skills/audit-dependencies",
-    "skills/generate-typeguards"
-  ],
-  "compatibility": {
-    "min-client-version": "1.4.0"
-  }
+  "author": {
+    "name": "Platform Team",
+    "email": "platform-team@company.com"
+  },
+  "license": "MIT"
 }
 ```
 
 ### 9.3 Distribution
 
-Options, from simplest to most controlled:
+Plugins are distributed via marketplaces — a marketplace is just a repo with a marketplace manifest listing plugins. Options, from simplest to most controlled:
 
-- **Direct install from Git.** Users `claude plugin install git@github.com:org/plugin.git`. Cheapest.
-- **Public plugin registry.** Anthropic's or community-run. Discoverable; users can search.
-- **Private registry.** For internal teams. Controlled access, internal versioning.
+- **Public marketplace repo.** Users run `/plugin marketplace add org/marketplace-repo`, then `/plugin install platform-team-toolkit@marketplace-name`. Anthropic's and community marketplaces are discoverable.
+- **Private / internal marketplace.** Same mechanism on a private repo. Controlled access, internal versioning.
 
 ### 9.4 Documentation for installers
 
@@ -636,11 +631,11 @@ description: |
   modifies a dependency lockfile in a way that needs validation. Skip for
   greenfield projects without dependencies installed yet.
 version: 1.0.0
+allowed-tools:
+  - Read
+  - Bash
+  - Grep
 metadata:
-  allowed-tools:
-    - Read
-    - Bash
-    - Grep
   category: security
   tags: [audit, security, dependencies, npm, pip, go, yarn, pnpm]
 ---
@@ -692,7 +687,7 @@ Unhealthy skills should be updated or removed. Stale skills mislead.
 Before merging a new skill:
 
 - [ ] Folder layout follows conventions (`SKILL.md` at root; assets in `references/`, `templates/`, `scripts/`, `examples/`).
-- [ ] Frontmatter has `name`, `description`, `version`, `metadata.allowed-tools`.
+- [ ] Frontmatter has `name`, `description`, `version`, and top-level `allowed-tools`.
 - [ ] Description includes what, when, and when-not (if relevant).
 - [ ] Body has Procedure with numbered concrete steps.
 - [ ] Body has Verification section.

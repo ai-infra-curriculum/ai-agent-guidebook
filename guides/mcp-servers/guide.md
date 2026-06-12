@@ -2,9 +2,9 @@
 
 A practitioner's introduction to MCP — what it is, the problem it solves, how it works, and where it fits in the broader agent ecosystem.
 
-> **Spec reference**: This guide tracks the MCP specification revision **2025-06-18** (latest stable), with notes on the **2025-11-05** draft where relevant. Official spec: <https://spec.modelcontextprotocol.io/>.
+> **Spec reference**: This guide tracks the MCP specification revision **2025-11-25** (latest), with notes on earlier revisions where features were introduced. Official spec: <https://spec.modelcontextprotocol.io/>.
 
-> **Last updated**: 2026-05-24
+> **Last updated**: 2026-06-11
 
 ---
 
@@ -343,13 +343,13 @@ A few common misconceptions worth flattening up front.
 
 A non-exhaustive list of where MCP shows up:
 
-**First-class hosts**: Claude Desktop, Claude Code, Cursor, Cline, Continue, Windsurf, Zed, Sourcegraph Cody, JetBrains AI Assistant, Codeium, Replit, Aider.
+**First-class hosts**: Claude Desktop, Claude Code, Cursor, Cline, Continue, Windsurf (formerly Codeium), Zed, JetBrains AI Assistant, Replit, Aider.
 
 **Framework clients**: OpenAI Agents SDK, LangChain / LangGraph (`langchain-mcp-adapters`), CrewAI (`crewai-tools[mcp]`), AutoGen (`autogen-ext[mcp]`), LlamaIndex (`llama-index-tools-mcp`), Pydantic AI, AWS Bedrock AgentCore, Microsoft Semantic Kernel, Microsoft Agent Framework.
 
 **Hosted MCP servers** (you connect via Streamable HTTP, no install): GitHub, GitLab, Sentry, Stripe, Linear, Notion, Atlassian (Jira + Confluence), Cloudflare, Vercel, Neon, Supabase, PlanetScale, Figma, Canva, Plaid.
 
-**Spec governance**: managed under the `modelcontextprotocol` GitHub org with a public spec process (SEP — Specification Enhancement Proposals), regular revisions (2024-11-05 → 2025-03-26 → 2025-06-18 → 2025-11-05 draft), and a multi-vendor steering committee.
+**Spec governance**: managed under the `modelcontextprotocol` GitHub org with a public spec process (SEP — Specification Enhancement Proposals), regular revisions (2024-11-05 → 2025-03-26 → 2025-06-18 → 2025-11-25), and a multi-vendor steering committee.
 
 ---
 

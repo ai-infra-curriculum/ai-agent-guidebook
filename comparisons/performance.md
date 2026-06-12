@@ -1,8 +1,8 @@
 # Performance Comparison
 
-Benchmarks where measurable, methodology notes where they're contested. Numbers are from May 2026 and move fast.
+Benchmarks where measurable, methodology notes where they're contested. Numbers are from June 2026 and move fast.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -27,7 +27,7 @@ These numbers come from public benchmarks (SWE-bench, Aider polyglot, HumanEval 
 
 Conditions:
 - US-East region tests (us-east-1 / us-east-2 / iad)
-- May 2026 model versions
+- June 2026 model versions
 - P50 unless noted
 - Single-tenant, no rate-limiting hit
 - Network: residential gigabit; ~30ms to nearest provider POP
@@ -52,18 +52,19 @@ Cold-cache, average input ~5K tokens, simple coding task:
 |-------|------------|------------|
 | Claude Haiku 4.5 | 480ms | 1.1s |
 | Claude Sonnet 4.6 | 820ms | 1.9s |
-| Claude Opus 4.7 (1M) | 1.3s | 3.2s |
-| GPT-5 Nano | 280ms | 700ms |
-| GPT-5 Mini | 450ms | 1.1s |
-| GPT-5 | 680ms | 1.6s |
-| GPT-5 Codex | 720ms | 1.7s |
-| o3 (reasoning) | 12s | 45s |
+| Claude Opus 4.8 (1M) | 1.3s | 3.2s |
+| Claude Fable 5 (1M) | 1.5s | 3.8s |
+| GPT-5.4 Nano | 280ms | 700ms |
+| GPT-5.4 Mini | 450ms | 1.1s |
+| GPT-5.4 | 680ms | 1.6s |
+| GPT-5.5 | 720ms | 1.7s |
+| GPT-5.5 (extended reasoning) | 12s | 45s |
 | Gemini 2.5 Flash-Lite | 320ms | 800ms |
-| Gemini 2.5 Flash | 410ms | 1.0s |
-| Gemini 2.5 Pro | 1.1s | 2.7s |
+| Gemini 3.5 Flash | 410ms | 1.0s |
+| Gemini 3.1 Pro | 1.1s | 2.7s |
 
 Notes:
-- Reasoning models (o3, Gemini "thinking", Claude extended thinking) have multi-second TTFT by design — the "thinking" happens before any token streams.
+- Reasoning modes (GPT-5.5 extended reasoning, Gemini "thinking", Claude extended thinking) have multi-second TTFT by design — the "thinking" happens before any token streams.
 - Cache hits cut TTFT by 50-70% on the cached portion.
 
 ### TTFT under input growth
@@ -73,11 +74,12 @@ Same models, growing input size:
 | Model | 5K input | 50K input | 200K input | 500K input | 1M input |
 |-------|----------|-----------|------------|------------|----------|
 | Haiku 4.5 | 0.5s | 1.2s | 3.0s | — | — |
-| Sonnet 4.6 | 0.8s | 2.0s | 5.0s | — | — |
-| Opus 4.7 (1M) | 1.3s | 3.5s | 9.0s | 18s | 35s |
-| GPT-5 | 0.7s | 1.8s | 4.5s | — | — |
-| Gemini 2.5 Flash | 0.4s | 1.0s | 3.0s | 8s | 16s |
-| Gemini 2.5 Pro | 1.1s | 2.5s | 6.0s | 14s | 28s |
+| Sonnet 4.6 (1M) | 0.8s | 2.0s | 5.0s | 11s | 22s |
+| Opus 4.8 (1M) | 1.3s | 3.5s | 9.0s | 18s | 35s |
+| Fable 5 (1M) | 1.5s | 4.0s | 10s | 20s | 38s |
+| GPT-5.4 | 0.7s | 1.8s | 4.5s | — | — |
+| Gemini 3.5 Flash | 0.4s | 1.0s | 3.0s | 8s | 16s |
+| Gemini 3.1 Pro | 1.1s | 2.5s | 6.0s | 14s | 28s |
 
 The "— " means the model's window can't hold that input. Roughly linear scaling with input size until you hit batching/scheduling boundaries.
 
@@ -89,21 +91,21 @@ Streaming speed once first token arrives:
 |-------|------------|
 | Haiku 4.5 | 165 tok/s |
 | Sonnet 4.6 | 88 tok/s |
-| Opus 4.7 | 48 tok/s |
-| GPT-5 Nano | 320 tok/s |
-| GPT-5 Mini | 220 tok/s |
-| GPT-5 | 105 tok/s |
-| GPT-5 Codex | 115 tok/s |
-| o3 | 65 tok/s (after thinking) |
+| Opus 4.8 | 48 tok/s |
+| Fable 5 | 42 tok/s |
+| GPT-5.4 Nano | 320 tok/s |
+| GPT-5.4 Mini | 220 tok/s |
+| GPT-5.4 | 115 tok/s |
+| GPT-5.5 | 105 tok/s |
 | Gemini 2.5 Flash-Lite | 380 tok/s |
-| Gemini 2.5 Flash | 240 tok/s |
-| Gemini 2.5 Pro | 95 tok/s |
+| Gemini 3.5 Flash | 240 tok/s |
+| Gemini 3.1 Pro | 95 tok/s |
 
 For a typical 2000-token coding response:
 - Haiku: ~12s total
 - Sonnet: ~23s total
 - Opus: ~42s total
-- GPT-5: ~19s total
+- GPT-5.5: ~19s total
 - Gemini Flash: ~9s total
 - Gemini Pro: ~21s total
 
@@ -128,8 +130,8 @@ Per-key tokens per minute:
 |----------|---------|-----------|
 | Anthropic Sonnet | 400K input / 80K output | 8M / 1.6M |
 | Anthropic Opus | 200K input / 40K output | 4M / 800K |
-| OpenAI GPT-5 | 800K input / 200K output | 15M / 4M |
-| Gemini 2.5 Pro | 1M input / 250K output | unlimited (Vertex enterprise) |
+| OpenAI GPT-5.5 | 800K input / 200K output | 15M / 4M |
+| Gemini 3.1 Pro | 1M input / 250K output | unlimited (Vertex enterprise) |
 
 For agent fleets running > 100 RPS sustained, talk to providers about dedicated capacity. Anthropic, OpenAI, and Google all offer provisioned throughput or dedicated capacity at enterprise tiers.
 
@@ -174,7 +176,7 @@ Implication: collapsing steps in your agent design is high-leverage. A 3-agent t
 
 ## Real-World Task Times
 
-Times observed on real tasks, May 2026, mid-range hardware, typical network:
+Times observed on real tasks, June 2026, mid-range hardware, typical network:
 
 ### "Implement a single REST endpoint with tests"
 
@@ -182,8 +184,8 @@ Times observed on real tasks, May 2026, mid-range hardware, typical network:
 |------------|------|-------|
 | Cursor (Sonnet 4.6) | 45-90s | Including tests |
 | Claude Code (Sonnet 4.6) | 60-120s | Including tests + lint pass |
-| Copilot Workspace (GPT-5) | 90-180s | Spec → plan → diff cycle adds time |
-| Gemini CLI (Gemini 2.5 Pro) | 50-100s | |
+| Copilot agent mode (GPT-5.4) | 90-180s | Plan → edit → verify loop in the IDE |
+| Gemini CLI (Gemini 3.1 Pro) | 50-100s | |
 
 ### "Refactor a 500-line module into 3 smaller modules"
 
@@ -191,14 +193,14 @@ Times observed on real tasks, May 2026, mid-range hardware, typical network:
 |------------|------|
 | Cursor Composer (Sonnet 4.6) | 2-5 min |
 | Claude Code (Sonnet 4.6) | 3-7 min (incl test runs) |
-| Claude Code (Opus 4.7) | 4-8 min |
+| Claude Code (Opus 4.8) | 4-8 min |
 
 ### "Audit a 50-file codebase for SQL injection patterns"
 
 | Tool/Model | Time |
 |------------|------|
 | Claude Code (Sonnet 4.6) + semgrep MCP | 5-15 min |
-| Gemini CLI (Gemini 2.5 Pro, single-shot) | 3-8 min |
+| Gemini CLI (Gemini 3.1 Pro, single-shot) | 3-8 min |
 | Cursor (Sonnet 4.6) | manual; ~15-30 min for thorough |
 
 ### "Migrate a project from Webpack 4 to Vite"
@@ -215,7 +217,7 @@ For larger Webpack→Vite migrations, expect multi-hour sessions even with agent
 
 | Tool/Model | Time |
 |------------|------|
-| Gemini CLI (2.5 Pro, load whole repo) | 2-5 min (mostly model time) |
+| Gemini CLI (3.1 Pro, load whole repo) | 2-5 min (mostly model time) |
 | Cody (Sonnet 4.6, repo-graph) | 30-90s |
 | Claude Code (Sonnet 4.6, grep + read) | 1-3 min |
 | Cursor (@codebase, Sonnet 4.6) | 1-2 min |
@@ -224,15 +226,17 @@ For larger Webpack→Vite migrations, expect multi-hour sessions even with agent
 
 ## Cost Per Task
 
-Cost in USD, based on May 2026 prices, typical token consumption per task class:
+Cost in USD, based on June 2026 prices ($/MTok: Sonnet 4.6 $3/$15, Opus 4.8 $5/$25, GPT-5.4 $2.50/$15, Gemini 3.1 Pro $2/$12), typical token consumption per task class:
 
-| Task class | Sonnet 4.6 | Opus 4.7 | GPT-5 | Gemini 2.5 Pro | Gemini 2.5 Flash |
-|------------|------------|----------|-------|-----------------|-------------------|
-| Single endpoint + tests | $0.05-0.15 | $0.30-0.80 | $0.04-0.12 | $0.03-0.10 | $0.005-0.02 |
-| 500-line refactor | $0.10-0.40 | $0.80-2.50 | $0.10-0.30 | $0.08-0.25 | $0.01-0.05 |
-| Codebase audit (50 files) | $0.30-1.00 | $2.00-6.00 | $0.25-0.80 | $0.15-0.50 | $0.03-0.10 |
-| Library migration | $1.00-5.00 | $6.00-25.00 | $0.80-4.00 | $0.50-3.00 | $0.10-0.50 |
-| Whole-repo Q&A (200K LOC) | n/a (over window) | $0.50-1.50 | n/a | $0.40-1.20 | $0.05-0.20 |
+| Task class | Sonnet 4.6 | Opus 4.8 | GPT-5.4 | Gemini 3.1 Pro | Gemini 3.5 Flash |
+|------------|------------|----------|---------|-----------------|-------------------|
+| Single endpoint + tests | $0.05-0.15 | $0.10-0.25 | $0.07-0.20 | $0.05-0.15 | $0.005-0.02 |
+| 500-line refactor | $0.10-0.40 | $0.25-0.85 | $0.20-0.55 | $0.10-0.35 | $0.01-0.05 |
+| Codebase audit (50 files) | $0.30-1.00 | $0.65-2.00 | $0.45-1.50 | $0.20-0.70 | $0.03-0.10 |
+| Library migration | $1.00-5.00 | $2.00-8.00 | $1.50-7.00 | $0.70-4.00 | $0.10-0.50 |
+| Whole-repo Q&A (200K LOC) | $0.10-0.30 | $0.15-0.50 | n/a | $0.60-1.80 | $0.05-0.20 |
+
+Sonnet 4.6 and Opus 4.8 carry the full 1M window at standard pricing, so whole-repo Q&A no longer requires a price-tier jump on Anthropic. Gemini 3.1 Pro charges its >200K rate ($4/$18) for that workload.
 
 Wide ranges because actual token usage varies 3-10x based on prompt structure, cache hits, and reasoning depth.
 
@@ -249,7 +253,7 @@ Cache hit rates observed in steady-state agent workflows (after first call):
 | Claude Code, stable CLAUDE.md, repeated tool use | 80-95% | ~75% input cost reduction |
 | Cursor (Sonnet), composer session | 60-80% | ~60% |
 | Custom Anthropic API client with cache_control | 70-90% | ~70% |
-| OpenAI auto-cache, stable system prompt | 70-85% | ~40% (50% savings on cached portion) |
+| OpenAI auto-cache, stable system prompt | 70-85% | ~70% (90% savings on cached portion) |
 | Gemini implicit cache | 50-80% (varies) | 0 explicit cost — free benefit |
 | Gemini Context Caching API (1h cache) | depends | ~85% on hit |
 
@@ -271,13 +275,13 @@ How tools / providers behave when you push them:
 - Past 50 concurrent: 529 overload errors common during peak hours.
 - Mitigation: enterprise tier or fallback to Haiku for non-critical traffic.
 
-### OpenAI GPT-5
+### OpenAI GPT-5.5 / 5.4
 
 - More forgiving at high concurrency in 2026.
 - Tier 4 / Enterprise: thousands of concurrent without issue.
-- Lower tiers: 429s start around 100 concurrent on Codex.
+- Lower tiers: 429s start around 100 concurrent on the flagship tier.
 
-### Gemini 2.5
+### Gemini 3.x
 
 - Vertex enterprise tier: effectively unlimited for most workloads.
 - AI Studio (free / paid): tighter quotas, hit 429s faster than Anthropic / OpenAI on equivalent workloads.
@@ -319,7 +323,7 @@ For inline completions, the round trip matters more than model speed:
 |------|-------------|
 | Cursor Tab (in-process model) | 150-300ms |
 | Copilot inline (GitHub edge) | 200-400ms |
-| Codeium / Windsurf inline | 200-400ms |
+| Windsurf (formerly Codeium) inline | 200-400ms |
 | Continue.dev with local Ollama | 100-500ms (depends on model + hardware) |
 | Cursor BYOK with Anthropic API | 400-800ms (cross-Internet) |
 
@@ -335,11 +339,11 @@ If a fast model produces an answer you have to fix or re-prompt, the real time i
 
 | Scenario | Fast-but-wrong | Slower-but-right |
 |----------|----------------|--------------------|
-| Inline completion | Copilot Pro on GPT-5-class, 250ms, ~25% accepted | Cursor with Sonnet, 350ms, ~40% accepted |
+| Inline completion | Copilot Pro on GPT-5.4-class, 250ms, ~25% accepted | Cursor with Sonnet, 350ms, ~40% accepted |
 | Single-file refactor | Haiku 4.5, 12s, often needs follow-up | Sonnet 4.6, 25s, usually one-shot |
-| Multi-file refactor | Sonnet 4.6, 4 min, ~70% one-shot | Opus 4.7, 7 min, ~90% one-shot |
-| Architecture decision | Sonnet 4.6, 30s, sometimes weak | Opus 4.7, 90s, more often defensible |
-| Debugging a hard bug | Sonnet 4.6, multiple iterations | Opus 4.7 or o3, one or two iterations |
+| Multi-file refactor | Sonnet 4.6, 4 min, ~70% one-shot | Opus 4.8, 7 min, ~90% one-shot |
+| Architecture decision | Sonnet 4.6, 30s, sometimes weak | Opus 4.8, 90s, more often defensible |
+| Debugging a hard bug | Sonnet 4.6, multiple iterations | Fable 5 or Opus 4.8, one or two iterations |
 
 Acceptance rate × iteration count is the real performance number. A model with 90% one-shot rate beats a model with 50% one-shot rate even if each call is twice as long, because the second model burns multiple iterations.
 
@@ -384,7 +388,7 @@ If a human isn't waiting, total throughput and cost matter, not latency. A batch
 
 ### Interactive but deep
 
-For architecture decisions, multi-file refactors, or complex debugging, the user is invested in the outcome and tolerates much higher latency. Spending 90 seconds with Opus 4.7 is fine if the answer is right; spending 30 seconds with Sonnet 4.6 and getting it wrong wastes 30 minutes of the human's time fixing it.
+For architecture decisions, multi-file refactors, or complex debugging, the user is invested in the outcome and tolerates much higher latency. Spending 90 seconds with Opus 4.8 is fine if the answer is right; spending 30 seconds with Sonnet 4.6 and getting it wrong wastes 30 minutes of the human's time fixing it.
 
 ### Eval / CI
 

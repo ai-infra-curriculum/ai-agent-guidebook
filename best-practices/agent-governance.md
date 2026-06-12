@@ -2,7 +2,7 @@
 
 Governance for AI agents moving from POC to production: trust scoring, guardrails, portable identity, audit ledgers. DIY patterns and managed platforms.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -249,7 +249,7 @@ Works if every platform you talk to accepts and validates JWTs from your IdP —
 ### What gets hard
 
 - **Cross-vendor identity standards barely exist** for agents. The IETF and OpenID drafts on "Agent Identity" are nascent.
-- **SaaS agent platforms** (Salesforce Agentforce, Microsoft 365 Agents, ServiceNow Now Assist) each have their own identity model. Bridging them is custom integration.
+- **SaaS agent platforms** (Salesforce Agentforce, Microsoft Agent 365, ServiceNow Now Assist) each have their own identity model. Bridging them is custom integration.
 - **Delegation chains** (agent A invokes agent B on behalf of user C) require thinking about transitive auth that most systems get wrong.
 
 This is the dimension where managed governance platforms add the most leverage — building a working portable-identity layer in-house is a quarters-long project.
@@ -262,7 +262,7 @@ This is the dimension where managed governance platforms add the most leverage �
 
 What did every agent do, when, with what authorization, and can you prove the record hasn't been tampered with?
 
-For non-regulated workloads, append-only logs in Datadog or OpenSearch are enough. For regulated workloads (HIPAA, SOC 2, ISO 42001, EU AI Act, PCI-DSS Article 10 in some interpretations), you may need tamper-evidence.
+For non-regulated workloads, append-only logs in Datadog or OpenSearch are enough. For regulated workloads (HIPAA, SOC 2, ISO 42001, EU AI Act, PCI DSS Requirement 10 in some interpretations), you may need tamper-evidence.
 
 ### Append-only logs
 
@@ -287,9 +287,9 @@ entry_n.hash = sha256(entry_n contents + entry_n.prev_hash)
 Periodically publish the latest hash to an external location (a Git repo, a public blockchain, a notary service). Now even an attacker with full database access can't rewrite history without that external anchor changing.
 
 Implementations:
-- **AWS QLDB** (deprecated 2025) — was the canonical managed option
+- **AWS QLDB** (deprecation announced 2024; end-of-support July 2025) — was the canonical managed option
 - **Amazon Aurora with managed audit features**
-- **TrustNote, Chronicle, Sigstore Rekor** — varying degrees of fit
+- **Sigstore Rekor** (transparency log) and **immudb** (immutable database) — varying degrees of fit
 - **Custom hash chain + S3 Object Lock** — viable for small scale
 - **Managed agent audit ledgers** (see Veriswarm Vault below)
 
@@ -378,7 +378,7 @@ Veriswarm is designed to be framework-agnostic. Verified integrations as of 2026
 - CrewAI
 - AutoGen / Magentic-One
 - Salesforce Agentforce
-- Microsoft 365 Agents
+- Microsoft Agent 365
 - AWS Bedrock Agents
 - Google Vertex AI Agent Builder
 - Custom (via MCP, REST, or Guard Proxy)

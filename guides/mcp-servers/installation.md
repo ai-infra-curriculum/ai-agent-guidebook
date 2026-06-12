@@ -2,7 +2,7 @@
 
 How to install Model Context Protocol servers across the major hosts, the three main packaging models (npm, uvx, Docker), where each host stores config, how to manage secrets, and how to verify a server end-to-end with the Inspector.
 
-> **Last updated**: 2026-05-24 · Tracks MCP spec **2025-06-18**.
+> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
 
 ---
 
@@ -29,7 +29,7 @@ How to install Model Context Protocol servers across the major hosts, the three 
 
 A pre-flight checklist that prevents most "it just doesn't work" reports:
 
-1. **Pin runtimes.** Node ≥ 20 LTS (22 is the current LTS), Python ≥ 3.11 (3.13 is current), `uv` ≥ 0.5.0, Docker ≥ 24. MCP SDKs drop support for old runtimes faster than most ecosystems.
+1. **Pin runtimes.** Node ≥ 22 (24 is the active LTS; Node 20 hit end-of-life in April 2026), Python ≥ 3.11 (3.14 is current), `uv` ≥ 0.5.0, Docker ≥ 24. MCP SDKs drop support for old runtimes faster than most ecosystems.
 2. **Check the server's transport.** stdio servers need to be spawnable as a subprocess; HTTP servers need a reachable URL. Don't paste an HTTP config into a stdio slot.
 3. **Read the server's README.** Required env vars (tokens, connection strings, project IDs), scopes for OAuth tokens, and any "destructive ops require flag X" notes live there.
 4. **Know your host's config path.** Different hosts read different files; see [Per-host installation](#per-host-installation).
@@ -58,7 +58,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 ```json
 {
   "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem@2025.11.0", "/path/to/workspace"]
+  "args": ["-y", "@modelcontextprotocol/server-filesystem@2026.1.14", "/path/to/workspace"]
 }
 ```
 
@@ -71,7 +71,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 uvx mcp-server-git --repository /path/to/repo
 
 # Pin version
-uvx mcp-server-git==2025.11.0 --repository /path/to/repo
+uvx mcp-server-git==2026.6.4 --repository /path/to/repo
 ```
 
 If you don't have `uv` installed:
@@ -97,7 +97,7 @@ Used when a server has heavy native dependencies (Playwright/Puppeteer, kubectl,
 ```bash
 docker run -i --rm \
   -v ~/.kube:/home/mcp/.kube:ro \
-  quay.io/containers/kubernetes-mcp-server
+  quay.io/manusa/kubernetes_mcp_server
 ```
 
 Notes for Docker-based MCP servers:
@@ -115,24 +115,20 @@ A growing pattern is **Docker MCP Toolkit** (Docker Desktop ≥ 4.40) which prov
 
 ### Claude Code
 
-Claude Code reads MCP config from a project-scoped `.mcp.json` and from user-scoped settings. The recommended workflow is the `claude mcp` CLI:
+Claude Code reads MCP config from a project-scoped `.mcp.json` (project scope) and from `~/.claude.json` (local and user scopes). The recommended workflow is the `claude mcp` CLI — stdio servers take the command after a `--` separator, HTTP servers take a URL:
 
 ```bash
-# Add an stdio server, scoped to the current project
-claude mcp add filesystem \
-  --command npx \
-  --args "-y,@modelcontextprotocol/server-filesystem,$(pwd)"
+# Add an stdio server (everything after -- is the launch command)
+claude mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem "$(pwd)"
+
+# Add it to the project scope instead (writes .mcp.json, shareable with the team)
+claude mcp add --scope project filesystem -- npx -y @modelcontextprotocol/server-filesystem "$(pwd)"
 
 # Add a hosted HTTP server
-claude mcp add github-hosted \
-  --transport http \
-  --url https://api.githubcopilot.com/mcp/
+claude mcp add --transport http github-hosted https://api.githubcopilot.com/mcp/
 
 # Add with env vars (don't put secrets on the command line — see below)
-claude mcp add postgres \
-  --command npx \
-  --args "-y,@modelcontextprotocol/server-postgres" \
-  --env "POSTGRES_CONNECTION_STRING=\${POSTGRES_CONNECTION_STRING}"
+claude mcp add fetch --env EXAMPLE_VAR='${EXAMPLE_VAR}' -- uvx mcp-server-fetch
 
 # List installed servers
 claude mcp list
@@ -151,21 +147,21 @@ The resulting `.mcp.json` (project-scoped, commit-safe if it contains only `${VA
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/code/project"]
     },
     "github-hosted": {
-      "transport": "http",
+      "type": "http",
       "url": "https://api.githubcopilot.com/mcp/"
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
       "env": {
-        "POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"
+        "EXAMPLE_VAR": "${EXAMPLE_VAR}"
       }
     }
   }
 }
 ```
 
-User-scoped servers live in `~/.claude/settings.json` under the same `mcpServers` key. Project-scoped takes precedence on name collisions.
+User-scoped and local-scoped servers live in `~/.claude.json` under the same `mcpServers` shape (`~/.claude/settings.json` holds permissions and other settings, never MCP server definitions). Project-scoped takes precedence on name collisions.
 
 To restrict which tools a server may expose, use `permissions.allow` / `permissions.deny` in settings (see [`configuration.md`](./configuration.md)).
 
@@ -177,7 +173,8 @@ Claude Desktop uses a single JSON file per platform:
 |---|---|
 | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+(There is no official Claude Desktop build for Linux; on Linux use Claude Code or another MCP host.)
 
 ```json
 {
@@ -186,10 +183,10 @@ Claude Desktop uses a single JSON file per platform:
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Documents"]
     },
-    "github": {
+    "brave-search": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx" }
+      "args": ["-y", "@brave/brave-search-mcp-server"],
+      "env": { "BRAVE_API_KEY": "BSA_xxx" }
     }
   }
 }
@@ -197,7 +194,7 @@ Claude Desktop uses a single JSON file per platform:
 
 After editing, fully quit and relaunch Claude Desktop (the menu bar icon must disappear on macOS). The Settings → Developer pane shows server status and lets you tail logs at:
 
-- macOS / Linux: `~/Library/Logs/Claude/mcp*.log`
+- macOS: `~/Library/Logs/Claude/mcp*.log`
 - Windows: `%LOCALAPPDATA%\Claude\Logs\mcp*.log`
 
 ### Cursor
@@ -261,13 +258,13 @@ mcpServers:
       - "-y"
       - "@modelcontextprotocol/server-filesystem"
       - "/Users/me/code"
-  - name: postgres
+  - name: mongodb
     command: npx
     args:
       - "-y"
-      - "@modelcontextprotocol/server-postgres"
+      - "mongodb-mcp-server"
     env:
-      POSTGRES_CONNECTION_STRING: ${{ secrets.POSTGRES_CONNECTION_STRING }}
+      MDB_MCP_CONNECTION_STRING: ${{ secrets.MDB_MCP_CONNECTION_STRING }}
 ```
 
 Continue resolves `${{ secrets.NAME }}` from its hub-managed secrets store, which is the cleanest way to keep tokens out of the YAML.
@@ -300,7 +297,7 @@ Note Zed uses `context_servers` rather than `mcpServers` for historical reasons 
 If you're building an in-house host, the SDKs handle all the wire details. Minimal TypeScript client connecting to a local stdio server:
 
 ```ts
-// package.json: "@modelcontextprotocol/sdk": "^1.20.0"
+// package.json: "@modelcontextprotocol/sdk": "^1.29.0"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -331,7 +328,7 @@ await client.close();
 Python equivalent:
 
 ```python
-# pip install "mcp>=1.13.0"
+# pip install "mcp>=1.27.0"
 import asyncio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -402,7 +399,7 @@ The cleanest path: no token in your config at all. Hosted MCP servers (GitHub's,
 ```json
 {
   "github": {
-    "transport": "http",
+    "type": "http",
     "url": "https://api.githubcopilot.com/mcp/"
   }
 }
@@ -427,13 +424,13 @@ npx @modelcontextprotocol/inspector npx -y @modelcontextprotocol/server-filesyst
 
 # Run against an stdio server with env vars
 npx @modelcontextprotocol/inspector \
-  -e GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx \
-  npx -y @modelcontextprotocol/server-github
+  -e BRAVE_API_KEY=BSA_xxx \
+  npx -y @brave/brave-search-mcp-server
 
-# Run against a Streamable HTTP server
+# Run against a Streamable HTTP server (CLI mode)
 npx @modelcontextprotocol/inspector \
-  --transport http \
-  --server-url https://api.githubcopilot.com/mcp/
+  --cli https://api.githubcopilot.com/mcp/ \
+  --transport http
 ```
 
 The Inspector opens a UI at `http://localhost:6274` (proxy server on 6277). The UI shows five tabs that map directly to the protocol surface:
@@ -471,7 +468,7 @@ If the Inspector can't connect, the host won't either; debug here first.
 | Server holds a stale token after rotation | Cached process | Restart the host. For stdio servers the process is per-session, but the host may keep it alive across reloads. |
 | Tool calls hang forever | Server isn't writing newline-terminated JSON-RPC | stdio framing is line-delimited; a misbehaving server (often one that printed to stdout from a dependency) breaks the stream. Send all logs to stderr only. |
 
-When all else fails, set `MCP_DEBUG=1` (Claude Code) or check the equivalent verbose-log flag for your host, run the server standalone in a terminal, and compare the JSON-RPC traffic against the spec.
+When all else fails, launch with `claude --debug` (Claude Code) or check the equivalent verbose-log flag for your host, run the server standalone in a terminal, and compare the JSON-RPC traffic against the spec. Claude Code also honors `MCP_TIMEOUT` (server startup timeout, ms) and `MCP_TOOL_TIMEOUT` (tool execution timeout, ms) env vars when slow servers look like failures.
 
 ---
 

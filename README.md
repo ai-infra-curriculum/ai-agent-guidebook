@@ -114,11 +114,15 @@ cat guides/gemini-cli/README.md
 ### Set Up MCP Servers
 
 ```bash
-# Copy MCP configuration template
-cp templates/mcp-config.json ~/.config/claude-code/mcp.json
+# Copy the MCP configuration template into your project as .mcp.json
+# (Claude Code's project-scope MCP config)
+cp templates/mcp-config.json /path/to/your/project/.mcp.json
 
 # Edit with your server configuration
-nano ~/.config/claude-code/mcp.json
+nano /path/to/your/project/.mcp.json
+
+# Or add servers via the CLI instead:
+claude mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem "$(pwd)"
 ```
 
 ### Create Multi-Agent System
@@ -182,8 +186,7 @@ ai-agent-guidebook/
 │   ├── CLAUDE.md                       # Claude orchestration template
 │   ├── AGENTS.md                       # Multi-agent template
 │   ├── mcp-config.json                 # MCP configuration
-│   ├── skill-template/                 # Claude Skill template
-│   └── project-templates/              # Complete project setups
+│   └── skill-template/                 # Claude Skill template
 ├── examples/
 │   ├── content-generation/             # Curriculum builder example
 │   ├── devops-automation/              # Infrastructure automation
@@ -199,10 +202,12 @@ ai-agent-guidebook/
 │   ├── context-management.md           # Managing context
 │   ├── error-handling.md               # Error recovery
 │   ├── security.md                     # Security practices
-│   └── testing.md                      # Testing AI systems
+│   ├── testing.md                      # Testing AI systems
+│   ├── performance.md                  # Model selection & cost/latency
+│   └── agent-governance.md             # Agent governance & trust
 └── .github/
     └── workflows/
-        └── validate.yml                # CI/CD validation
+        └── ci.yml                      # CI validation
 ```
 
 ---
@@ -313,7 +318,7 @@ ai-agent-guidebook/
 
 ### Context Management
 
-- ✅ Use `.claudeignore` to exclude irrelevant files
+- ✅ Use `permissions.deny` rules (Claude Code) and ignore files (`.cursorignore`, `.geminiignore`) to exclude irrelevant files
 - ✅ Reference specific files and line numbers
 - ✅ Provide focused code snippets
 - ✅ Use MCP servers for external data
@@ -391,11 +396,11 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 
-**Last Updated**: 2026-05-24
+**Last Updated**: 2026-06-11
 
-**Status**: 🚀 Active Development — covering Claude 4.x family (Opus 4.7, Sonnet 4.6, Haiku 4.5), GitHub Copilot Workspace + CLI, Gemini 2.x CLI, and the current MCP spec.
+**Status**: 🚀 Active Development — covering the current Claude models (Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5), the standalone GitHub Copilot CLI + coding agent, Gemini CLI (Gemini 3.x), and MCP spec revision 2025-11-25.
 
 
 ---

@@ -226,8 +226,9 @@ export TF_VAR_gcp_project=acme-staging-12345
 export KUBECONFIG=$HOME/.kube/staging.yaml
 export PROMETHEUS_URL=https://prometheus.staging.acme.internal
 
-# 4. Launch Claude Code from the repo root with the agent definitions.
-claude code --agents .deploy-agents/AGENTS.md --mcp .deploy-agents/mcp.config.json
+# 4. Launch Claude Code from the repo root — AGENTS.md and .claude/agents/
+#    are picked up automatically; load the deploy MCP servers explicitly.
+claude --mcp-config .deploy-agents/mcp.config.json
 
 # 5. Issue an intent.
 > "Plan a deployment of payments-api v2.14.3 to staging.

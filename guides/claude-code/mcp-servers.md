@@ -40,29 +40,30 @@ A modern Claude Code install often has 10-30 MCP servers wired in. Past that, th
 
 ## Where Config Lives
 
-Three scopes, evaluated in order. Later scopes override earlier ones for the same server name.
+Three scopes. When the same server name exists in multiple scopes, the more specific scope wins.
 
-| Scope | Path | When to use |
-|-------|------|-------------|
-| User-global | `~/.claude/mcp.json` (or `~/.config/claude-code/mcp.json`) | Servers you want everywhere: GitHub, your password manager, your notes app |
-| Project-local | `<repo>/.claude/mcp.json` | Servers specific to a codebase: that project's DB, its Docker daemon, project-scoped Jira |
-| Session | passed via `--mcp-config <path>` | One-off experiments without polluting persistent config |
+| Scope | Stored in | When to use |
+|-------|-----------|-------------|
+| `local` (default) | `~/.claude.json`, under the current project's entry | Personal/experimental servers for one project; credentials you don't want in version control |
+| `project` | `<repo>/.mcp.json` (committed) | Servers the whole team should share: the project's DB, its Sentry org, project-scoped Jira |
+| `user` | `~/.claude.json` | Servers you want everywhere: GitHub, your password manager, your notes app |
+
+A session can also load extra servers via `--mcp-config <path>` (add `--strict-mcp-config` to ignore everything else) — useful for one-off experiments without polluting persistent config.
 
 Inspect resolved config:
 
 ```bash
-claude mcp list           # all configured servers
-claude mcp list --json    # machine-readable
-claude mcp status         # which are connected, which failed
+claude mcp list           # all configured servers and their connection status
+claude mcp get <name>     # details for one server
 ```
 
-Inside an interactive session, `/mcp` opens the same UI.
+Inside an interactive session, `/mcp` shows connection status, tool counts, and OAuth state.
 
 ---
 
 ## Config File Shape
 
-Canonical structure:
+Canonical structure (`.mcp.json` at the project root; the same shape is used inside `~/.claude.json`):
 
 ```json
 {
@@ -72,30 +73,23 @@ Canonical structure:
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-      },
-      "disabled": false,
-      "autoApprove": ["search_repositories", "get_file_contents"],
-      "timeout": 30000
+      }
     },
     "postgres-prod": {
+      "type": "stdio",
       "command": "uvx",
       "args": ["mcp-server-postgres", "--read-only"],
       "env": {
         "DATABASE_URL": "${PROD_READ_REPLICA_URL}"
-      },
-      "transport": "stdio"
-    },
-    "internal-tools": {
-      "transport": "sse",
-      "url": "https://mcp.corp.internal/sse",
-      "headers": {
-        "Authorization": "Bearer ${INTERNAL_MCP_TOKEN}"
       }
     },
-    "kubernetes-staging": {
-      "command": "kubectl-mcp",
-      "args": ["--context", "staging"],
-      "disabled": true
+    "internal-tools": {
+      "type": "http",
+      "url": "https://mcp.corp.internal/mcp",
+      "headers": {
+        "Authorization": "Bearer ${INTERNAL_MCP_TOKEN}"
+      },
+      "timeout": 600000
     }
   }
 }
@@ -105,18 +99,15 @@ Field reference:
 
 | Field | Type | Purpose |
 |-------|------|---------|
+| `type` | `stdio` \| `http` \| `sse` \| `ws` | Wire protocol. Defaults to `stdio`. `streamable-http` is accepted as an alias for `http` |
 | `command` | string | Executable to launch (stdio transport) |
 | `args` | string[] | Arguments to the command |
-| `env` | object | Environment variables. `${VAR}` interpolates from shell env |
-| `transport` | `stdio` \| `sse` \| `http` | Wire protocol. Defaults to `stdio` |
-| `url` | string | Endpoint for `sse` and `http` transports |
-| `headers` | object | HTTP headers (interpolation supported) |
-| `disabled` | bool | Skip during startup. Useful for parked servers |
-| `autoApprove` | string[] | Tool names that bypass the permission prompt |
-| `timeout` | number | Per-tool-call timeout in ms. Default 30000 |
-| `cwd` | string | Working directory for stdio commands |
+| `env` | object | Environment variables. `${VAR}` (and `${VAR:-default}`) expand from the shell env |
+| `url` | string | Endpoint for `http`, `sse`, and `ws` transports |
+| `headers` | object | HTTP headers (expansion supported) |
+| `timeout` | number | Per-server tool execution timeout in ms; overrides `MCP_TOOL_TIMEOUT` for that server |
 
-Env interpolation only reads the shell environment of the `claude` process. Hardcoded secrets are an anti-pattern — keep them in a secrets manager and export at session start.
+Env expansion only reads the shell environment of the `claude` process. Hardcoded secrets are an anti-pattern — keep them in a secrets manager and export at session start.
 
 ---
 
@@ -128,32 +119,32 @@ Env interpolation only reads the shell environment of the `claude` process. Hard
 /mcp
 ```
 
-The TUI lets you add, edit, disable, restart, and inspect servers. Changes write back to the appropriate config file based on the scope you choose.
+Shows connection status and tool counts per server, lets you complete OAuth flows, and flags project-scoped servers awaiting approval.
 
 ### Command line
 
+For stdio servers, `--` separates Claude's own flags from the command that runs the server:
+
 ```bash
 # Add user-global
-claude mcp add github \
-  --command npx \
-  --args "-y,@modelcontextprotocol/server-github" \
-  --env "GITHUB_TOKEN=\${GITHUB_TOKEN}"
+claude mcp add --scope user --env GITHUB_TOKEN=ghp_xxx github -- \
+  npx -y @modelcontextprotocol/server-github
 
-# Add project-local
-claude mcp add --scope project postgres-dev \
-  --command "uvx" \
-  --args "mcp-server-postgres" \
-  --env "DATABASE_URL=postgres://localhost/dev"
+# Add project-scoped (written to .mcp.json, shareable via version control)
+claude mcp add --scope project --env DATABASE_URL=postgres://localhost/dev postgres-dev -- \
+  uvx mcp-server-postgres
+
+# Add a remote HTTP server
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+
+# Add from raw JSON
+claude mcp add-json events-server '{"type":"http","url":"https://mcp.example.com/mcp"}'
 
 # Remove
 claude mcp remove github
 
-# Toggle
-claude mcp disable github
-claude mcp enable github
-
-# Restart a single server
-claude mcp restart github
+# Reset approval choices for project-scoped servers
+claude mcp reset-project-choices
 ```
 
 ### Direct edit
@@ -161,10 +152,10 @@ claude mcp restart github
 Most operators end up editing the JSON file directly once they have more than a few servers. Use a `jq` sanity check before saving:
 
 ```bash
-jq empty ~/.claude/mcp.json && echo "valid"
+jq empty .mcp.json && echo "valid"
 ```
 
-If invalid JSON ships, Claude Code refuses to start. Keep a backup.
+Keep a backup before hand-editing.
 
 ---
 
@@ -184,33 +175,34 @@ The MCP server is a child process. Claude Code writes JSON-RPC requests to its s
 Pros: zero network setup, OS-level process isolation, easy local secrets.
 Cons: one process per session, slow cold start for `npx`-based servers, no sharing across teams.
 
-### SSE (server-sent events)
+### HTTP (streamable HTTP)
 
-The server is a long-lived HTTP service that streams responses.
+The server is a long-lived HTTP service. This is the standard transport for remote and shared servers, and the only remote transport that supports OAuth.
 
 ```json
 {
-  "transport": "sse",
+  "type": "http",
+  "url": "https://mcp.corp.internal/mcp",
+  "headers": { "Authorization": "Bearer ${TOKEN}" }
+}
+```
+
+Pros: shared infrastructure, central auth (including OAuth), observable, easy version pinning.
+Cons: requires hosting; network failures more common than process crashes.
+
+### SSE (server-sent events)
+
+A legacy remote transport that streams responses over server-sent events. Still supported (`claude mcp add --transport sse <name> <url>`), but the MCP ecosystem has moved to streamable HTTP.
+
+```json
+{
+  "type": "sse",
   "url": "https://mcp.corp.internal/sse",
   "headers": { "Authorization": "Bearer ${TOKEN}" }
 }
 ```
 
-Pros: shared infrastructure, central auth, observable, easy version pinning.
-Cons: requires hosting; network failures more common than process crashes.
-
-### HTTP (request/response)
-
-Plain HTTP for servers that do not stream:
-
-```json
-{
-  "transport": "http",
-  "url": "https://mcp.example.com/rpc"
-}
-```
-
-For new internal servers, default to SSE. stdio is best for personal tools and prototypes. HTTP is mostly used for legacy or stateless integrations.
+For new internal servers, default to HTTP. stdio is best for personal tools and prototypes. SSE is mostly for existing servers that have not migrated.
 
 ---
 
@@ -220,18 +212,22 @@ Once an MCP server is connected, every tool it exposes is callable. Two layers c
 
 ### Permission mode
 
-Set globally in `settings.json`:
+Set the default in `settings.json`:
 
 ```json
 {
-  "permissionMode": "ask"
+  "permissions": {
+    "defaultMode": "default"
+  }
 }
 ```
 
-- `ask` — prompt for every tool the agent has not already been approved for this session.
-- `accept-edits` — auto-approve file edits, prompt for everything else.
+- `default` — prompt for every tool the agent has not already been approved for.
+- `acceptEdits` — auto-approve file edits, prompt for everything else.
 - `plan` — refuse all writes; useful for read-only exploration.
-- `bypass-permissions` — auto-approve everything. Reserve for sandboxed CI containers.
+- `bypassPermissions` — auto-approve everything. Reserve for sandboxed CI containers.
+
+Override per session with `claude --permission-mode <mode>` or cycle in-session with `Shift+Tab`.
 
 ### Per-tool allowlist
 
@@ -260,39 +256,36 @@ In `settings.json`:
 
 Tool names follow the pattern `mcp__<server-name>__<tool-name>`. Bash patterns support glob-style suffixes (`Bash(git:*)` allows any `git` subcommand).
 
-### Per-server `autoApprove`
+### Allowlisting a whole server
 
-Per-server `autoApprove` is a convenience that adds entries to the allowlist without listing them in the central permissions config:
+Using just the server name (no tool suffix) approves every tool that server exposes:
 
 ```json
 {
-  "mcpServers": {
-    "github": {
-      "autoApprove": ["search_repositories", "list_issues"]
-    }
+  "permissions": {
+    "allow": ["mcp__github"]
   }
 }
 ```
 
-Use `autoApprove` for safe read-only operations. Anything that mutates state belongs in the central allowlist where it is reviewable.
+Reserve whole-server allows for servers that are entirely read-only. Anything that mutates state belongs in the central allowlist as an explicit `mcp__<server>__<tool>` entry, where it is reviewable.
 
 ---
 
 ## Deferred Tools and ToolSearch
 
-By default, every connected MCP server's full tool schema lands in the model's context at session start. With 30+ servers and 500+ tools, this can consume 40-80k tokens before you write a prompt.
+Without deferral, every connected MCP server's full tool schema lands in the model's context at session start. With 30+ servers and 500+ tools, this can consume 40-80k tokens before you write a prompt.
 
-Deferred-tool mode solves this. Enable it:
+MCP tool search solves this, and it is **enabled by default**. Only tool *names* and server instructions appear in initial context. Control it with the `ENABLE_TOOL_SEARCH` environment variable:
 
-```json
-{
-  "mcp": {
-    "deferredTools": true
-  }
-}
-```
+| Value | Behavior |
+|-------|----------|
+| unset (default) | All MCP tools deferred and loaded on demand (falls back to upfront loading on Vertex AI or non-first-party `ANTHROPIC_BASE_URL`) |
+| `true` | All MCP tools deferred, even on Vertex/proxies |
+| `auto` | Threshold mode: load upfront if schemas fit within 10% of the context window, defer the overflow |
+| `false` | All MCP tools loaded upfront, no deferral |
 
-With deferred tools on, only tool *names* appear in initial context. The full JSON Schema for parameters is fetched on demand by the `ToolSearch` tool:
+The full JSON Schema for parameters is fetched on demand by the `ToolSearch` tool:
 
 ```
 ToolSearch(query="select:mcp__github__create_pull_request,mcp__github__list_branches")
@@ -306,18 +299,17 @@ ToolSearch(query="postgres query", max_results=5)
 
 The matched tool definitions are injected as if they had been there all along, and the model can call them on the next turn.
 
-**When to enable deferred tools:**
+**When to keep the default (deferred):**
 
-- You have more than 15 MCP servers, or
-- Initial context usage exceeds 30k tokens before the first user prompt, or
-- You run long sessions where context economy matters.
+- You have many MCP servers or run long sessions where context economy matters — i.e., almost always.
 
-**When to leave it off:**
+**When to disable (`ENABLE_TOOL_SEARCH=false`) or use `auto`:**
 
-- You have fewer than 10 small servers.
+- You have a handful of small servers and want zero lookup round-trips.
 - You routinely invoke a wide variety of tools per turn (the round-trip cost dominates).
+- You are on a model or proxy that does not support `tool_reference` blocks (Haiku models don't; tool search is off by default on Vertex AI).
 
-Plugin-namespaced tools (`plugin:serena:find_symbol`) participate in the same deferred flow. ToolSearch returns plugin-qualified names.
+Plugin-bundled MCP tools participate in the same deferred flow. ToolSearch returns plugin-qualified names.
 
 ---
 
@@ -389,8 +381,8 @@ Wire whatever you pick as a normal MCP server:
 {
   "mcpServers": {
     "policy-proxy": {
-      "transport": "sse",
-      "url": "https://policy.corp.internal/sse",
+      "type": "http",
+      "url": "https://policy.corp.internal/mcp",
       "headers": { "Authorization": "Bearer ${POLICY_TOKEN}" }
     }
   }
@@ -423,39 +415,21 @@ Categories most teams pull from on day one:
 ### Check connection status
 
 ```bash
-claude mcp status
+claude mcp list      # all servers with connection status
+claude mcp get github
 ```
 
-```
-github            connected (12 tools)
-postgres-prod     connected (3 tools)
-internal-tools    failed: ECONNREFUSED
-kubernetes-stag   disabled
-```
+Inside a session, `/mcp` shows each server's status, tool count, and OAuth state, and flags project-scoped servers as `⏸ Pending approval` until you approve them.
 
-### Inspect server logs
+### Verbose logging
 
-stdio servers' stderr is captured to:
-
-```
-~/.claude/logs/mcp/<server-name>.log
-```
-
-Tail in another terminal during a session:
+Launch with debug output to see MCP handshakes, errors, and stdio servers' stderr:
 
 ```bash
-tail -f ~/.claude/logs/mcp/github.log
+claude --debug
 ```
 
-### Verbose protocol logging
-
-Set the env var before launching:
-
-```bash
-MCP_DEBUG=1 claude
-```
-
-This dumps every JSON-RPC frame to `~/.claude/logs/mcp/protocol.log`. Heavy, but invaluable when a server appears connected but never returns results.
+Heavy, but invaluable when a server appears connected but never returns results. If a server is slow to start, raise the startup timeout: `MCP_TIMEOUT=10000 claude`.
 
 ### Common failure modes
 
@@ -463,7 +437,7 @@ This dumps every JSON-RPC frame to `~/.claude/logs/mcp/protocol.log`. Heavy, but
 
 **`Method not found` errors.** The server speaks an old MCP version. Update it, or pin Claude Code to a compatible release.
 
-**`Permission denied`** for an `mcp__server__tool` call despite being in `allow`. The tool name in the allowlist must match exactly. Run `claude mcp list --json` to get the canonical names; copy-paste, don't retype.
+**`Permission denied`** for an `mcp__server__tool` call despite being in `allow`. The tool name in the allowlist must match exactly (`mcp__<server>__<tool>`, where `<server>` is the name you configured). Check `/mcp` for canonical server names; copy-paste, don't retype.
 
 **Server hangs on first call.** Usually upstream auth. Run the server manually with the same env:
 
@@ -472,19 +446,19 @@ GITHUB_TOKEN=$GITHUB_TOKEN npx -y @modelcontextprotocol/server-github
 # Then issue a manual tools/call via stdio with a small test payload
 ```
 
-**Cold-start latency.** `npx`-based servers re-download the package on first run after a cache eviction. Use `uvx`, pre-install with `npm i -g`, or switch to a long-running SSE server.
+**Cold-start latency.** `npx`-based servers re-download the package on first run after a cache eviction. Use `uvx`, pre-install with `npm i -g`, or switch to a long-running HTTP server.
 
-**`Connection refused`** on SSE/HTTP. Check the URL is reachable from the `claude` process (not just from your browser — corporate split DNS can lie). `curl -v <url>` from the same shell.
+**`Connection refused`** on HTTP/SSE. Check the URL is reachable from the `claude` process (not just from your browser — corporate split DNS can lie). `curl -v <url>` from the same shell. Note that Claude Code auto-reconnects remote servers with exponential backoff (up to five attempts) before marking them failed.
 
 ---
 
 ## Performance Tuning
 
-- **Enable deferred tools** above ~15 servers.
-- **Disable servers you don't actively use** in a given session. `claude mcp disable <name>`. They consume context, startup time, and a process slot.
-- **Prefer SSE/HTTP for shared servers** to avoid per-session cold starts.
-- **Cap timeouts** for flaky external APIs so the agent doesn't sit on a stalled call.
-- **Watch the `/cost` output** — high MCP tool counts inflate every prompt's input tokens.
+- **Keep tool search on** (the default) — it keeps per-prompt context cost flat as server count grows.
+- **Remove servers you don't actively use**: `claude mcp remove <name>`. They consume context, startup time, and a process slot.
+- **Prefer HTTP for shared servers** to avoid per-session cold starts.
+- **Cap timeouts** for flaky external APIs (per-server `"timeout"`, or the `MCP_TOOL_TIMEOUT` env var) so the agent doesn't sit on a stalled call.
+- **Watch the `/cost` and `/context` output** — high MCP tool counts inflate every prompt's input tokens.
 
 ---
 
@@ -493,7 +467,7 @@ GITHUB_TOKEN=$GITHUB_TOKEN npx -y @modelcontextprotocol/server-github
 - Treat MCP servers as part of your attack surface. A compromised server can read and exfiltrate every prompt and tool result the model sees.
 - Pin server versions. `npx -y @scope/server@1.2.3` rather than `@latest`.
 - Run servers with the least privileges they need. The Postgres MCP can use a read-only replica; the Kubernetes MCP can use a namespaced service account.
-- Audit `autoApprove` lists. Auto-approving a tool that can call arbitrary URLs (most "fetch" tools) is equivalent to auto-approving Bash with network access.
+- Audit the MCP entries in `permissions.allow`. Auto-approving a tool that can call arbitrary URLs (most "fetch" tools) is equivalent to auto-approving Bash with network access.
 - Log every tool call in production agent fleets. A governance MCP layer (above) or a Stop hook (see [hooks.md](hooks.md)) can do this.
 - Rotate credentials on a schedule. The hash-chained audit trail from a governance layer is what tells you what was accessed during a window of compromise.
 

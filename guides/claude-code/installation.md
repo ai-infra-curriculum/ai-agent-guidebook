@@ -8,10 +8,11 @@ Detailed installation guide for Claude Code across macOS, Linux, and Windows (WS
 
 - [System Requirements](#system-requirements)
 - [Installation Methods](#installation-methods)
+  - [Native installer (recommended)](#install-via-the-native-installer-recommended)
   - [npm (cross-platform)](#install-via-npm-cross-platform)
   - [Homebrew (macOS)](#install-via-homebrew-macos)
-  - [Manual binary install](#manual-binary-install)
-  - [Windows via WSL](#windows-via-wsl)
+  - [Pinning a specific version](#pinning-a-specific-version)
+  - [Windows: native or WSL](#windows-native-or-wsl)
 - [Verifying the Install](#verifying-the-install)
 - [Authentication](#authentication)
 - [First-Run Wizard](#first-run-wizard)
@@ -25,22 +26,38 @@ Detailed installation guide for Claude Code across macOS, Linux, and Windows (WS
 
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
-| OS | macOS 12+, Ubuntu 20.04+, Windows 10 + WSL2 | macOS 14+, Ubuntu 22.04+, Windows 11 + WSL2 |
-| Node.js | 18.x | 20.x LTS or 22.x |
+| OS | macOS 13+, Ubuntu 20.04+ / Debian 10+, Windows 10 1809+ | macOS 14+, Ubuntu 22.04+, Windows 11 |
+| Node.js | 18.x (npm install path only) | 20.x LTS or 22.x |
 | RAM | 4 GB | 16 GB (for parallel agents) |
 | Disk | 500 MB | 5 GB (with caches and skills) |
 | Network | Outbound HTTPS to `api.anthropic.com` | Same, plus low-latency link |
-| Shell | bash 4+ or zsh 5+ | zsh 5.8+ or fish 3+ |
+| Shell | Bash, Zsh, PowerShell, or CMD | zsh 5.8+ or bash 5+ |
 
-Claude Code expects a POSIX-like environment. On Windows, native PowerShell is unsupported; use WSL2.
+Claude Code runs natively on macOS, Linux, and Windows. On Windows you can use native PowerShell/CMD (Git for Windows recommended so the Bash tool is available) or WSL 2.
 
 ---
 
 ## Installation Methods
 
+### Install via the native installer (recommended)
+
+The native installer requires no Node.js and auto-updates in the background:
+
+```bash
+# macOS, Linux, WSL
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+```powershell
+# Windows PowerShell
+irm https://claude.ai/install.ps1 | iex
+```
+
+The binary lands in `~/.local/bin/claude`.
+
 ### Install via npm (cross-platform)
 
-The npm package is the canonical distribution. It works on every supported OS and is the only path that gets same-day patch releases.
+The npm package installs the same native binary via a per-platform optional dependency. It requires Node.js 18+ for the install itself; the installed `claude` binary does not invoke Node.
 
 ```bash
 # Verify Node 18+ first
@@ -48,10 +65,6 @@ node --version
 
 # Install globally
 npm install -g @anthropic-ai/claude-code
-
-# Or with a project-local install (preferred in monorepos)
-npm install --save-dev @anthropic-ai/claude-code
-npx claude-code
 ```
 
 If you see `EACCES` permission errors, do not use `sudo`. Either fix your npm prefix or use a Node version manager:
@@ -80,54 +93,36 @@ nvm alias default 22
 
 ### Install via Homebrew (macOS)
 
-Homebrew is the lowest-friction path on macOS if you do not already manage Node yourself.
+Claude Code ships as a Homebrew cask:
 
 ```bash
-# Tap and install
-brew install anthropic/claude/claude-code
+brew install --cask claude-code
 
 # Verify
 claude --version
 ```
 
-The Homebrew formula pins its own Node runtime, so it will not collide with system Node or other version managers. The tradeoff: Homebrew updates lag npm by a few hours to a few days.
+Two casks exist: `claude-code` tracks the stable channel (typically about a week behind, skipping releases with major regressions); `claude-code@latest` tracks every release. Homebrew installs do not auto-update — run `brew upgrade claude-code` periodically.
 
-### Install via Bun
+### Pinning a specific version
 
-Bun is supported as a drop-in replacement for npm in CI and on developer machines that already use it:
-
-```bash
-bun install -g @anthropic-ai/claude-code
-claude --version
-```
-
-Performance is comparable. The Bun install path is useful when you want a single runtime in CI containers.
-
-### Manual binary install
-
-For air-gapped environments or pinned reproducible installs, download a release tarball:
+The native installer accepts a release channel or an exact version, which is the supported path for reproducible installs:
 
 ```bash
-# Replace VERSION with the target release (e.g. 1.2.3)
-VERSION=$(curl -fsSL https://api.github.com/repos/anthropics/claude-code/releases/latest | jq -r .tag_name)
+# Stable channel
+curl -fsSL https://claude.ai/install.sh | bash -s stable
 
-# macOS arm64
-curl -fsSL "https://github.com/anthropics/claude-code/releases/download/${VERSION}/claude-code-${VERSION}-darwin-arm64.tar.gz" -o claude-code.tar.gz
-
-# Linux x64
-curl -fsSL "https://github.com/anthropics/claude-code/releases/download/${VERSION}/claude-code-${VERSION}-linux-x64.tar.gz" -o claude-code.tar.gz
-
-# Extract and install
-tar -xzf claude-code.tar.gz
-sudo mv claude-code /usr/local/bin/claude
-chmod +x /usr/local/bin/claude
+# Exact version
+curl -fsSL https://claude.ai/install.sh | bash -s 2.1.89
 ```
 
-Verify the SHA-256 against the release page checksums file before installing in any environment you trust.
+Releases publish a signed `manifest.json` with SHA-256 checksums per platform; verify the GPG signature before trusting a binary in sensitive environments. Signed apt, dnf, and apk repositories are also available for Debian/Ubuntu, Fedora/RHEL, and Alpine.
 
-### Windows via WSL
+### Windows: native or WSL
 
-Claude Code on Windows runs inside WSL2. Native Windows builds are not supported.
+Claude Code runs natively on Windows. Run the PowerShell installer above (no Administrator needed), and optionally install [Git for Windows](https://git-scm.com/downloads/win) so Claude Code can use Git Bash for its Bash tool; without it, shell commands run through PowerShell.
+
+WSL 2 is still a good choice for Linux toolchains and is required for sandboxed command execution:
 
 ```powershell
 # In an elevated PowerShell
@@ -142,14 +137,8 @@ Once Ubuntu is up:
 sudo apt update
 sudo apt install -y curl git build-essential
 
-# Install Node via fnm
-curl -fsSL https://fnm.vercel.app/install | bash
-exec $SHELL
-fnm install 22
-fnm default 22
-
-# Install Claude Code
-npm install -g @anthropic-ai/claude-code
+# Install Claude Code (native installer; no Node required)
+curl -fsSL https://claude.ai/install.sh | bash
 claude --version
 ```
 
@@ -165,7 +154,7 @@ claude --version
 
 ```bash
 claude --version
-# Expected: claude-code v1.x.x
+# Expected: a 2.x.x version string
 
 claude --help
 # Should print the full command reference
@@ -174,26 +163,7 @@ claude --help
 claude doctor
 ```
 
-`claude doctor` checks:
-- Node version and PATH
-- Auth credentials present and valid
-- MCP server config syntax
-- Network reachability to `api.anthropic.com`
-- Settings file integrity
-
-Sample healthy output:
-
-```
-Claude Code Doctor
-==================
-[ok]   Node v22.5.0
-[ok]   claude binary at /opt/homebrew/bin/claude
-[ok]   Auth: API key present (sk-ant-***-a8f2)
-[ok]   API reachable (142ms)
-[ok]   Settings: ~/.claude/settings.json valid
-[ok]   MCP config: 3 servers configured
-[warn] Skills directory empty
-```
+`claude doctor` reports on your installation health and configuration — installation type and version, auto-update status, and the result of the most recent update attempt — and is the first thing to run when something is off.
 
 ---
 
@@ -203,24 +173,16 @@ Claude Code supports three auth flows. Pick one — do not mix.
 
 ### Option 1: claude.ai login (recommended for individuals)
 
-If you have a Claude Pro or Max subscription, log in with your Anthropic account. Claude Code rides on the same entitlements as the web app, with no extra billing.
+If you have a Claude Pro, Max, Team, or Enterprise subscription, log in with your Anthropic account. Claude Code rides on the same entitlements as the web app, with no extra billing. The free claude.ai plan does not include Claude Code access.
 
 ```bash
-claude login
+claude
+# Follow the browser prompt on first run, or run /login inside the session
 ```
 
-This opens a browser tab to `claude.ai/oauth/authorize`. After approval, the CLI receives a refresh token stored in:
+After approval, the CLI stores credentials locally (macOS Keychain on macOS; under `~/.claude/` on Linux and WSL).
 
-- macOS: Keychain (`com.anthropic.claude-code`)
-- Linux: `~/.config/claude-code/credentials.json` (mode 0600)
-- WSL: same as Linux
-
-To switch accounts:
-
-```bash
-claude logout
-claude login
-```
+To switch accounts, run `/logout` then `/login` inside a session. For CI and scripts, generate a long-lived OAuth token with `claude setup-token`.
 
 ### Option 2: Anthropic API key (recommended for teams and CI)
 
@@ -273,7 +235,7 @@ export CLOUD_ML_REGION=us-central1
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
 ```
 
-The model IDs differ on these backends. Use the provider-specific names in any `--model` flags (for example `anthropic.claude-opus-4-7-v1:0` on Bedrock).
+The model IDs differ on these backends. Use the provider-specific names in any `--model` flags (Bedrock IDs follow the `us.anthropic.claude-*` pattern — for example a region-prefixed ID for Sonnet 4.6 — check your provider's console for the exact string).
 
 ---
 
@@ -285,23 +247,21 @@ On first invocation, `claude` walks through a short setup wizard:
 claude
 ```
 
-You will be asked:
+You will be asked to pick a theme and log in. Sensible defaults to know about:
 
-1. **Theme** — dark (default), light, or no-color (for terminals without truecolor).
-2. **Default model** — Sonnet 4.6 is the right choice for almost all users. Opt for Opus 4.7 only if you frequently do deep architecture work and accept the cost. Haiku 4.5 is appropriate for high-volume agent fleets.
-3. **Permission mode** — `ask` (prompt on every tool call), `accept-edits` (auto-allow file edits but prompt on Bash), or `plan` (read-only exploration with explicit promotion to write). Start with `ask`; relax later.
-4. **Telemetry** — anonymous usage telemetry. Off by default in enterprise installs; opt-in elsewhere.
-5. **MCP servers** — skip during first run; add later with `/mcp` or by editing config.
+1. **Theme** — dark (default), light, or colorblind-friendly variants. Change later via `/config`.
+2. **Default model** — Sonnet 4.6 is the right choice for almost all users. Opt for Opus 4.8 only if you frequently do deep architecture work and accept the cost. Haiku 4.5 is appropriate for high-volume agent fleets.
+3. **Permission mode** — `default` (prompt on first use of each tool), `acceptEdits` (auto-allow file edits but prompt on Bash), `plan` (read-only exploration with explicit promotion to write), or `bypassPermissions` (no prompts; reserve for sandboxes). Start with `default`; relax later. Cycle modes in-session with `Shift+Tab`.
+4. **MCP servers** — skip during first run; add later with `claude mcp add` or inspect with `/mcp`.
 
-Settings written to `~/.claude/settings.json`:
+Example `~/.claude/settings.json`:
 
 ```json
 {
-  "theme": "dark",
   "model": "claude-sonnet-4-6",
-  "permissionMode": "ask",
-  "telemetry": false,
-  "editor": "$EDITOR",
+  "permissions": {
+    "defaultMode": "default"
+  },
   "alwaysThinkingEnabled": true
 }
 ```
@@ -322,32 +282,31 @@ After the wizard you land in the interactive prompt. Useful first commands:
 ## Updating Claude Code
 
 ```bash
-# npm install
-npm update -g @anthropic-ai/claude-code
+# Apply an update immediately (any install method)
+claude update
+
+# npm install — avoid `npm update -g`, which can pin to the original semver range
+npm install -g @anthropic-ai/claude-code@latest
 
 # Homebrew
 brew upgrade claude-code
 
-# Manual binary
-# Re-download the latest release and replace /usr/local/bin/claude
-
-# Check installed vs latest
+# Check installed version
 claude --version
-npm view @anthropic-ai/claude-code version
 ```
 
-Auto-update notifications appear at the top of each session when a newer version is available. To suppress:
+Native installs auto-update in the background. To disable background updates, set the env var in `settings.json`:
 
 ```json
 {
-  "updates": { "checkOnStartup": false }
+  "env": { "DISABLE_AUTOUPDATER": "1" }
 }
 ```
 
-Pin a specific version in CI:
+To follow the slower, regression-skipping channel, set `"autoUpdatesChannel": "stable"`. Pin a specific version in CI:
 
 ```bash
-npm install -g @anthropic-ai/claude-code@1.2.3
+npm install -g @anthropic-ai/claude-code@2.1.89
 ```
 
 ---
@@ -355,18 +314,19 @@ npm install -g @anthropic-ai/claude-code@1.2.3
 ## Uninstalling
 
 ```bash
+# Native installer
+rm -f ~/.local/bin/claude
+rm -rf ~/.local/share/claude
+
 # npm
 npm uninstall -g @anthropic-ai/claude-code
 
 # Homebrew
-brew uninstall claude-code
-brew untap anthropic/claude
-
-# Manual binary
-sudo rm /usr/local/bin/claude
+brew uninstall --cask claude-code
 
 # Remove user data (optional — destroys settings, history, sessions, skills)
-rm -rf ~/.claude ~/.config/claude-code
+rm -rf ~/.claude
+rm -f ~/.claude.json
 security delete-generic-password -s anthropic-api-key 2>/dev/null
 ```
 
@@ -417,7 +377,7 @@ curl -sS https://api.anthropic.com/v1/messages \
   -d '{"model":"claude-haiku-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}'
 ```
 
-If curl works but `claude` does not, an OAuth session is also present and shadowing the env var path. Run `claude logout`, then retry.
+If curl works but `claude` does not, an OAuth session is also present and shadowing the env var path. Run `/logout` inside a session (or check `/status` to see which auth method is active), then retry.
 
 ### `EAI_AGAIN` or DNS errors
 
@@ -435,9 +395,9 @@ If your proxy intercepts TLS, point Node at the right CA bundle:
 export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/corp-root-ca.pem
 ```
 
-### `glibc version not found` on Linux
+### Native binary fails on Alpine / musl-based Linux
 
-The bundled native binaries require glibc 2.31+. Distro upgrades or a switch to the npm install path (which uses your Node's libc) usually fix this.
+On Alpine and other musl-based distributions, install `libgcc`, `libstdc++`, and `ripgrep` with your package manager, then set `USE_BUILTIN_RIPGREP=0` in the `env` section of `settings.json`.
 
 ### Claude hangs on first prompt
 

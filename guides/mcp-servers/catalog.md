@@ -2,7 +2,9 @@
 
 Comprehensive catalog of Model Context Protocol (MCP) servers for extending Claude Code and other AI assistants.
 
-> **Last updated**: 2026-05-24 · Tracks MCP spec **2025-06-18**.
+> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
+>
+> **Version note**: install snippets below are unpinned (`npx -y <pkg>` / `uvx <pkg>`) so they keep working as servers release. "Current" versions are listed per entry as of the last-updated date; pin (`<pkg>@<version>` / `<pkg>==<version>`) when supply-chain stability matters.
 
 See the companion guides:
 
@@ -33,7 +35,9 @@ See the companion guides:
 ## Development
 
 ### GitHub MCP
-**Package**: `@modelcontextprotocol/server-github` (legacy stdio) · official hosted server at `https://api.githubcopilot.com/mcp/` (recommended)
+**Package**: official hosted server at `https://api.githubcopilot.com/mcp/` (recommended) · self-hostable Go binary at [`github/github-mcp-server`](https://github.com/github/github-mcp-server)
+
+> **Note**: the old `@modelcontextprotocol/server-github` npm package is **archived** (moved to [`modelcontextprotocol/servers-archived`](https://github.com/modelcontextprotocol/servers-archived)) and deprecated on npm. Use GitHub's official hosted server or `github/github-mcp-server` instead.
 
 **Features**:
 - Create and manage repositories
@@ -46,18 +50,19 @@ See the companion guides:
 ```json
 {
   "github": {
-    "transport": "http",
+    "type": "http",
     "url": "https://api.githubcopilot.com/mcp/"
   }
 }
 ```
 
-**Installation (stdio)**:
+**Installation (self-hosted, Docker)**:
 ```json
 {
   "github": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github@2025.11.0"],
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+             "ghcr.io/github/github-mcp-server"],
     "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"}
   }
 }
@@ -72,7 +77,7 @@ See the companion guides:
 ---
 
 ### Filesystem MCP
-**Package**: `@modelcontextprotocol/server-filesystem` · current `2025.11.0`
+**Package**: `@modelcontextprotocol/server-filesystem` · current `2026.1.14`
 
 **Features**:
 - File read/write/edit with diff previews
@@ -85,7 +90,7 @@ See the companion guides:
 {
   "filesystem": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem@2025.11.0", "/path/to/project"]
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/project"]
   }
 }
 ```
@@ -98,7 +103,7 @@ See the companion guides:
 ---
 
 ### Git MCP
-**Package**: `mcp-server-git` (Python, via `uvx`) · current `2025.11.0`
+**Package**: `mcp-server-git` (Python, via `uvx`) · current `2026.6.4`
 
 **Features**:
 - Git operations (status, log, diff, show, add, commit, branch)
@@ -110,7 +115,7 @@ See the companion guides:
 {
   "git": {
     "command": "uvx",
-    "args": ["mcp-server-git==2025.11.0", "--repository", "/path/to/repo"]
+    "args": ["mcp-server-git", "--repository", "/path/to/repo"]
   }
 }
 ```
@@ -118,7 +123,7 @@ See the companion guides:
 ---
 
 ### Memory MCP
-**Package**: `@modelcontextprotocol/server-memory` · current `2025.11.0`
+**Package**: `@modelcontextprotocol/server-memory` · current `2026.1.26`
 
 **Features**:
 - Knowledge graph persistence
@@ -131,8 +136,8 @@ See the companion guides:
 {
   "memory": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-memory@2025.11.0"],
-    "env": {"MEMORY_FILE_PATH": "/path/to/memory.json"}
+    "args": ["-y", "@modelcontextprotocol/server-memory"],
+    "env": {"MEMORY_FILE_PATH": "/path/to/memory.jsonl"}
   }
 }
 ```
@@ -145,7 +150,7 @@ See the companion guides:
 ---
 
 ### Sequential Thinking MCP
-**Package**: `@modelcontextprotocol/server-sequential-thinking` · current `2025.11.0`
+**Package**: `@modelcontextprotocol/server-sequential-thinking` · current `2025.12.18`
 
 **Features**:
 - Structured reasoning scratchpad
@@ -157,7 +162,7 @@ See the companion guides:
 {
   "sequential-thinking": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-sequential-thinking@2025.11.0"]
+    "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
   }
 }
 ```
@@ -167,21 +172,21 @@ See the companion guides:
 ## Databases
 
 ### PostgreSQL MCP
-**Package**: `@modelcontextprotocol/server-postgres` · current `1.4.0`
+**Package**: `@modelcontextprotocol/server-postgres` · **archived** (last release `0.6.2`)
 
-**Features**:
-- Parameterized SQL queries
-- Schema inspection (tables, columns, indexes)
-- Read-only mode by default
-- Connection pooling
+> **Note**: the reference Postgres server is **archived** (moved to [`modelcontextprotocol/servers-archived`](https://github.com/modelcontextprotocol/servers-archived)) and deprecated on npm. For maintained options, look at community/vendor servers such as **Postgres MCP Pro** (`crystaldba/postgres-mcp`), the **Neon MCP** (hosted, below), or the **Supabase MCP** (below).
 
-**Installation**:
+**Features (archived server)**:
+- Read-only SQL queries
+- Schema inspection (tables, columns)
+
+**Installation (legacy — connection string is a positional argument, not an env var)**:
 ```json
 {
   "postgres": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-postgres@1.4.0"],
-    "env": {"POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"}
+    "args": ["-y", "@modelcontextprotocol/server-postgres",
+             "postgresql://user:pass@localhost:5432/db"]
   }
 }
 ```
@@ -189,19 +194,21 @@ See the companion guides:
 ---
 
 ### SQLite MCP
-**Package**: `mcp-server-sqlite` (Python) · current `2025.11.0`
+**Package**: `mcp-server-sqlite` (Python) · **archived** (last release `2025.4.25`)
+
+> **Note**: archived to [`modelcontextprotocol/servers-archived`](https://github.com/modelcontextprotocol/servers-archived); no longer maintained. Community alternatives exist on PyPI and npm if you need active maintenance.
 
 **Features**:
 - SQLite database operations
 - Local data storage
 - Schema and index inspection
 
-**Installation**:
+**Installation (legacy)**:
 ```json
 {
   "sqlite": {
     "command": "uvx",
-    "args": ["mcp-server-sqlite==2025.11.0", "--db-path", "/path/to/database.db"]
+    "args": ["mcp-server-sqlite", "--db-path", "/path/to/database.db"]
   }
 }
 ```
@@ -209,7 +216,7 @@ See the companion guides:
 ---
 
 ### MongoDB MCP
-**Package**: `mongodb-mcp-server` (official, MongoDB Inc.) · current `1.6.0`
+**Package**: `mongodb-mcp-server` (official, MongoDB Inc.) · current `1.12.0`
 
 **Features**:
 - MongoDB Atlas + self-hosted operations
@@ -222,7 +229,7 @@ See the companion guides:
 {
   "mongodb": {
     "command": "npx",
-    "args": ["-y", "mongodb-mcp-server@1.6.0"],
+    "args": ["-y", "mongodb-mcp-server"],
     "env": {"MDB_MCP_CONNECTION_STRING": "${MONGODB_URI}"}
   }
 }
@@ -231,7 +238,7 @@ See the companion guides:
 ---
 
 ### Neon MCP
-**Package**: hosted at `https://mcp.neon.tech/sse`
+**Package**: hosted at `https://mcp.neon.tech/mcp` (the older `/sse` endpoint is deprecated)
 
 **Features**:
 - Serverless Postgres branching
@@ -243,8 +250,8 @@ See the companion guides:
 ```json
 {
   "neon": {
-    "transport": "http",
-    "url": "https://mcp.neon.tech/sse"
+    "type": "http",
+    "url": "https://mcp.neon.tech/mcp"
   }
 }
 ```
@@ -252,7 +259,7 @@ See the companion guides:
 ---
 
 ### Supabase MCP
-**Package**: `@supabase/mcp-server-supabase` · current `0.6.0`
+**Package**: `@supabase/mcp-server-supabase` · current `0.8.2`
 
 **Features**:
 - Project / branch / migration management
@@ -265,7 +272,7 @@ See the companion guides:
 {
   "supabase": {
     "command": "npx",
-    "args": ["-y", "@supabase/mcp-server-supabase@0.6.0", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]
+    "args": ["-y", "@supabase/mcp-server-supabase", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]
   }
 }
 ```
@@ -275,21 +282,31 @@ See the companion guides:
 ## Infrastructure
 
 ### Kubernetes MCP
-**Package**: `kubernetes-mcp-server` (containers.io) · current `0.6.0`
+**Package**: `kubernetes-mcp-server` (npm/PyPI, from the GitHub `containers` org) · current `0.0.62`
 
 **Features**:
 - kubectl operations (pods, deployments, services, configmaps, secrets)
 - Helm chart operations
 - Multi-cluster (kubeconfig context switching)
-- Apply / patch / delete with explicit confirmation
+- Read-only mode via `--read-only`
 
-**Installation**:
+**Installation (npx)**:
+```json
+{
+  "kubernetes": {
+    "command": "npx",
+    "args": ["-y", "kubernetes-mcp-server@latest"]
+  }
+}
+```
+
+**Installation (Docker)**:
 ```json
 {
   "kubernetes": {
     "command": "docker",
     "args": ["run", "-i", "--rm", "-v", "~/.kube:/home/mcp/.kube:ro",
-             "quay.io/containers/kubernetes-mcp-server:0.6.0"]
+             "quay.io/manusa/kubernetes_mcp_server"]
   }
 }
 ```
@@ -320,20 +337,21 @@ See the companion guides:
 ---
 
 ### Terraform MCP
-**Package**: `terraform-mcp-server` (HashiCorp) · current `0.4.0`
+**Package**: `hashicorp/terraform-mcp-server` (official, HashiCorp) — a Go binary distributed via Docker and [GitHub releases](https://github.com/hashicorp/terraform-mcp-server/releases), **not** npm
+
+> **Note**: the `terraform-mcp-server` package on npm is a separate community project (thrashr888), not HashiCorp's.
 
 **Features**:
-- Terraform plan/apply with diff summaries
-- State inspection
+- Terraform Registry provider + module doc lookup
 - Registry module search
-- Workspace and variable management
+- Terraform-aware code assistance
 
-**Installation**:
+**Installation (Docker)**:
 ```json
 {
   "terraform": {
-    "command": "npx",
-    "args": ["-y", "terraform-mcp-server@0.4.0"]
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "hashicorp/terraform-mcp-server"]
   }
 }
 ```
@@ -341,20 +359,20 @@ See the companion guides:
 ---
 
 ### Cloudflare MCP
-**Package**: hosted at `https://mcp.cloudflare.com/`
+**Package**: hosted, **per-product servers** (there is no single `mcp.cloudflare.com` endpoint) — e.g. `https://bindings.mcp.cloudflare.com/sse` (Workers bindings), `https://observability.mcp.cloudflare.com/sse` (logs/analytics), plus a docs server. Full list: <https://github.com/cloudflare/mcp-server-cloudflare>
 
 **Features**:
-- Workers deployment
-- KV / R2 / D1 / Queues admin
-- DNS and zone management
-- Analytics + observability queries
+- Workers builds + bindings (KV / R2 / D1 / Queues)
+- Observability: logs and analytics queries
+- DNS analytics
+- Docs search
 
-**Installation**:
+**Installation (example: Workers bindings)**:
 ```json
 {
-  "cloudflare": {
-    "transport": "http",
-    "url": "https://mcp.cloudflare.com/"
+  "cloudflare-bindings": {
+    "type": "http",
+    "url": "https://bindings.mcp.cloudflare.com/sse"
   }
 }
 ```
@@ -364,7 +382,7 @@ See the companion guides:
 ## Quality & Testing
 
 ### Playwright MCP
-**Package**: `@playwright/mcp` · current `0.4.0`
+**Package**: `@playwright/mcp` · current `0.0.76` (the package versions on a `0.0.x` line — use unpinned)
 
 **Features**:
 - Full browser automation (Chromium, Firefox, WebKit)
@@ -377,7 +395,7 @@ See the companion guides:
 {
   "playwright": {
     "command": "npx",
-    "args": ["-y", "@playwright/mcp@0.4.0"]
+    "args": ["-y", "@playwright/mcp"]
   }
 }
 ```
@@ -391,7 +409,7 @@ See the companion guides:
 ---
 
 ### MCP Code Checker
-**Package**: `mcp-code-checker` · current `1.0.0`
+**Package**: GitHub-only — [`MarcusJellinghaus/mcp-code-checker`](https://github.com/MarcusJellinghaus/mcp-code-checker) (not published to PyPI)
 
 **Features**:
 - pylint integration
@@ -399,36 +417,16 @@ See the companion guides:
 - Coverage reports
 - LLM-friendly result summaries
 
-**Installation**:
+**Installation** (clone + install from source per the repo README):
 ```bash
-uvx mcp-code-checker==1.0.0
-```
-
----
-
-### Ruff MCP Server
-**Package**: `ruff-mcp-server` · current `0.3.0`
-
-**Features**:
-- Fast Python linting and formatting
-- Import sorting
-- Rule explanations
-- Auto-fix where supported
-
-**Installation**:
-```json
-{
-  "ruff": {
-    "command": "uvx",
-    "args": ["ruff-mcp-server==0.3.0"]
-  }
-}
+git clone https://github.com/MarcusJellinghaus/mcp-code-checker.git
+pip install -e ./mcp-code-checker
 ```
 
 ---
 
 ### Semgrep MCP
-**Package**: `semgrep-mcp-server` · current `0.5.0`
+**Package**: `semgrep-mcp` (PyPI) · current `0.9.0` · repo [`semgrep/mcp`](https://github.com/semgrep/mcp)
 
 **Features**:
 - Static analysis with Semgrep rules
@@ -441,7 +439,7 @@ uvx mcp-code-checker==1.0.0
 {
   "semgrep": {
     "command": "uvx",
-    "args": ["semgrep-mcp-server==0.5.0"]
+    "args": ["semgrep-mcp"]
   }
 }
 ```
@@ -463,7 +461,7 @@ uvx mcp-code-checker==1.0.0
 ```json
 {
   "context7": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.context7.com/mcp",
     "headers": {"Authorization": "Bearer ${CONTEXT7_API_KEY}"}
   }
@@ -477,19 +475,24 @@ uvx mcp-code-checker==1.0.0
 
 ---
 
-### Mintlify Documentation MCP
-**Package**: `@mintlify/mcp` · current `0.4.0`
+### Mintlify MCP CLI
+**Package**: `@mintlify/mcp` · current `1.1.x`
+
+**Note**: this is a CLI that installs MCP servers for **Mintlify-hosted documentation sites** (every Mintlify-hosted docs site can expose an MCP server) — it is not a docs generator.
 
 **Features**:
-- Generate docs from code
-- API reference scaffolding
-- Markdown conversion
-- Mintlify hosting integration
+- One-command install of a docs site's MCP server into your host
+- Search + Q&A tools over the hosted docs corpus
+
+**Installation**:
+```bash
+npx @mintlify/mcp add <docs-site>
+```
 
 ---
 
 ### MarkItDown MCP (Microsoft)
-**Package**: `markitdown-mcp` · current `0.1.0`
+**Package**: `markitdown-mcp` · current `0.0.1a4` (pre-release)
 
 **Features**:
 - PDF / DOCX / PPTX / XLSX → Markdown
@@ -499,13 +502,13 @@ uvx mcp-code-checker==1.0.0
 
 **Installation**:
 ```bash
-uvx markitdown-mcp==0.1.0
+uvx markitdown-mcp
 ```
 
 ---
 
 ### MCP Documentation Service
-**Package**: `mcp-docs-service` · current `0.7.0`
+**Package**: `mcp-docs-service` · current `7.2.1`
 
 **Features**:
 - Markdown management
@@ -518,34 +521,26 @@ uvx markitdown-mcp==0.1.0
 ## Web & APIs
 
 ### Puppeteer MCP
-**Package**: `@modelcontextprotocol/server-puppeteer` · current `2025.11.0`
+**Package**: `@modelcontextprotocol/server-puppeteer` · **archived** (moved to [`modelcontextprotocol/servers-archived`](https://github.com/modelcontextprotocol/servers-archived), deprecated on npm)
 
-**Note**: For new projects prefer the **Playwright MCP** above — broader browser support and more stable accessibility-tree interaction.
+**Note**: use the **Playwright MCP** (`@playwright/mcp`, above) instead — actively maintained, broader browser support, and more stable accessibility-tree interaction.
 
-**Features**:
+**Features (archived server)**:
 - Headless Chromium automation
 - Screenshot capture
 - Form filling
 - Web scraping
 
-**Installation**:
-```json
-{
-  "puppeteer": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-puppeteer@2025.11.0"]
-  }
-}
-```
-
 ---
 
 ### Brave Search MCP
-**Package**: `@modelcontextprotocol/server-brave-search` · current `2025.11.0`
+**Package**: `@brave/brave-search-mcp-server` (official, Brave) · current `2.0.x`
+
+> **Note**: the old `@modelcontextprotocol/server-brave-search` reference server is archived and deprecated on npm; Brave now maintains the official package.
 
 **Features**:
 - Web search via Brave Search API
-- Local / image / news search
+- Local / image / news / video search
 - No tracking; independent index
 
 **Installation**:
@@ -553,7 +548,7 @@ uvx markitdown-mcp==0.1.0
 {
   "brave-search": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-brave-search@2025.11.0"],
+    "args": ["-y", "@brave/brave-search-mcp-server"],
     "env": {"BRAVE_API_KEY": "${BRAVE_API_KEY}"}
   }
 }
@@ -562,7 +557,7 @@ uvx markitdown-mcp==0.1.0
 ---
 
 ### Fetch MCP
-**Package**: `mcp-server-fetch` (Python) · current `2025.11.0`
+**Package**: `mcp-server-fetch` (Python) · current `2026.6.4`
 
 **Features**:
 - HTTP GET / POST
@@ -575,7 +570,7 @@ uvx markitdown-mcp==0.1.0
 {
   "fetch": {
     "command": "uvx",
-    "args": ["mcp-server-fetch==2025.11.0"]
+    "args": ["mcp-server-fetch"]
   }
 }
 ```
@@ -583,7 +578,7 @@ uvx markitdown-mcp==0.1.0
 ---
 
 ### Firecrawl MCP
-**Package**: `firecrawl-mcp` · current `1.4.0`
+**Package**: `firecrawl-mcp` · current `3.20.4`
 
 **Features**:
 - Full-site crawl with JS rendering
@@ -596,7 +591,7 @@ uvx markitdown-mcp==0.1.0
 {
   "firecrawl": {
     "command": "npx",
-    "args": ["-y", "firecrawl-mcp@1.4.0"],
+    "args": ["-y", "firecrawl-mcp"],
     "env": {"FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"}
   }
 }
@@ -619,7 +614,7 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "notion": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.notion.com/mcp"
   }
 }
@@ -628,7 +623,7 @@ uvx markitdown-mcp==0.1.0
 ---
 
 ### Linear MCP
-**Package**: hosted at `https://mcp.linear.app/mcp` · also `@linear/mcp-server` for stdio
+**Package**: hosted-only at `https://mcp.linear.app/mcp` (Linear does not publish a stdio npm package)
 
 **Features**:
 - Issue lifecycle (create / update / assign / close)
@@ -640,7 +635,7 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "linear": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.linear.app/mcp"
   }
 }
@@ -661,7 +656,7 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "atlassian": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.atlassian.com/v1/sse"
   }
 }
@@ -670,7 +665,7 @@ uvx markitdown-mcp==0.1.0
 ---
 
 ### Sentry MCP
-**Package**: hosted at `https://mcp.sentry.dev/sse`
+**Package**: hosted at `https://mcp.sentry.dev/mcp`
 
 **Features**:
 - Issue + event inspection
@@ -682,8 +677,8 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "sentry": {
-    "transport": "http",
-    "url": "https://mcp.sentry.dev/sse"
+    "type": "http",
+    "url": "https://mcp.sentry.dev/mcp"
   }
 }
 ```
@@ -703,8 +698,8 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "stripe": {
-    "transport": "http",
-    "url": "https://mcp.stripe.com/"
+    "type": "http",
+    "url": "https://mcp.stripe.com"
   }
 }
 ```
@@ -714,20 +709,20 @@ uvx markitdown-mcp==0.1.0
 ## Cloud Services
 
 ### AWS MCP
-**Package**: `aws-mcp-server` (community) · also `awslabs/mcp` collection for service-specific servers
+**Package**: the official [`awslabs/mcp`](https://github.com/awslabs/mcp) collection — dozens of per-service PyPI packages named `awslabs.<service>-mcp-server` (e.g. `awslabs.aws-documentation-mcp-server`, `awslabs.s3-tables-mcp-server`, `awslabs.cdk-mcp-server`)
 
 **Features**:
-- S3, Lambda, EC2, IAM, CloudFormation, ECS, RDS via per-service MCPs
+- Per-service servers across S3 Tables, Lambda, ECS, RDS, CloudFormation/CDK, and more
 - CloudWatch logs + metrics queries
-- Cost Explorer integration
+- Cost analysis servers
 - SSO + profile-based auth
 
-**Installation (example, S3)**:
+**Installation (example, AWS documentation server)**:
 ```json
 {
-  "aws-s3": {
+  "aws-docs": {
     "command": "uvx",
-    "args": ["awslabs.s3-mcp-server@0.3.0"],
+    "args": ["awslabs.aws-documentation-mcp-server@latest"],
     "env": {"AWS_PROFILE": "default", "AWS_REGION": "us-east-1"}
   }
 }
@@ -747,7 +742,7 @@ uvx markitdown-mcp==0.1.0
 ---
 
 ### Azure MCP
-**Package**: `azure-mcp-server` (Microsoft) · current `0.5.0`
+**Package**: `@azure/mcp` (Microsoft, official) · current `3.0.0-beta.x`
 
 **Features**:
 - Storage (Blob, Queue, Table)
@@ -761,7 +756,7 @@ uvx markitdown-mcp==0.1.0
 {
   "azure": {
     "command": "npx",
-    "args": ["-y", "azure-mcp-server@0.5.0"]
+    "args": ["-y", "@azure/mcp@latest", "server", "start"]
   }
 }
 ```
@@ -781,30 +776,8 @@ uvx markitdown-mcp==0.1.0
 ```json
 {
   "vercel": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.vercel.com/"
-  }
-}
-```
-
----
-
-### Replicate MCP
-**Package**: `@replicate/mcp` · current `0.3.0`
-
-**Features**:
-- Model inference (image, video, audio, LLM)
-- Prediction tracking
-- Model search
-- Output streaming
-
-**Installation**:
-```json
-{
-  "replicate": {
-    "command": "npx",
-    "args": ["-y", "@replicate/mcp@0.3.0"],
-    "env": {"REPLICATE_API_TOKEN": "${REPLICATE_API_TOKEN}"}
   }
 }
 ```
@@ -814,23 +787,21 @@ uvx markitdown-mcp==0.1.0
 ## Communication
 
 ### Slack MCP
-**Package**: `@modelcontextprotocol/server-slack` · current `2025.11.0`
+**Package**: `slack-mcp-server` (community, maintained) · the old `@modelcontextprotocol/server-slack` reference server is **archived** and deprecated on npm
 
 **Features**:
 - Send messages (channels + DMs)
 - Channel + user lookup
 - Message history search
-- File uploads
 
 **Installation**:
 ```json
 {
   "slack": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-slack@2025.11.0"],
+    "args": ["-y", "slack-mcp-server@latest", "--transport", "stdio"],
     "env": {
-      "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
-      "SLACK_TEAM_ID": "${SLACK_TEAM_ID}"
+      "SLACK_MCP_XOXP_TOKEN": "${SLACK_MCP_XOXP_TOKEN}"
     }
   }
 }
@@ -851,29 +822,8 @@ uvx markitdown-mcp==0.1.0
 
 ## Data & Analytics
 
-### Pandas MCP
-**Package**: `mcp-server-pandas` · current `0.3.0`
-
-**Features**:
-- DataFrame operations
-- CSV / Excel / Parquet I/O
-- Statistical summaries
-- Plot generation
-
-**Installation**:
-```bash
-uvx mcp-server-pandas==0.3.0
-```
-
-**Use Cases**:
-- Ad-hoc data exploration
-- Report generation
-- Data cleaning pipelines
-
----
-
 ### Jupyter MCP
-**Package**: `jupyter-mcp-server` · current `0.5.0`
+**Package**: `jupyter-mcp-server` · current `1.0.2`
 
 **Features**:
 - Notebook execution against running Jupyter kernel
@@ -884,7 +834,7 @@ uvx mcp-server-pandas==0.3.0
 ---
 
 ### ClickHouse MCP
-**Package**: `mcp-clickhouse` · current `0.3.0`
+**Package**: `mcp-clickhouse` · current `0.4.0`
 
 **Features**:
 - ClickHouse query execution
@@ -897,7 +847,7 @@ uvx mcp-server-pandas==0.3.0
 {
   "clickhouse": {
     "command": "uvx",
-    "args": ["mcp-clickhouse==0.3.0"],
+    "args": ["mcp-clickhouse"],
     "env": {
       "CLICKHOUSE_HOST": "${CH_HOST}",
       "CLICKHOUSE_USER": "${CH_USER}",
@@ -929,7 +879,7 @@ Production agent deployments need more than tool access — they need identity, 
 ```json
 {
   "veriswarm": {
-    "transport": "http",
+    "type": "http",
     "url": "https://mcp.veriswarm.ai/",
     "headers": {"Authorization": "Bearer ${VERISWARM_API_KEY}"}
   }
@@ -969,7 +919,7 @@ Production agent deployments need more than tool access — they need identity, 
 ---
 
 ### Arize Phoenix
-**Package**: `arize-phoenix-mcp` · current `0.2.0` · OSS
+**Package**: `@arizeai/phoenix-mcp` (npm) · current `4.x` · OSS
 
 **Features**:
 - OpenTelemetry-based LLM + tool tracing
@@ -982,9 +932,9 @@ Production agent deployments need more than tool access — they need identity, 
 ```json
 {
   "phoenix": {
-    "command": "uvx",
-    "args": ["arize-phoenix-mcp==0.2.0"],
-    "env": {"PHOENIX_COLLECTOR_ENDPOINT": "http://localhost:6006"}
+    "command": "npx",
+    "args": ["-y", "@arizeai/phoenix-mcp@latest",
+             "--baseUrl", "http://localhost:6006"]
   }
 }
 ```
@@ -994,7 +944,7 @@ Production agent deployments need more than tool access — they need identity, 
 ---
 
 ### Patronus AI
-**Package**: `patronus-mcp` · current `0.3.0`
+**Package**: GitHub-only — [`patronus-ai/patronus-mcp-server`](https://github.com/patronus-ai/patronus-mcp-server) (not published to PyPI)
 
 **Features**:
 - Pre-deployment evals across hallucination, safety, brand-voice
@@ -1049,35 +999,34 @@ See [`installation.md`](./installation.md) for the full per-host walkthrough.
 {
   "mcpServers": {
     "github": {
-      "transport": "http",
+      "type": "http",
       "url": "https://api.githubcopilot.com/mcp/"
     },
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem@2025.11.0", "/path/to/projects"]
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/projects"]
     },
     "git": {
       "command": "uvx",
-      "args": ["mcp-server-git==2025.11.0", "--repository", "/path/to/repo"]
+      "args": ["mcp-server-git", "--repository", "/path/to/repo"]
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory@2025.11.0"],
-      "env": {"MEMORY_FILE_PATH": "/path/to/memory.json"}
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {"MEMORY_FILE_PATH": "/path/to/memory.jsonl"}
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres@1.4.0"],
-      "env": {"POSTGRES_CONNECTION_STRING": "${POSTGRES_CONNECTION_STRING}"}
+    "neon": {
+      "type": "http",
+      "url": "https://mcp.neon.tech/mcp"
     },
     "context7": {
-      "transport": "http",
+      "type": "http",
       "url": "https://mcp.context7.com/mcp",
       "headers": {"Authorization": "Bearer ${CONTEXT7_API_KEY}"}
     },
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@0.4.0"]
+      "args": ["-y", "@playwright/mcp"]
     }
   }
 }
@@ -1111,6 +1060,6 @@ See [`building.md`](./building.md) for the build, test, and publish walkthrough.
 
 ---
 
-**Last Updated**: 2026-05-24
+**Last Updated**: 2026-06-11
 
 **Total Servers**: 35+ across 11 categories

@@ -1,726 +1,301 @@
 # Gemini CLI Guide
 
-Complete guide to using Google's Gemini CLI for AI-assisted development in the terminal.
+Complete guide to Google's Gemini CLI — an open-source AI agent that brings the Gemini models directly into your terminal.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Important: Consumer-Tier Transition](#important-consumer-tier-transition)
 - [Installation](#installation)
 - [Getting Started](#getting-started)
 - [Basic Usage](#basic-usage)
+- [Models](#models)
+- [Free Tier and Pricing](#free-tier-and-pricing)
 - [Advanced Features](#advanced-features)
-- [Multimodal Capabilities](#multimodal-capabilities)
-- [Integration Patterns](#integration-patterns)
-- [Best Practices](#best-practices)
 - [Comparison](#comparison)
 - [Troubleshooting](#troubleshooting)
+- [Resources](#resources)
 
 ---
 
 ## Overview
 
-Gemini CLI provides command-line access to Google's Gemini AI models, offering powerful capabilities for development tasks directly in your terminal.
+[Gemini CLI](https://github.com/google-gemini/gemini-cli) is Google's open-source (Apache 2.0) agentic command-line tool. It is a Node.js application published as `@google/gemini-cli` on npm. Unlike a thin API wrapper, it is a full coding agent: it can read and edit files, run shell commands, ground answers with Google Search, and connect to external tools via the Model Context Protocol (MCP).
 
 ### Key Features
 
-- ✅ **Large Context Window** - Up to 2M tokens (largest available)
-- ✅ **Multimodal Support** - Text, images, audio, video
-- ✅ **Multiple Models** - Gemini Pro, Ultra, Flash
-- ✅ **Command-Line Native** - Built for terminal workflows
-- ✅ **Google Integration** - Access to Google services
-- ✅ **Streaming Responses** - Real-time output
-- ✅ **Function Calling** - Execute tools and commands
+- ✅ **Agentic terminal workflow** — interactive REPL with file editing, shell execution, and approval modes
+- ✅ **Large context** — 1M-token input window on the Gemini 2.5/3 Pro models
+- ✅ **Built-in tools** — Google Search grounding, web fetch, file operations, shell commands
+- ✅ **MCP support** — connect MCP servers via `settings.json` or `gemini mcp add`
+- ✅ **Project context** — hierarchical `GEMINI.md` files plus `.geminiignore`
+- ✅ **Multimodal input** — reference images, PDFs, and other files with `@path` syntax
+- ✅ **Headless mode** — `gemini -p "..."` with `--output-format json` for scripting
+- ✅ **Checkpointing and sessions** — `/chat save`, `/chat resume`, `--resume`
+- ✅ **CI integration** — official `google-github-actions/run-gemini-cli` GitHub Action
+- ✅ **Extensions** — installable extension packages and custom slash commands
 
 ### When to Use Gemini CLI
 
 **Best for:**
-- Very large codebases requiring extensive context
-- Multimodal tasks (analyzing images, diagrams, videos)
-- Complex analysis and reasoning tasks
-- Integration with Google Cloud services
-- Projects already using Google ecosystem
+- Terminal-first, agentic coding sessions on a codebase
+- Very large-context analysis (1M-token input window)
+- Tasks that benefit from Google Search grounding
+- Free-tier experimentation with a personal Google account (see transition note below)
+- Scripted/headless LLM calls in shell pipelines and CI
 
 **Not ideal for:**
-- Real-time code completion (use Copilot)
-- Multi-agent orchestration (use Claude Code)
-- IDE-integrated workflows (use Copilot)
+- Real-time inline code completion (use an IDE assistant such as Copilot)
+- GUI-centric workflows (use an IDE extension or a desktop agent platform)
+
+---
+
+## Important: Consumer-Tier Transition
+
+On May 19, 2026, Google [announced](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) that it is transitioning Gemini CLI to the new **Antigravity CLI**, part of its Antigravity agent platform. Key dates and impacts:
+
+- **June 18, 2026**: Gemini CLI (and the Gemini Code Assist IDE extensions) stop serving requests for **Google AI Pro and Ultra subscribers** and for **free Gemini Code Assist for individuals** users — i.e., the "Login with Google" consumer tiers.
+- **Unaffected**: usage via **paid Gemini API keys**, the **Gemini Enterprise Agent Platform**, and **Gemini Code Assist Standard/Enterprise** licenses continues to work.
+- Google notes there will not be 1:1 feature parity between Gemini CLI and Antigravity CLI at launch.
+
+If you rely on the free OAuth tier, plan a migration — either to a paid API key (AI Studio / Vertex AI) or to Antigravity CLI. The rest of this guide documents Gemini CLI as it works today.
 
 ---
 
 ## Installation
 
+Quick version — full details in [installation.md](installation.md).
+
 ### Prerequisites
 
-- Python 3.7+
-- Google Cloud account
-- API key or service account credentials
+- Node.js **20 or newer**
 
-### Install via pip
+### Install
 
 ```bash
-pip install google-generativeai
+# Run without installing
+npx @google/gemini-cli
+
+# Global install (recommended)
+npm install -g @google/gemini-cli
+
+# Homebrew (macOS / Linux)
+brew install gemini-cli
 ```
 
-### Alternative: Install from source
+### Authenticate
 
-```bash
-git clone https://github.com/google/generative-ai-python.git
-cd generative-ai-python
-pip install -e .
-```
+Three options (details in [installation.md](installation.md#authentication)):
 
-### Set Up API Key
-
-1. **Get API key** from [Google AI Studio](https://makersuite.google.com/app/apikey)
-
-2. **Set environment variable**:
-   ```bash
-   export GOOGLE_API_KEY='your-api-key-here'
-   ```
-
-3. **Add to shell profile** for persistence:
-   ```bash
-   # Add to ~/.bashrc or ~/.zshrc
-   echo 'export GOOGLE_API_KEY="your-api-key-here"' >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-### Verify Installation
-
-```bash
-python -c "import google.generativeai as genai; print('Gemini installed successfully')"
-```
+1. **Login with Google (OAuth)** — just run `gemini` and follow the browser flow. Free tier via the Gemini Code Assist license for individuals: 60 requests/min, 1,000 requests/day (ends for consumer tiers on June 18, 2026 — see above).
+2. **Gemini API key** — `export GEMINI_API_KEY="..."` with a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+3. **Vertex AI** — `export GOOGLE_GENAI_USE_VERTEXAI=true` plus `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`.
 
 ---
 
 ## Getting Started
 
-### Basic Python Script
+Start an interactive session in your project:
 
-Create a simple CLI wrapper:
-
-```python
-#!/usr/bin/env python3
-import google.generativeai as genai
-import os
-import sys
-
-# Configure API key
-genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-
-# Initialize model
-model = genai.GenerativeModel('gemini-pro')
-
-# Get prompt from command line
-prompt = ' '.join(sys.argv[1:])
-
-# Generate response
-response = model.generate_content(prompt)
-print(response.text)
-```
-
-Save as `gemini` and make executable:
 ```bash
-chmod +x gemini
-./gemini "Explain async/await in Python"
+cd my-project
+gemini
 ```
 
-### Interactive Mode
+Then just talk to it:
 
-```python
-#!/usr/bin/env python3
-import google.generativeai as genai
-import os
+```text
+> Give me a tour of this codebase: entry points, key abstractions, data flow.
 
-genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-model = genai.GenerativeModel('gemini-pro')
-chat = model.start_chat(history=[])
+> @src/auth.ts explain the token-refresh flow in this file.
 
-print("Gemini CLI (type 'exit' to quit)")
-while True:
-    user_input = input("\nYou: ")
-    if user_input.lower() == 'exit':
-        break
+> Write unit tests for the validation logic in @src/lib/validate.ts and run them.
+```
 
-    response = chat.send_message(user_input)
-    print(f"\nGemini: {response.text}")
+Gemini CLI proposes file edits and shell commands and asks for approval before executing them (configurable via `--approval-mode`).
+
+One-shot, non-interactive prompt:
+
+```bash
+gemini -p "Explain async/await in Python"
+```
+
+Pipe input from stdin:
+
+```bash
+cat error.log | gemini -p "What is causing these errors?"
 ```
 
 ---
 
 ## Basic Usage
 
-### Simple Queries
+| Task | Command |
+|------|---------|
+| Interactive session | `gemini` |
+| One-shot prompt | `gemini -p "your prompt"` |
+| Pick a model | `gemini -m gemini-2.5-flash` |
+| Reference files in a prompt | `@path/to/file` or `@src/` inside the prompt |
+| Include extra directories | `gemini --include-directories ../lib,../docs` |
+| Run a shell command from the REPL | `!git status` (or `!` to toggle shell mode) |
+| JSON output for scripts | `gemini -p "..." --output-format json` |
+| Resume a previous session | `gemini --resume` |
+| Help | `gemini --help`, or `/help` inside the REPL |
 
-```bash
-# Ask questions
-gemini "How do I implement a binary search tree in Python?"
+See [usage.md](usage.md) for the full command and flag reference, and [integration.md](integration.md) for scripting and CI patterns.
 
-# Code generation
-gemini "Write a Flask API endpoint for user authentication"
+---
 
-# Code explanation
-gemini "Explain this code: $(cat script.py)"
+## Models
 
-# Debugging help
-gemini "Why am I getting this error: TypeError: 'NoneType' object is not iterable"
-```
+Gemini CLI defaults to **Auto routing**: simple prompts go to Gemini 2.5 Flash; complex prompts go to Gemini 3 Pro where enabled (otherwise Gemini 2.5 Pro). You can pin a model with `-m` or the `/model` command.
 
-### With File Input
+| Model | Notes |
+|-------|-------|
+| Gemini 3 Pro | Current flagship for complex reasoning and coding |
+| Gemini 3 Flash (`gemini-3-flash-preview`) | Fast Gemini 3 model, default in many surfaces |
+| Gemini 3.1 Pro (`gemini-3.1-pro-preview`) | Newer preview of the Pro line |
+| Gemini 2.5 Pro | Previous-generation Pro; still available |
+| Gemini 2.5 Flash (`gemini-2.5-flash`) | Fast, cheap workhorse for scripting |
 
-```python
-import google.generativeai as genai
+Context window: **1M tokens of input** on the Pro models, with output capped far lower (65,536 tokens on 2.5 Pro / 3 Pro). Availability of specific models depends on your auth method and tier — check `/model` in the REPL for what your account can use.
 
-# Read file
-with open('code.py', 'r') as f:
-    code = f.read()
+> Older names you may see in stale tutorials — `gemini-pro`, `gemini-pro-vision`, `gemini-ultra` — are retired and will not work.
 
-# Analyze
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content(f"Review this code for bugs:\n\n{code}")
-print(response.text)
-```
+---
 
-### Streaming Responses
+## Free Tier and Pricing
 
-```python
-model = genai.GenerativeModel('gemini-pro')
+With **Login with Google** (Gemini Code Assist for individuals), the free tier provides:
 
-# Stream response for long outputs
-response = model.generate_content("Explain Kubernetes architecture", stream=True)
+- **60 requests per minute**
+- **1,000 requests per day**
 
-for chunk in response:
-    print(chunk.text, end='', flush=True)
-```
+at no cost. With a **Gemini API key** from AI Studio, you get a free quota tier plus pay-as-you-go pricing. **Vertex AI** is billed to your Google Cloud project.
+
+⚠️ Reminder: the free consumer tiers stop being served on **June 18, 2026** (see [the transition note](#important-consumer-tier-transition)).
 
 ---
 
 ## Advanced Features
 
-### Model Selection
+### GEMINI.md context files
 
-**Available Models:**
+Gemini CLI loads instructional context hierarchically from `GEMINI.md` files:
 
-```python
-# Gemini Pro - Balanced performance
-model = genai.GenerativeModel('gemini-pro')
+1. Global: `~/.gemini/GEMINI.md`
+2. Project root (and parent directories up to the `.git` boundary)
+3. Subdirectories of your working tree
 
-# Gemini Pro Vision - Multimodal (images)
-model = genai.GenerativeModel('gemini-pro-vision')
+Use `/init` to generate a starter `GEMINI.md` for the current project, and `/memory show` / `/memory refresh` to inspect or reload loaded context. Exclude files from context discovery with a `.geminiignore` file (same syntax as `.gitignore`).
 
-# Gemini Ultra - Most capable (when available)
-model = genai.GenerativeModel('gemini-ultra')
+### MCP servers
 
-# Gemini Flash - Fastest, optimized for speed
-model = genai.GenerativeModel('gemini-1.5-flash')
-```
-
-### Configuration Options
-
-```python
-generation_config = {
-    "temperature": 0.7,        # Creativity (0-1)
-    "top_p": 0.95,             # Nucleus sampling
-    "top_k": 40,               # Top-k sampling
-    "max_output_tokens": 2048, # Response length
-    "stop_sequences": ["END"], # Stop generation
-}
-
-model = genai.GenerativeModel(
-    'gemini-pro',
-    generation_config=generation_config
-)
-```
-
-### Safety Settings
-
-```python
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-    },
-]
-
-model = genai.GenerativeModel(
-    'gemini-pro',
-    safety_settings=safety_settings
-)
-```
-
-### Chat Sessions
-
-```python
-model = genai.GenerativeModel('gemini-pro')
-chat = model.start_chat(history=[])
-
-# Multi-turn conversation
-response1 = chat.send_message("What is a closure in JavaScript?")
-print(response1.text)
-
-response2 = chat.send_message("Can you show me an example?")
-print(response2.text)
-
-# Access history
-for message in chat.history:
-    print(f"{message.role}: {message.parts[0].text[:50]}...")
-```
-
-### Function Calling
-
-```python
-import google.generativeai as genai
-
-# Define functions
-functions = [
-    {
-        "name": "execute_command",
-        "description": "Execute a shell command",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The shell command to execute"
-                }
-            },
-            "required": ["command"]
-        }
-    }
-]
-
-model = genai.GenerativeModel('gemini-pro', tools=functions)
-
-# Model can now call functions
-response = model.generate_content("List files in current directory")
-```
-
----
-
-## Multimodal Capabilities
-
-### Working with Images
-
-```python
-import PIL.Image
-import google.generativeai as genai
-
-# Load image
-image = PIL.Image.open('diagram.png')
-
-# Use vision model
-model = genai.GenerativeModel('gemini-pro-vision')
-
-# Analyze image
-response = model.generate_content([
-    "Explain what this diagram shows",
-    image
-])
-print(response.text)
-```
-
-### Screenshot Analysis
+Connect external tools via the Model Context Protocol:
 
 ```bash
-# Take screenshot and analyze
-import pyautogui
-import google.generativeai as genai
-
-screenshot = pyautogui.screenshot()
-model = genai.GenerativeModel('gemini-pro-vision')
-
-response = model.generate_content([
-    "What UI elements are visible in this screenshot?",
-    screenshot
-])
-print(response.text)
+gemini mcp add github -- npx -y @modelcontextprotocol/server-github
+gemini mcp list
 ```
 
-### Code Diagram Understanding
+or declare servers under `mcpServers` in `.gemini/settings.json`. Use `/mcp` inside the REPL to inspect connected servers and their tools. See [usage.md](usage.md#mcp-servers-and-extensions).
 
-```python
-# Analyze architecture diagrams
-image = PIL.Image.open('architecture.png')
-model = genai.GenerativeModel('gemini-pro-vision')
+### Checkpointing and sessions
 
-response = model.generate_content([
-    "Convert this architecture diagram into a detailed written description. Include all components, connections, and data flows.",
-    image
-])
-```
+- `/chat save <tag>`, `/chat resume <tag>`, `/chat list` — save and resume conversation checkpoints.
+- `gemini --resume` — resume a previous session from the command line.
+- `--checkpointing` / `/restore` — snapshot project files before tool execution and roll back if needed.
 
-### Video Analysis
+### Sandboxing and approval modes
 
-```python
-# Upload and analyze video
-import google.generativeai as genai
+- `-s` / `--sandbox` runs tool execution in a sandbox (Docker/Podman, or Seatbelt on macOS).
+- `--approval-mode` controls how much the agent can do without asking: `default`, `auto_edit`, `plan`, or `yolo` (`-y` / `--yolo` auto-approves everything — use with care).
 
-# Upload video file
-video_file = genai.upload_file('demo.mp4')
+### GitHub Action
 
-# Analyze with Gemini
-model = genai.GenerativeModel('gemini-pro-vision')
-response = model.generate_content([
-    "Summarize what happens in this video",
-    video_file
-])
-print(response.text)
-```
+The official [`google-github-actions/run-gemini-cli`](https://github.com/google-github-actions/run-gemini-cli) action runs Gemini CLI in workflows for PR review, issue triage, and on-demand collaboration (`@gemini-cli` mentions). The `/setup-github` slash command scaffolds the workflows for you. See [integration.md](integration.md#ci-usage).
 
 ---
 
-## Integration Patterns
-
-### CLI Wrapper Script
-
-```python
-#!/usr/bin/env python3
-"""
-Gemini CLI - Command-line interface for Google Gemini
-Usage: gemini [options] <prompt>
-"""
-import argparse
-import google.generativeai as genai
-import os
-import sys
-
-def main():
-    parser = argparse.ArgumentParser(description='Gemini CLI')
-    parser.add_argument('prompt', nargs='+', help='Prompt for Gemini')
-    parser.add_argument('-m', '--model', default='gemini-pro',
-                       help='Model to use (default: gemini-pro)')
-    parser.add_argument('-t', '--temperature', type=float, default=0.7,
-                       help='Temperature (0-1)')
-    parser.add_argument('-f', '--file', help='Input file path')
-    parser.add_argument('-i', '--image', help='Image file path')
-    parser.add_argument('-s', '--stream', action='store_true',
-                       help='Stream response')
-
-    args = parser.parse_args()
-
-    # Configure
-    genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-
-    # Build prompt
-    prompt = ' '.join(args.prompt)
-
-    if args.file:
-        with open(args.file, 'r') as f:
-            prompt += f"\n\nFile content:\n{f.read()}"
-
-    # Generate
-    model = genai.GenerativeModel(args.model)
-
-    content = [prompt]
-    if args.image:
-        import PIL.Image
-        content.append(PIL.Image.open(args.image))
-
-    if args.stream:
-        response = model.generate_content(content, stream=True)
-        for chunk in response:
-            print(chunk.text, end='', flush=True)
-        print()
-    else:
-        response = model.generate_content(content)
-        print(response.text)
-
-if __name__ == '__main__':
-    main()
-```
-
-### Git Integration
-
-```bash
-#!/bin/bash
-# gemini-commit: Generate commit message
-
-# Get staged changes
-DIFF=$(git diff --staged)
-
-# Generate commit message
-python3 << EOF
-import google.generativeai as genai
-import os
-
-genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-model = genai.GenerativeModel('gemini-pro')
-
-diff = """$DIFF"""
-response = model.generate_content(f"Generate a concise commit message for these changes:\n\n{diff}")
-print(response.text)
-EOF
-```
-
-### Code Review Helper
-
-```python
-#!/usr/bin/env python3
-import google.generativeai as genai
-import subprocess
-import os
-
-genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-model = genai.GenerativeModel('gemini-pro')
-
-# Get PR diff
-diff = subprocess.check_output(['git', 'diff', 'main...HEAD']).decode()
-
-# Review
-prompt = f"""
-Review this pull request for:
-- Code quality issues
-- Potential bugs
-- Security vulnerabilities
-- Best practices violations
-
-{diff}
-"""
-
-response = model.generate_content(prompt)
-print(response.text)
-```
-
-### Documentation Generation
-
-```python
-#!/usr/bin/env python3
-import google.generativeai as genai
-import os
-import glob
-
-genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-model = genai.GenerativeModel('gemini-pro')
-
-# Read all Python files
-files = glob.glob('**/*.py', recursive=True)
-code = {}
-for file in files:
-    with open(file) as f:
-        code[file] = f.read()
-
-# Generate documentation
-prompt = f"""
-Generate comprehensive API documentation for this Python project.
-Include:
-- Module overview
-- Class and function documentation
-- Usage examples
-
-Code files:
-{chr(10).join([f'{k}:{chr(10)}{v}' for k,v in code.items()])}
-"""
-
-response = model.generate_content(prompt)
-
-# Save documentation
-with open('API.md', 'w') as f:
-    f.write(response.text)
-
-print("Documentation generated: API.md")
-```
-
----
-
-## Best Practices
-
-### Optimize for Large Context
-
-```python
-# Use Gemini's large context effectively
-with open('large_codebase.txt', 'r') as f:
-    codebase = f.read()  # Can be up to 2M tokens
-
-model = genai.GenerativeModel('gemini-pro')
-
-# Ask specific questions about large context
-response = model.generate_content(f"""
-Analyze this entire codebase and identify:
-1. All database query patterns
-2. Potential N+1 query issues
-3. Missing indexes
-
-Codebase:
-{codebase}
-""")
-```
-
-### Structured Output
-
-```python
-# Request JSON output for programmatic use
-response = model.generate_content("""
-Analyze this code and return JSON with this structure:
-{
-  "bugs": [...],
-  "security_issues": [...],
-  "improvements": [...]
-}
-
-Code: ...
-""")
-
-import json
-result = json.loads(response.text)
-```
-
-### Error Handling
-
-```python
-import google.generativeai as genai
-from google.api_core import exceptions
-
-try:
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(prompt)
-    print(response.text)
-except exceptions.ResourceExhausted:
-    print("Rate limit exceeded. Please try again later.")
-except exceptions.InvalidArgument as e:
-    print(f"Invalid request: {e}")
-except Exception as e:
-    print(f"Error: {e}")
-```
-
-### Cost Optimization
-
-```python
-# Use appropriate model for task
-# Flash for simple tasks (cheaper, faster)
-model_fast = genai.GenerativeModel('gemini-1.5-flash')
-
-# Pro for complex reasoning
-model_pro = genai.GenerativeModel('gemini-pro')
-
-# Choose based on task
-if task_is_simple:
-    response = model_fast.generate_content(prompt)
-else:
-    response = model_pro.generate_content(prompt)
-```
-
----
-
-## Comparison with Other Tools
+## Comparison
 
 ### vs Claude Code
 
-**Gemini CLI Advantages:**
-- 2M token context (vs 200K)
-- Multimodal capabilities
-- Faster for simple queries
-- Google ecosystem integration
+**Gemini CLI advantages:**
+- 1M-token input context on Pro models
+- Generous free tier with a personal Google account (until the June 2026 transition)
+- Built-in Google Search grounding
+- Open source (Apache 2.0)
 
-**Claude Code Advantages:**
-- MCP server ecosystem
-- Multi-agent orchestration
-- Better for complex workflows
-- More development-focused
+**Claude Code advantages:**
+- Subagent orchestration and deeper multi-agent workflows
+- Mature hooks/skills/plugin ecosystem
+- Strong long-horizon coding performance
 
 ### vs GitHub Copilot
 
-**Gemini CLI Advantages:**
-- Large context window
-- Multimodal support
-- Complex reasoning
-- Conversational
+**Gemini CLI advantages:**
+- Terminal-native agentic loop (edit files, run commands)
+- Much larger context window
+- Free tier without a subscription
 
-**Copilot Advantages:**
-- Real-time completions
-- IDE integration
-- GitHub workflow integration
-- Code-specific training
+**Copilot advantages:**
+- Real-time inline completions
+- Deep IDE and GitHub workflow integration
 
-### Combined Usage
-
-```bash
-# Use Gemini for analysis
-gemini "Analyze this 50k line codebase for patterns" > analysis.md
-
-# Use Copilot for implementation
-# (in IDE while writing code)
-
-# Use Claude Code for orchestration
-# (multi-phase refactoring project)
-```
+See the [feature matrix](../../comparisons/feature-matrix.md) for a fuller comparison.
 
 ---
 
 ## Troubleshooting
 
-### API Key Issues
+### `command not found: gemini`
 
-```bash
-# Verify API key is set
-echo $GOOGLE_API_KEY
+Your npm global bin directory is not on `PATH` — see [installation.md](installation.md#common-install-issues).
 
-# Test API key
-python -c "import google.generativeai as genai; genai.configure(api_key='$GOOGLE_API_KEY'); print('API key valid')"
-```
+### Node version errors
 
-### Rate Limiting
+Gemini CLI requires Node.js 20+. Check with `node --version` and upgrade via nvm/fnm/asdf if needed.
 
-```python
-import time
-from google.api_core import exceptions
+### Authentication problems
 
-def generate_with_retry(model, prompt, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            return model.generate_content(prompt)
-        except exceptions.ResourceExhausted:
-            if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff
-                print(f"Rate limited. Waiting {wait_time}s...")
-                time.sleep(wait_time)
-            else:
-                raise
-```
+- Run `/auth` inside the REPL to switch authentication methods.
+- For API-key auth, confirm `GEMINI_API_KEY` is exported in the shell that launches `gemini`.
+- For Vertex AI, confirm `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, and `GOOGLE_CLOUD_LOCATION` are set and ADC is configured (`gcloud auth application-default login`).
+- Cached OAuth credentials live under `~/.gemini/` — remove them to force a fresh login.
 
-### Context Length Errors
+### Rate limits (429s)
 
-```python
-# Check token count before sending
-model = genai.GenerativeModel('gemini-pro')
+The free tier is capped at 60 requests/min and 1,000 requests/day. Switch to an API key or Vertex AI for higher limits, or add backoff in scripts (see [integration.md](integration.md#error-handling-and-exit-codes)).
 
-# Count tokens
-token_count = model.count_tokens(prompt)
-print(f"Tokens: {token_count}")
+### Filing bugs
 
-# Split if too large
-MAX_TOKENS = 1900000  # Leave margin
-if token_count > MAX_TOKENS:
-    # Split prompt into chunks
-    # Process separately
-    pass
-```
+Use the `/bug` command inside the REPL — it pre-fills an issue against the [gemini-cli repository](https://github.com/google-gemini/gemini-cli/issues).
 
 ---
 
 ## Resources
 
-- **Official Docs**: https://ai.google.dev/docs
-- **API Reference**: https://ai.google.dev/api/python/google/generativeai
-- **Python SDK**: https://github.com/google/generative-ai-python
-- **Examples**: https://github.com/google/generative-ai-docs
-- **Pricing**: https://ai.google.dev/pricing
+- **GitHub repository**: https://github.com/google-gemini/gemini-cli
+- **Official docs**: https://geminicli.com/docs/
+- **npm package**: https://www.npmjs.com/package/@google/gemini-cli
+- **GitHub Action**: https://github.com/google-github-actions/run-gemini-cli
+- **Gemini API (AI Studio) keys**: https://aistudio.google.com/app/apikey
+- **Gemini API docs**: https://ai.google.dev/gemini-api/docs
+- **Antigravity transition announcement**: https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/
 
 ---
 
 ## Next Steps
 
-1. [Install Gemini CLI](#installation)
-2. [Try basic examples](#getting-started)
-3. [Explore multimodal features](#multimodal-capabilities)
+1. [Install Gemini CLI](installation.md)
+2. [Learn day-to-day usage](usage.md)
+3. [Script it and wire it into CI](integration.md)
 4. [Compare with other tools](../../comparisons/feature-matrix.md)
 5. [Join the community](../../SUPPORT.md)
 
 ---
 
-**Last Updated**: 2025-11-04
+**Last Updated**: 2026-06-11

@@ -245,10 +245,10 @@ export GITHUB_TOKEN=ghp_...
 export SLACK_BOT_TOKEN=xoxb-...
 
 # 4. Initial snapshot.
-claude code \
-  --agents .pipeline-agents/AGENTS.md \
-  --mcp .pipeline-agents/mcp-config.json
-> "Run the schema-watcher in bootstrap mode against the current dbt sources."
+# Run from the repo root — AGENTS.md and .claude/agents/ are picked up
+# automatically. Load the pipeline MCP servers and run the bootstrap task:
+claude --mcp-config .pipeline-agents/mcp-config.json \
+  -p "Run the schema-watcher in bootstrap mode against the current dbt sources."
 
 # 5. Wire the cron job.
 # See your runbook of choice (Airflow, Dagster, dbt Cloud webhook, plain cron).

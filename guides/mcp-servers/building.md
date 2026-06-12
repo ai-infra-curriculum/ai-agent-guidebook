@@ -2,7 +2,7 @@
 
 End-to-end walkthrough for building your own MCP server in TypeScript and Python. Starts from a one-tool "hello world," then adds resources, prompts, error handling, logging, tests, and publishing. Covers both stdio and Streamable HTTP transports.
 
-> **Last updated**: 2026-05-24 · Tracks MCP spec **2025-06-18** · TS SDK `^1.20.0` · Python SDK `^1.13.0`.
+> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25** · TS SDK `^1.29.0` · Python SDK `^1.27.2`.
 
 ---
 
@@ -265,7 +265,7 @@ const server = new McpServer({
 });
 
 notesService.on("change", (note) => {
-  server.sendResourceUpdated({ uri: `notes://${note.id}` });
+  server.server.sendResourceUpdated({ uri: `notes://${note.id}` });
 });
 ```
 
@@ -367,7 +367,7 @@ For production:
 ```bash
 mkdir my-mcp-server-py && cd my-mcp-server-py
 uv init --package
-uv add "mcp[cli]>=1.13.0" pydantic
+uv add "mcp[cli]>=1.27.0" pydantic
 ```
 
 `pyproject.toml`:
@@ -378,7 +378,7 @@ name = "my-mcp-server-py"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp[cli]>=1.13.0",
+  "mcp[cli]>=1.27.0",
   "pydantic>=2.0",
 ]
 
@@ -643,10 +643,10 @@ npx @modelcontextprotocol/inspector tsx src/index.ts
 uv run mcp dev src/my_mcp_server_py/__init__.py
 ```
 
-For Streamable HTTP servers, start the server then run:
+For Streamable HTTP servers, start the server then run the Inspector in CLI mode:
 
 ```bash
-npx @modelcontextprotocol/inspector --transport http --server-url http://localhost:3000/mcp
+npx @modelcontextprotocol/inspector --cli http://localhost:3000/mcp --transport http
 ```
 
 Verification flow for every change:
@@ -731,7 +731,7 @@ Why this matters: agent workflows that "memorize" tool names break on major bump
 
 Pin the spec revision your server targets in your README, e.g.:
 
-> Implements MCP spec revision 2025-06-18. Compatible with hosts speaking 2024-11-05 or later (negotiation handles capability differences).
+> Implements MCP spec revision 2025-11-25. Compatible with hosts speaking 2024-11-05 or later (negotiation handles capability differences).
 
 ---
 

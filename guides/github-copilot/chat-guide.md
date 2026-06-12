@@ -12,8 +12,9 @@ Comprehensive guide to Copilot Chat — the conversational layer that sits along
 - [Workspace-Aware Chat](#workspace-aware-chat)
 - [Chat Participants (@-mentions)](#chat-participants--mentions)
 - [Chat Threads and History](#chat-threads-and-history)
-- [Custom Chat Participants (Copilot Extensions)](#custom-chat-participants-copilot-extensions)
-- [Models and Premium Requests](#models-and-premium-requests)
+- [Repository Custom Instructions](#repository-custom-instructions)
+- [Copilot Extensions → MCP Migration](#copilot-extensions--mcp-migration)
+- [Models and AI Credits](#models-and-ai-credits)
 - [Patterns That Work](#patterns-that-work)
 - [Troubleshooting](#troubleshooting)
 
@@ -34,7 +35,7 @@ Copilot Chat is the conversational sibling of ghost-text completions. It's avail
 
 ### What Chat Is Bad At
 
-- Long autonomous tasks — use Agent mode or Workspace
+- Long autonomous tasks — use agent mode or the [coding agent](workspace-guide.md)
 - Cross-file refactors — use Edits mode
 - Anything requiring up-to-the-minute information about a library — Copilot's training data lags, and the in-chat web search is shallow
 
@@ -183,7 +184,7 @@ Check status: command palette → `GitHub Copilot: Workspace Index Status`.
 ```
 @workspace refactor the entire codebase to use TypeScript strict mode
 ```
-→ `@workspace` is *retrieval*, not bulk editing. Use Edits mode or Workspace.
+→ `@workspace` is *retrieval*, not bulk editing. Use Edits mode or the coding agent.
 
 ```
 @workspace what does this function do?
@@ -320,87 +321,91 @@ Chat threads aren't unlimited. Most models in chat have a 64k–200k context win
 
 ---
 
-## Custom Chat Participants (Copilot Extensions)
+## Repository Custom Instructions
 
-Copilot Extensions let third parties (and you) ship participants that show up in chat as `@theirname`.
+Custom instructions are the durable way to shape chat answers per repository — they replaced much of what people used Extensions and per-prompt boilerplate for.
 
-### Examples from the Marketplace
+### The Files
 
-- `@stripe` — answers Stripe API questions, generates SDK code, checks against your account's mode
-- `@docker` — explains and authors Dockerfiles, composes, and Kubernetes manifests
-- `@sentry` — pulls in Sentry issue context to help debug live errors
-- `@perplexity` — web search inside chat
-- `@neon` — Postgres / Neon-specific schema and query help
+- **`.github/copilot-instructions.md`** — repository-wide instructions, applied to every chat request in that repo. Put build/test commands, architecture notes, and conventions here.
+- **`.github/instructions/NAME.instructions.md`** — path-specific instructions with an `applyTo` frontmatter glob, so frontend rules don't pollute backend prompts:
 
-Install from the [GitHub Marketplace](https://github.com/marketplace?type=apps&copilot_app=true). Most are free with a connected account on the relevant service.
+  ```markdown
+  ---
+  applyTo: "src/api/**"
+  ---
+  All endpoints return the standard envelope { data, error, meta }.
+  Use the repository's `httpx` client at app.http — never `requests`.
+  ```
 
-### Authoring Your Own
+- **`AGENTS.md`** — the cross-tool agent instructions format, also read by Copilot CLI, the coding agent, and non-Copilot tools.
 
-Copilot Extensions are GitHub Apps that implement a chat protocol over HTTP.
+There are also **personal instructions** (your Copilot Chat on GitHub.com) and **organization instructions** (Business/Enterprise, set by org owners).
 
-**Minimal structure:**
+### What Belongs in Instructions vs Prompts
 
-1. Create a GitHub App with the `Copilot Chat` permission.
-2. Implement a webhook endpoint that responds to chat requests in [Server-Sent Event](https://docs.github.com/copilot/building-copilot-extensions) format.
-3. Optionally register tools (function-calling style) that Copilot can invoke.
+| Put it in instructions | Put it in the prompt |
+|------------------------|----------------------|
+| "We use Vitest, never Jest" | "Generate tests for this function" |
+| Error-handling conventions | The specific bug you're fixing |
+| Repo layout and entry points | Which file you're working on |
+| "Never modify generated code in `gen/`" | Task-specific constraints |
 
-**Example response format** (SSE stream):
-
-```
-data: {"choices":[{"delta":{"role":"assistant","content":"Working on it…"}}]}
-
-data: {"choices":[{"delta":{"content":" Done. Here's the schema."}}]}
-
-data: [DONE]
-```
-
-The [Copilot Extensions SDK](https://github.com/copilot-extensions/preview-sdk.js) (JavaScript) wraps most of the boilerplate. Python and Go community SDKs exist.
-
-### When to Build One
-
-- You have internal tooling that engineers need conversational access to.
-- You want to enforce policy on AI-generated content (PII scrubbing, license checking).
-- You want chat to be able to query your data warehouse, ticketing system, or feature-flag service.
-
-### When to Skip It
-
-- A slash command in your CI or a CLI subcommand will do.
-- The functionality is one-shot; an MCP server in VS Code may fit better than a hosted GitHub App.
+If you find yourself typing the same constraint into chat twice, move it into `.github/copilot-instructions.md`.
 
 ---
 
-## Models and Premium Requests
+## Copilot Extensions → MCP Migration
 
-As of 2026, Copilot Chat lets you pick the model on a per-message basis. The dropdown at the bottom of the chat input shows available models for your plan.
+GitHub-App-based **Copilot Extensions** — the marketplace participants like `@stripe`, `@docker`, and `@perplexity` — were **sunset on November 10, 2025** (new ones were blocked from September 2025). They no longer work anywhere in Copilot Chat.
 
-### Typical Lineup
+The replacement is the **Model Context Protocol (MCP)**, an open standard: build or install an MCP server once and it works across Copilot, Copilot CLI, the coding agent, Claude Code, and any other MCP-compatible host.
 
-| Model | Plan tier | Notes |
-|-------|-----------|-------|
-| GPT-4.1 / GPT-5-mini | All paid | Default for most tasks |
-| GPT-5 | Pro+ | Premium-request budget applies |
-| Claude 3.7 / 4.x Sonnet | Pro+ | Better long-context reasoning |
-| Claude Opus 4.x | Business+ | Highest quality, premium request |
-| Gemini 2.5 Pro | Pro+ | Strong on multimodal / very long context |
-| o3 / o4-mini | Pro+ | Reasoning models, slower |
+### Using MCP in Copilot Today
 
-The exact list moves quarterly. Check `Settings` → `Copilot` → `Models` for what's available to you.
+- **VS Code**: add servers to `.vscode/mcp.json` (workspace) or your user-level `mcp.json` — see the [IDE guide](ide-guide.md#agent-mode). MCP tools are invoked with `#toolname` in chat and autonomously in agent mode.
+- **Copilot CLI**: `/mcp add` — GitHub's MCP server is pre-configured. See the [CLI guide](cli-guide.md#mcp-servers).
+- **Coding agent**: GitHub and Playwright MCP servers are enabled by default; add more in repository settings.
 
-### Premium Requests
+### If You Built an Extension
 
-- Free tier: GPT-class small models only, capped requests per month.
-- Pro ($10/mo): 300 premium requests/month against the higher-end models above.
-- Pro+ ($39/mo): 1,500 premium requests/month.
-- Business / Enterprise: configurable per-seat budget.
+Port the same functionality to an MCP server: tools map naturally from the old function-calling registrations, and you drop the GitHub App + webhook + SSE plumbing entirely. As a bonus, your server now works with every MCP-capable assistant, not just Copilot.
 
-Once exhausted, you fall back to the base model with normal limits. Track usage at <https://github.com/settings/copilot/usage>.
+---
+
+## Models and AI Credits
+
+Copilot Chat lets you pick the model on a per-message basis. The dropdown at the bottom of the chat input shows the models available on your plan.
+
+### Typical Lineup (mid-2026)
+
+| Model | Notes |
+|-------|-------|
+| GPT-5 mini | Light, fast default-tier model |
+| GPT-5.x series | OpenAI's mainline models |
+| Claude Haiku 4.5 | Fast, cheap Anthropic model |
+| Claude Sonnet 4.5 / 4.6 | Strong general coding, long context |
+| Claude Opus 4.5+ | Highest quality, higher credit burn (Pro+ and up) |
+| Gemini 2.5 Pro / Gemini 3.x | Strong multimodal / very long context |
+
+The exact list moves monthly — check the [supported models reference](https://docs.github.com/en/copilot/reference/ai-models/supported-models) for the current set and per-model billing multipliers.
+
+### AI Credits
+
+As of **June 1, 2026**, Copilot bills model usage in **GitHub AI Credits** (1 credit = $0.01), metered by model and tokens consumed — replacing the old "premium requests" system.
+
+- Free tier: capped completions and chat requests per month.
+- Pro ($10/mo), Pro+ ($39/mo), and higher plans include a monthly credit allowance; heavier models and longer contexts burn credits faster.
+- Business / Enterprise: pooled credits with admin-configurable budgets.
+
+Track usage in your GitHub billing settings.
 
 ### Picking a Model
 
-- **Default work** (one-file edits, simple Q&A): base model is fine.
+- **Default work** (one-file edits, simple Q&A): a light model (GPT-5 mini, Claude Haiku) is fine and cheap.
 - **Long-context analysis** (large file, full repo summary): Claude Sonnet or Gemini Pro.
-- **Tricky algorithmic / refactor questions**: reasoning model (o-series) if you can wait 10–30 seconds.
-- **Image-in-chat** (screenshots, diagrams): Gemini Pro or GPT-4o with vision.
+- **Hard algorithmic / refactor questions**: a frontier model (Claude Opus, top GPT tier) if the credit cost is justified.
+- **Image-in-chat** (screenshots, diagrams): a multimodal model such as Gemini Pro.
 
 ---
 
@@ -496,12 +501,12 @@ This kind of question is a poor fit for inline chat or `@workspace` — it's a t
 ### Replies Are Outdated
 
 - Copilot's models have training cutoffs. Library APIs change.
-- For up-to-date library docs, prefer `@perplexity` or paste the relevant doc snippet into the prompt.
+- For up-to-date library docs, paste the relevant doc snippet into the prompt, or wire up an MCP server that provides documentation/web search (the old `@perplexity` Extension is gone — Extensions were sunset in favor of MCP).
 - For your own private libraries, `@workspace` will always be more accurate than the model's prior.
 
 ### Streaming Stops Mid-Response
 
-- Almost always premium-request quota hit. Look for the small badge in the chat input.
+- Often an exhausted AI Credit allowance. Look for the small badge in the chat input and check your billing settings.
 - Or network issue — check `Output` → `GitHub Copilot Chat` for HTTP errors.
 
 ### Inline Chat Diff Is Wrong
@@ -526,6 +531,10 @@ This kind of question is a poor fit for inline chat or `@workspace` — it's a t
 ## Related Guides
 
 - [Copilot IDE Guide](ide-guide.md) — how chat integrates per editor
-- [Copilot Workspace Guide](workspace-guide.md) — when to graduate from chat to Workspace
+- [Copilot Coding Agent Guide](workspace-guide.md) — when to graduate from chat to the coding agent
 - [Copilot Best Practices](best-practices.md) — broader prompting and review patterns
 - [Main Copilot README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

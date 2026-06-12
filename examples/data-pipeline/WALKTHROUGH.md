@@ -28,10 +28,9 @@ export SLACK_BOT_TOKEN=xoxb-...
 Launch:
 
 ```bash
-claude code \
-  --agents examples/data-pipeline/AGENTS.md \
-  --mcp .pipeline/mcp-config.json \
-  --working-dir $(pwd)
+# Run from the repo root — CLAUDE.md, AGENTS.md, and .claude/agents/ are
+# picked up automatically. Load the example's MCP servers explicitly:
+claude --mcp-config .pipeline/mcp-config.json
 ```
 
 ---

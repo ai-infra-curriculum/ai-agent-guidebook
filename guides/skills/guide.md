@@ -10,7 +10,7 @@ This guide is pragmatic. It assumes you've used Claude Code (or another Claude S
 
 A **skill** is a named, reusable instruction set that Claude loads on demand. Concretely:
 
-- A folder with a `SKILL.md` file (or sometimes just `metadata.md` + body).
+- A folder with a `SKILL.md` file (YAML frontmatter + Markdown body).
 - The folder may contain supporting files: scripts, templates, reference docs, example inputs.
 - The skill has a **name**, a **description**, and a **body** of instructions.
 - Optionally, it declares allowed tools and other metadata.
@@ -27,7 +27,7 @@ Mentally, treat a skill as a slash command in a chat-style tool. Users type `/mi
 
 This model has implications:
 
-- **Skills are discoverable.** Users find them via `/help`, `/skill list`, or the client's autocomplete.
+- **Skills are discoverable.** Each skill shows up as its own slash command — users find them via `/help` or the client's slash-command autocomplete.
 - **Skills are invocable.** Either explicitly (`/skill-name`) or by Claude itself when the active task matches the skill's description.
 - **Skills compose with the active conversation.** A loaded skill doesn't replace what's happening; it adds to it.
 - **Skills are version-controlled.** The folder lives in a repo. Changes go through review.
@@ -102,7 +102,7 @@ Most skills should start as project or user scope. Plugins are for distribution,
 
 ## 5. Metadata and Allowed Tools
 
-The `SKILL.md` (or `metadata.md`) frontmatter declares what the skill is and what it's allowed to do.
+The `SKILL.md` frontmatter declares what the skill is and what it's allowed to do.
 
 Minimum viable frontmatter:
 
@@ -124,21 +124,23 @@ name: migrate-rails-7-to-8
 version: 1.2.0
 description: |
   ...
+allowed-tools:
+  - Read
+  - Edit
+  - Bash
+  - Grep
 metadata:
-  allowed-tools:
-    - Read
-    - Edit
-    - Bash
-    - Grep
   category: migration
   tags: [rails, ruby, upgrade]
   author: platform-team
 ---
 ```
 
-### 5.1 `metadata.allowed-tools`
+### 5.1 `allowed-tools`
 
 The most important non-description field. Restricts which tools Claude can use while the skill is active.
+
+**It must be a top-level frontmatter field.** If you nest it under `metadata:`, the client treats it as inert metadata and the restriction is *not enforced* — a security-relevant footgun.
 
 - **Set it narrow.** If the skill is "format this file," it doesn't need `WebFetch`. Don't grant it.
 - **Set it explicit.** Listing allowed tools is faster than enumerating disallowed ones.
@@ -151,7 +153,7 @@ For destructive skills (anything that runs `Bash` or `Write`), being narrow abou
 - `version` — semver. Bump when behavior changes.
 - `requires` — other skills this skill depends on or composes with.
 - `inputs` — declared arguments (for clients that support typed inputs).
-- `tags` — for discoverability via `/skill search`.
+- `tags` — for discoverability in skill listings and catalogs.
 
 The schema varies slightly between Claude Code, plugin distributions, and other Skills-compatible clients. Read your target client's spec.
 
@@ -161,9 +163,9 @@ The schema varies slightly between Claude Code, plugin distributions, and other 
 
 Users find skills three ways:
 
-### 6.1 `/help` and `/skill` commands
+### 6.1 `/help` and slash-command listings
 
-Most clients list available skills. The listing shows the name and description. This is why descriptions matter for users, not just for auto-loading.
+Most clients list available skills alongside other slash commands (there is no separate `/skill` command — each skill *is* a slash command). The listing shows the name and description. This is why descriptions matter for users, not just for auto-loading.
 
 ### 6.2 Autocomplete
 

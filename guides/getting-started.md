@@ -2,7 +2,7 @@
 
 Three-question decision tree, choose-your-tool flowchart, and cross-links to detailed install guides.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -74,7 +74,7 @@ Start at the top. Follow the answers.
                                               │                   │
                                               ▼                   ▼
                                      Gemini CLI (free        Claude Code
-                                     tier, 2M context)       (--print mode)
+                                     tier, 1M context)       (--print mode)
                                      or Cody (multi-repo)    + governance
                                                              at scale
 ```
@@ -86,7 +86,7 @@ Start at the top. Follow the answers.
 ### Solo / hobbyist, no budget
 
 - **Cursor Free** (50 slow + 2K completions/mo) is the most generous free tier with a real IDE.
-- Add **Gemini CLI** for big-context Q&A on the side (free Vertex AI Studio tier).
+- Add **Gemini CLI** for big-context Q&A on the side (free with a personal Google account: 60 requests/min, 1,000 requests/day).
 - Optional: **GitHub Copilot Free** if you maintain OSS or want a second opinion.
 
 Setup time: 30 minutes.
@@ -139,14 +139,14 @@ After picking a tool:
 
 1. **Install it.** See [basic-setup.md](basic-setup.md) for the generic walkthrough.
 2. **Sign in and run hello-world.** Verify the tool works on a throwaway file.
-3. **Set up `.gitignore` / `.claudeignore` / `.cursorignore`.** Prevent the tool from indexing junk. See [context-management.md](../best-practices/context-management.md).
+3. **Set up `.gitignore` / `.cursorignore`, and `permissions.deny` in `.claude/settings.json` for Claude Code.** Prevent the tool from pulling in junk or secrets. See [context-management.md](../best-practices/context-management.md).
 4. **Write project rules.** CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md — whichever your tool reads. Start with 20 lines of project-specific conventions.
 5. **Try a real task.** Pick something small but real. See [first-steps.md](first-steps.md).
 
 For tool-specific deep dives:
 
 - [Claude Code Guide](claude-code/) — installation, configuration, MCP servers, skills
-- [GitHub Copilot Guide](github-copilot/) — IDE setup, Workspace, agent mode
+- [GitHub Copilot Guide](github-copilot/) — IDE setup, coding agent, agent mode
 - [Gemini CLI Guide](gemini-cli/) — installation, large-context patterns
 - [Agents & Subagents Guide](agents-subagents/) — multi-agent design
 - [MCP Servers Guide](mcp-servers/) — installing and writing MCP servers
@@ -182,7 +182,7 @@ You rarely lose by adding a second tool if it covers a different work shape. The
 5. **Trusting AI output without tests.** AI-generated code passes review by humans more often than humans realize. Run the tests.
 6. **Treating an agent like a search engine.** Agents excel at multi-step tasks with tool calls. If you only want a quick answer, use chat — agents are overkill.
 7. **Spending too long evaluating before committing.** Pick something, use it for two weeks, then re-evaluate. Don't paralysis-analyze.
-8. **Cheap-tier-only.** Haiku 4.5 / Gemini Flash are amazing for routing and simple tasks; they fail on hard ones. Use Sonnet / Opus / GPT-5 / Gemini Pro when the task demands it.
+8. **Cheap-tier-only.** Haiku 4.5 / Gemini Flash are amazing for routing and simple tasks; they fail on hard ones. Use Sonnet / Opus / GPT-5.5 / Gemini Pro when the task demands it.
 9. **Ignoring cost dashboards.** Agents in loops can burn $100 in an hour. Set spend limits before you need them.
 10. **Skipping security review on AI-generated code.** "It compiles" is not "it's safe."
 
@@ -190,7 +190,7 @@ You rarely lose by adding a second tool if it covers a different work shape. The
 
 ## Three-Sentence Summary
 
-If you write code daily in an IDE, install Cursor or Copilot Pro and use it for everything. If you need multi-file refactors, background agents, or DevOps tooling, also install Claude Code. If you need to understand a huge codebase, also install Gemini CLI for its 2M-token context.
+If you write code daily in an IDE, install Cursor or Copilot Pro and use it for everything. If you need multi-file refactors, background agents, or DevOps tooling, also install Claude Code. If you need to understand a huge codebase, also install Gemini CLI for its 1M-token context.
 
 ---
 
@@ -201,14 +201,14 @@ When you can't decide and want a one-line answer:
 | Constraint | Pick |
 |------------|------|
 | Cheapest, IDE | Cursor Free or Copilot Free |
-| Cheapest, terminal | Gemini CLI (free Vertex tier) |
+| Cheapest, terminal | Gemini CLI (free with a personal Google account) |
 | Best inline completion (typing experience) | GitHub Copilot Pro |
 | Best agent mode in IDE | Cursor Pro |
 | Best for multi-file refactors | Claude Code (Sonnet 4.6) |
-| Best for whole-repo Q&A | Gemini CLI (2M context) |
+| Best for whole-repo Q&A | Gemini CLI (1M context) |
 | Best for multi-repo Q&A | Sourcegraph Cody |
 | Best for infra / DevOps | Claude Code with MCP servers |
-| Best for spec → PR flow | GitHub Copilot Workspace |
+| Best for spec → PR flow | GitHub Copilot coding agent |
 | Best for background agents | Claude Code --print mode |
 | Best for regulated / enterprise | Claude Code + governance platform (see [agent-governance.md](../best-practices/agent-governance.md)) |
 
@@ -238,9 +238,9 @@ Yes if you find yourself wanting agent-mode and multi-file capabilities Copilot 
 
 If you live in an IDE and want everything in one place: Cursor. If you do a lot of terminal work, infra, or background agents: Claude Code. If you genuinely can only have one and your work is mixed: Cursor edges out for most developers because the IDE integration covers more cases.
 
-### "Is GPT-5 better than Claude Sonnet 4.6 for coding?"
+### "Is GPT-5.5 better than Claude Sonnet 4.6 for coding?"
 
-They trade off depending on task. Aider polyglot benchmark and SWE-bench show them within a few percentage points of each other in 2026. Claude Sonnet 4.6 tends to win on long agent loops; GPT-5 Codex tends to win on tight inline completion. Use whichever your tool defaults to and switch only if you observe specific failure modes.
+They trade off depending on task. Aider polyglot benchmark and SWE-bench show them within a few percentage points of each other in 2026. Claude Sonnet 4.6 tends to win on long agent loops; GPT-5.5 Codex tends to win on tight inline completion. Use whichever your tool defaults to and switch only if you observe specific failure modes.
 
 ### "How much does this actually cost in practice?"
 
@@ -252,7 +252,7 @@ Most paid subscriptions (Cursor Business+, Copilot Business+, Anthropic API) do 
 
 ### "What about local / self-hosted models?"
 
-Possible. Cursor and Continue support Bring-Your-Own-Key for local models (Ollama, vLLM). Quality is lower than frontier models in 2026 — Llama 4 70B is competitive with GPT-4-class models but not with Sonnet 4.6 or GPT-5. Self-hosting matters most for privacy / compliance reasons, not for capability.
+Possible. Cursor and Continue support Bring-Your-Own-Key for local models (Ollama, vLLM). Quality is lower than frontier models in 2026 — Llama 4 (Scout and Maverick, Meta's MoE models) is competitive with GPT-4-class models but not with Sonnet 4.6 or GPT-5.5. Self-hosting matters most for privacy / compliance reasons, not for capability.
 
 ### "Do I need to learn prompt engineering?"
 
@@ -269,10 +269,10 @@ MCP (Model Context Protocol) is the standard for connecting AI tools to external
 If you want to start right now and read the rest later:
 
 1. `npm install -g @anthropic-ai/claude-code` — installs Claude Code.
-2. `claude /login` — opens browser, sign in with your Anthropic account (or set `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com)).
+2. Run `claude`, then type `/login` — opens browser, sign in with your Anthropic account (or set `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com)).
 3. `cd` into a real repo. Create a 20-line `CLAUDE.md` describing the project.
-4. Add a `.claudeignore` (copy the template from [basic-setup.md](basic-setup.md)).
-5. Run `claude` and ask "What does this codebase do? What's the test command?"
+4. Add `permissions.deny` entries to `.claude/settings.json` for secrets and junk paths (copy the template from [basic-setup.md](basic-setup.md)).
+5. In the `claude` session, ask "What does this codebase do? What's the test command?"
 
 If it answers reasonably, you're set up. Total time: under 10 minutes.
 
@@ -287,7 +287,7 @@ If you're rolling out to a team:
 ### Week 1: Pilot
 - 3-5 volunteer developers
 - Pick one tool (Cursor Business or Copilot Business is the typical starting point)
-- One project, one rules file, one shared `.claudeignore` / `.cursorignore`
+- One project, one rules file, one shared `.claude/settings.json` (permissions) / `.cursorignore`
 - Daily Slack thread for "what did you try, what worked"
 
 ### Week 2-3: Iterate

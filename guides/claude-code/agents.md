@@ -32,7 +32,7 @@ Key properties:
 - **Context isolation.** The sub-agent does not see the parent's conversation. It only sees the prompt the parent passes in. This is the main reason to use sub-agents at all — it keeps the parent's context budget intact while delegating large-scale work.
 - **Tool inheritance with constraints.** By default a sub-agent inherits the parent's tools (modulo the agent definition's `tools` list). It can be locked down to a smaller set.
 - **Single response.** The sub-agent returns one final message. There is no streaming back to the parent during execution. If you need progressive output, use `Monitor` to watch the sub-agent's log.
-- **Independent model selection.** Each agent can run on a different model (Opus 4.7 for the orchestrator, Haiku 4.5 for cheap fanned-out workers).
+- **Independent model selection.** Each agent can run on a different model (Opus 4.8 for the orchestrator, Haiku 4.5 for cheap fanned-out workers).
 
 A sub-agent invocation looks like this:
 
@@ -55,7 +55,7 @@ Use one when:
 1. **The task fits in a fresh context but would blow up yours.** Searching a 500k-line repo. Reading and summarizing 80 files. Running a large refactor across modules you have not loaded.
 2. **You want parallelism.** Three independent reviews of the same PR (security, perf, style) finish in roughly one wall-clock unit instead of three.
 3. **The task is well-specified and self-contained.** A sub-agent that needs five rounds of clarification with the parent is worse than just doing it inline.
-4. **You want a clean "audit trail" of one sub-task.** The sub-agent's full transcript is preserved in `~/.claude/sessions/<id>/` and reviewable later.
+4. **You want a clean "audit trail" of one sub-task.** The sub-agent's full transcript is preserved alongside the session transcript under `~/.claude/projects/` and reviewable later.
 
 Do not use one when:
 
@@ -67,7 +67,7 @@ Do not use one when:
 
 ## Built-In Agent Types
 
-Four ship with every install:
+Three built-in types ship with every install, plus whatever you define yourself:
 
 ### `general-purpose`
 
@@ -239,8 +239,8 @@ name: security-reviewer
 description: Use PROACTIVELY after any code change touching auth, payments,
   database queries, or user input. Reviews for OWASP Top 10 issues, hardcoded
   secrets, injection risks, and auth bypasses.
-tools: Read, Grep, Glob, Bash(rg:*), mcp__semgrep__scan
-model: claude-opus-4-7
+tools: Read, Grep, Glob, Bash, mcp__semgrep__scan
+model: claude-opus-4-8
 ---
 
 You are a security reviewer. For each file the user names or pastes, identify
@@ -291,19 +291,19 @@ model: claude-haiku-4-5
 ---
 name: architect
 description: Design system architecture and produce ADRs.
-model: claude-opus-4-7
+model: claude-opus-4-8
 ---
 ```
 
-The orchestrator runs on Sonnet 4.6 (default), fans out to 20 `file-summarizer` agents on Haiku 4.5 in parallel, then escalates a hard design decision to an `architect` on Opus 4.7. The total cost is a fraction of running everything on Opus, and the wall-clock is dominated by the slowest Haiku.
+The orchestrator runs on Sonnet 4.6 (default), fans out to 20 `file-summarizer` agents on Haiku 4.5 in parallel, then escalates a hard design decision to an `architect` on Opus 4.8. The total cost is a fraction of running everything on Opus, and the wall-clock is dominated by the slowest Haiku.
 
-Rule of thumb:
+Rule of thumb (the `model` field also accepts the aliases `haiku`, `sonnet`, `opus`, and `fable`):
 
 | Role | Model |
 |------|-------|
 | Frequent, narrow worker | Haiku 4.5 |
 | General implementation, default | Sonnet 4.6 |
-| Architecture, complex reasoning, ambiguous specs | Opus 4.7 |
+| Architecture, complex reasoning, ambiguous specs | Opus 4.8 or Fable 5 |
 
 ---
 
@@ -380,7 +380,7 @@ You suspect a flaky test. Dispatch a long-running `general-purpose` agent with w
 
 ## Anti-Patterns
 
-**Recursive over-dispatch.** A sub-agent that dispatches its own sub-agents that dispatch their own sub-agents. Context multiplies, cost explodes, debuggability dies. Cap nesting at two.
+**Expecting recursive dispatch.** Sub-agents cannot spawn their own sub-agents — nesting is capped at one level by design. Plans that assume an agent will "fan out further" will stall; the orchestrator has to do all the dispatching itself.
 
 **Verbose returns.** A sub-agent that returns 50KB of prose to the parent. Constrain the output format in the prompt: "Return ONLY a JSON array of {file, line, issue}." Less context burned in the parent.
 
@@ -421,11 +421,7 @@ Whichever route, the principle is the same: don't trust each agent in isolation.
 
 ### Inspect a recent agent's transcript
 
-```
-~/.claude/sessions/<parent-session>/agents/<agent-id>/transcript.jsonl
-```
-
-Each line is a turn — user message, assistant message, tool call, tool result. Open in your editor and skim.
+Session transcripts live as JSONL files under `~/.claude/projects/<munged-project-path>/`; sub-agent activity is recorded as sidechains within the parent session's transcript. Each line is a turn — user message, assistant message, tool call, tool result. Open in your editor and skim, or use `/agents` (Running tab) to watch live sub-agents.
 
 ### Stop a runaway agent
 
@@ -443,7 +439,7 @@ Sends an interrupt signal; the agent stops at its next tool boundary and returns
 
 **Agent's response is empty.** It hit its turn cap. Either increase it or break the task in half.
 
-**Parent receives the wrong agent type.** `subagent_type` does not match any definition. Run `claude agents list` to see what is registered.
+**Parent receives the wrong agent type.** `subagent_type` does not match any definition. Run `/agents` to see what is registered (Library tab). Note that agent files added directly on disk load at session start — restart the session after creating one manually.
 
 **Worktree leaks.** A crashed agent leaves a worktree behind. `git worktree prune` cleans up.
 

@@ -8,19 +8,19 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 
 | Feature | Claude Code | GitHub Copilot | Gemini CLI |
 |---------|-------------|----------------|------------|
-| **IDE Integration** | ❌ CLI only | ✅ VS Code, JetBrains, Vim | ❌ CLI only |
+| **IDE Integration** | ✅ VS Code, JetBrains (official extensions) | ✅ VS Code, JetBrains, Vim | ❌ CLI only |
 | **Real-time Completions** | ❌ | ✅ | ❌ |
 | **Chat Interface** | ✅ | ✅ | ✅ |
 | **CLI Tool** | ✅ | ✅ | ✅ |
-| **MCP Server Support** | ✅ 50+ servers | ❌ | ❌ |
-| **Multi-Agent Orchestration** | ✅ | ❌ | ❌ |
-| **Skills System** | ✅ | ❌ | ❌ |
+| **MCP Server Support** | ✅ 50+ servers | ✅ Agent mode + coding agent | ✅ Native |
+| **Multi-Agent Orchestration** | ✅ Subagents | ⚠️ Agent mode + autonomous coding agent | ❌ |
+| **Skills System** | ✅ | ❌ | ⚠️ Custom commands |
 | **Event Hooks** | ✅ | ❌ | ❌ |
 | **Checkpoint/Resume** | ✅ | ❌ | ❌ |
-| **Workspace** | ❌ | ✅ (Preview) | ❌ |
+| **Async Coding Agent (issue → PR)** | ❌ | ✅ Copilot coding agent (GA) | ❌ |
 | **Multimodal** | ✅ | ❌ | ✅ |
-| **Code Context** | Large (200K tokens) | Medium | Very Large (2M tokens) |
-| **Pricing** | API usage | $10-39/mo | API usage |
+| **Code Context** | Very Large (1M tokens, current models) | Medium | Very Large (1M tokens) |
+| **Pricing** | API usage or Claude subscription ($20-200/mo) | $0-39/mo | Free tier + API usage |
 
 ---
 
@@ -31,7 +31,7 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 #### Claude Code
 - **Type**: Conversational, no inline completions
 - **Scope**: Multi-file, project-wide
-- **Context**: 200K tokens
+- **Context**: 1M tokens on current models
 - **Best For**: Complex refactoring, architecture changes
 - **Limitations**: No real-time completions
 
@@ -44,7 +44,7 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 
 #### Gemini CLI
 - **Type**: Conversational, no inline completions
-- **Scope**: Large context (2M tokens)
+- **Scope**: Large context (1M tokens)
 - **Context**: Very large context window
 - **Best For**: Complex analysis, large codebases
 - **Limitations**: No real-time completions, CLI only
@@ -98,19 +98,19 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 - **Hooks**: ✅ Event-driven customization
 
 #### GitHub Copilot
-- **Extensions**: ❌ Limited
-- **Custom Tools**: ❌
+- **Extensions**: ✅ Copilot Extensions marketplace
+- **Custom Tools**: ✅ MCP servers in agent mode and the coding agent
 - **Skills**: ❌
 - **Hooks**: ❌
-- **Note**: Relies on IDE extensions
+- **Note**: MCP support is GA across agent mode and the coding agent
 
 #### Gemini CLI
-- **Extensions**: ❌ Limited
-- **Custom Tools**: Via API
-- **Skills**: ❌
+- **Extensions**: ✅ Extensions system
+- **Custom Tools**: ✅ Native MCP server support
+- **Skills**: ⚠️ Custom commands (similar role)
 - **Hooks**: ❌
 
-**Winner**: Claude Code (by far)
+**Winner**: Claude Code (deepest stack: MCP + skills + hooks), though all three now support MCP
 
 ---
 
@@ -121,33 +121,32 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 - **Orchestration**: ✅ Full support
 - **Parallel Execution**: ✅
 - **State Management**: ✅ Memory MCP
-- **Custom Agents**: ✅ Define in AGENTS.md
+- **Custom Agents**: ✅ Define in `.claude/agents/*.md` (with name/description/tools frontmatter)
 - **Use Cases**:
   - Research → Design → Implement → Test → Deploy
   - Parallel independent tasks
   - Complex multi-phase workflows
 
 #### GitHub Copilot
-- **Agents**: ❌ None
-- **Orchestration**: ❌
-- **Note**: Single-threaded assistance only
+- **Agents**: ✅ Agent mode (multi-step, MCP-enabled) + autonomous coding agent (GA, issue → PR)
+- **Orchestration**: ⚠️ No user-defined multi-agent topologies
+- **Note**: Coding agent runs asynchronously in GitHub Actions
 
 #### Gemini CLI
 - **Agents**: ❌ None
 - **Orchestration**: ❌
 
-**Winner**: Claude Code (only option)
+**Winner**: Claude Code (most complete: subagents, parallel dispatch, custom agent definitions)
 
 ---
 
 ### IDE Integration
 
 #### Claude Code
-- **VS Code**: ❌
-- **JetBrains**: ❌
-- **Vim**: ❌
-- **Other**: ❌
-- **Note**: CLI-based, runs in terminal
+- **VS Code**: ✅ Official extension
+- **JetBrains**: ✅ Official extension
+- **Vim**: ⚠️ Runs in any terminal (no dedicated plugin)
+- **Other**: Terminal-based, works alongside any editor
 
 #### GitHub Copilot
 - **VS Code**: ✅ Excellent
@@ -159,7 +158,7 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 #### Gemini CLI
 - **IDE Integration**: ❌ None
 
-**Winner**: GitHub Copilot
+**Winner**: GitHub Copilot (broadest coverage and inline completions); Claude Code now has official VS Code and JetBrains extensions
 
 ---
 
@@ -201,13 +200,13 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 ### Context Management
 
 #### Claude Code
-- **Context Window**: 200K tokens
+- **Context Window**: 1M tokens (current models)
 - **Context Sources**:
   - File reads
   - MCP servers (databases, APIs, etc.)
   - Memory persistence
   - Agent communication
-- **Context Control**: `.claudeignore`
+- **Context Control**: `permissions.deny` in `.claude/settings.json` (`.claudeignore` is not supported)
 - **Multi-session**: ✅ Via Memory MCP
 
 #### GitHub Copilot
@@ -221,7 +220,7 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 - **Multi-session**: ❌
 
 #### Gemini CLI
-- **Context Window**: 2M tokens (largest)
+- **Context Window**: 1M tokens
 - **Context Sources**:
   - Files
   - Images
@@ -229,7 +228,7 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 - **Context Control**: Manual
 - **Multi-session**: Limited
 
-**Winner**: Gemini CLI (context size), Claude Code (context sources)
+**Winner**: Tie on context size (both 1M); Claude Code (context sources)
 
 ---
 
@@ -327,25 +326,25 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 ### Cost
 
 #### Claude Code
-- **Model**: Sonnet, Opus, Haiku
-- **Pricing**: Per-token API usage
+- **Model**: Fable, Opus, Sonnet, Haiku
+- **Pricing**: Per-token API usage, or Claude subscription (Pro $20 / Max 5x $100 / Max 20x $200)
 - **Estimate**:
-  - Light use: $10-20/mo
-  - Heavy use: $50-100/mo
-  - Enterprise: $200+/mo
+  - Light use: $10-30/mo
+  - Heavy use: $100-500/mo (see [cost-analysis.md](cost-analysis.md))
 
 #### GitHub Copilot
-- **Individual**: $10/mo or $100/yr
+- **Free**: $0 (limited)
+- **Pro**: $10/mo; **Pro+**: $39/mo
 - **Business**: $19/user/mo
 - **Enterprise**: $39/user/mo
-- **Free**: Students, OSS maintainers
+- **Note**: Since June 1, 2026, usage is billed via GitHub AI Credits (replaced premium requests)
 
 #### Gemini CLI
-- **Model**: Gemini Pro, Ultra
-- **Pricing**: Per-token API usage
+- **Model**: Gemini 3 family (3 Pro / 3 Flash / 3.1 Pro preview) + 2.5 family
+- **Pricing**: Free tier (personal Google account: 60 req/min, 1,000 req/day) or per-token API usage
 - **Estimate**:
-  - Light use: $5-15/mo
-  - Heavy use: $30-80/mo
+  - Light use: $0-15/mo (free tier covers a lot)
+  - Heavy use: $30-100/mo
 
 **Winner**: Varies by usage pattern
 
@@ -367,9 +366,10 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 
 ### Large Codebase Analysis
 **Winner**: Gemini CLI
-- 2M token context
+- 1M token context with a generous free tier
 - Deep analysis
 - Complex reasoning
+- (Claude Code's current models also offer 1M context)
 
 ### Infrastructure Management
 **Winner**: Claude Code
@@ -467,21 +467,21 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 
 **Claude Code**:
 - Best for: Complex tasks, infrastructure, orchestration
-- Unique: MCP servers, agents, skills
-- Weakness: No IDE integration
+- Unique: Deepest agent stack — subagents, skills, hooks (plus official VS Code/JetBrains extensions)
+- Weakness: No inline completions
 
 **GitHub Copilot**:
 - Best for: Daily coding, real-time completions
-- Unique: IDE integration, Workspace
-- Weakness: Limited extensibility
+- Unique: IDE integration, autonomous coding agent (issue → PR)
+- Weakness: Less extensible than Claude Code (though agent mode now supports MCP)
 
 **Gemini CLI**:
 - Best for: Large context, multimodal tasks
-- Unique: 2M token context
-- Weakness: Limited tooling
+- Unique: 1M token context on a generous free tier
+- Weakness: Limited tooling (though it has MCP support, extensions, and custom commands)
 
 **Recommendation**: Use Claude Code + GitHub Copilot together for maximum productivity.
 
 ---
 
-**Last Updated**: 2025-11-04
+**Last Updated**: 2026-06-11

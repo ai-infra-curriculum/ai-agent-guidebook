@@ -76,13 +76,7 @@ description: |
   asks to "deploy to staging", "push to staging", "stage this", or after a
   feature is verified locally and the user wants to validate in staging.
   Handles preflight checks, deployment, smoke tests, and rollback on failure.
-metadata:
-  category: deployment
-  version: 2.1.0
-  owner: platform-team
-  estimated_duration_minutes: 8
-  requires_tools: [Bash, Read, Write]
-  requires_mcp: [kubernetes-staging, slack]
+allowed-tools: Bash(./scripts/preflight.sh *), Bash(kubectl *), Read
 ---
 
 # Deploy to Staging
@@ -111,16 +105,17 @@ Frontmatter field reference:
 
 | Field | Required | Purpose |
 |-------|----------|---------|
-| `name` | yes | Unique identifier. Lowercase, hyphenated. Invoked as `/<name>` |
-| `description` | yes | What gates auto-loading. See [The Description Field Is the Gate](#the-description-field-is-the-gate) |
-| `metadata.category` | no | Free-form taxonomy for `claude skills list` |
-| `metadata.version` | no | Semver. Useful for distributed skills |
-| `metadata.owner` | no | Team or person responsible |
-| `metadata.requires_tools` | no | Built-in tools the skill expects. Surface a warning if missing |
-| `metadata.requires_mcp` | no | MCP servers expected to be connected |
-| `metadata.estimated_duration_minutes` | no | Hint for the user |
+| `name` | no | Display label in skill listings. The slash command comes from the *directory* name, not this field (except for plugin-root skills) |
+| `description` | recommended | What gates auto-loading. If omitted, the first paragraph of the body is used. See [The Description Field Is the Gate](#the-description-field-is-the-gate) |
+| `when_to_use` | no | Extra trigger context (phrases, example requests). Appended to `description` in the skill listing; the combined text is truncated at 1,536 characters |
+| `disable-model-invocation` | no | `true` = only you can invoke it (via `/name`); Claude never auto-loads it. Use for deploys, commits, anything with side effects |
+| `user-invocable` | no | `false` = hidden from the `/` menu; Claude can still load it automatically |
+| `allowed-tools` | no | Tools Claude may use without a permission prompt while this skill is active (space- or comma-separated, or a YAML list) |
+| `disallowed-tools` | no | Tools removed from Claude's pool while the skill is active |
+| `context` | no | `fork` runs the skill in an isolated subagent instead of the main conversation |
+| `arguments` | no | Named argument list; names map to `$name` placeholders in the body |
 
-Only `name` and `description` are load-bearing. Everything else is metadata for humans.
+Only `description` (plus `when_to_use`) is load-bearing for auto-invocation. The invocation-control and tool fields change behavior; everything else is presentation.
 
 ---
 
@@ -134,19 +129,14 @@ Three scopes, evaluated together at session start:
 | Project-local | `<repo>/.claude/skills/` | Sessions started in this repo |
 | Plugin-bundled | `<plugin>/skills/` | Sessions where the plugin is installed |
 
-A user-global skill and a project-local skill with the same `name` will collide. Project wins. Inspect what is loaded:
-
-```bash
-claude skills list
-claude skills list --json
-```
-
-Inside a session:
+A user-global skill and a project-local skill with the same directory name collide; the project skill wins. Inspect what is loaded inside a session:
 
 ```
 /skills              # interactive list of available skills
-/skill-info my-name  # show frontmatter and body of a specific skill
+/context             # see what skill descriptions are occupying context
 ```
+
+Skill directories are watched live: adding, editing, or removing a skill under `~/.claude/skills/` or the project's `.claude/skills/` takes effect within the current session, no restart needed.
 
 ---
 
@@ -278,16 +268,13 @@ $EDITOR ~/.claude/skills/commit/SKILL.md
 
 ```markdown
 ---
-name: commit
 description: |
   Use when the user asks to commit, "make a commit", "stage and commit", or
   after a logical chunk of work is done and the user wants to checkpoint.
   Produces a Conventional Commits-formatted commit using staged or unstaged
   changes. Skip when the user has explicitly asked for a different commit
   message style.
-metadata:
-  category: git
-  version: 1.0.0
+allowed-tools: Bash(git status *), Bash(git diff *), Bash(git log *)
 ---
 
 # Commit
@@ -316,10 +303,9 @@ unless the user explicitly asks. Do NOT use `git add -A` — only commit
 what is already staged unless the user says otherwise.
 ```
 
-Test by reloading and invoking:
+Test by invoking — skill directories are watched, so no reload step is needed:
 
 ```bash
-claude skills reload
 claude
 # > /commit
 ```
@@ -357,12 +343,11 @@ If the model doesn't pick it up on a natural-language "let's commit this," sharp
 ## Best Practices
 
 - **One skill, one job.** Split before you grow past two pages of body content.
-- **Version your skills.** Bump `metadata.version` on breaking changes so consumers can pin.
 - **Keep the auto-loaded body short.** Less than 150 lines if you can. Reference longer material from `runbook.md`.
 - **Lead with triggers in the description.** First sentence: when to use. Second sentence: what it does. Third: what it doesn't do.
-- **Don't auto-invoke destructive skills.** Anything that writes, deploys, or rotates secrets should require explicit `/skill-name`.
+- **Don't auto-invoke destructive skills.** Anything that writes, deploys, or rotates secrets should set `disable-model-invocation: true` and require explicit `/skill-name`.
 - **Test the description by reading it cold.** If you can't tell from the description alone when this skill should fire, the orchestrator can't either.
-- **Use `metadata.requires_mcp` honestly.** It gates a warning if the user lacks the server; nothing kills trust faster than a skill that silently fails because the user's environment didn't have what it assumed.
+- **Scope `allowed-tools` honestly.** It grants permission without prompting while the skill is active, so list only what the workflow genuinely needs — and remember project skills' grants only apply after the workspace trust dialog is accepted.
 - **Review your own skills quarterly.** Triggers drift; what was important six months ago may not be now.
 
 ---
@@ -397,35 +382,25 @@ Publish to a registry (the community is converging on a few — check `awesome-c
 
 Almost always the description. Read it cold. If the description is "A helper for things," rewrite with explicit triggers.
 
-Check that the orchestrator can even see the skill:
+Check that the orchestrator can even see the skill: run `/skills` and look for it in the list. If missing, it failed to parse. Common causes: invalid YAML frontmatter (tab characters, unquoted strings with colons), file not named `SKILL.md`.
 
-```bash
-claude skills list | grep my-skill
-```
-
-If missing, it failed to parse. Run:
-
-```bash
-claude skills validate
-```
-
-Common causes: invalid YAML frontmatter (tab characters, unquoted strings with colons), missing `name`, file not named `SKILL.md`.
+Also check the skill doesn't set `disable-model-invocation: true` — that removes its description from Claude's context entirely.
 
 ### "Slash command doesn't fire"
 
-Invocation is case-sensitive. `/MySkill` and `/myskill` are different. Match the `name` field exactly.
+The command comes from the skill's *directory* name, and invocation is case-sensitive: `/MySkill` and `/myskill` are different. Match the directory name exactly.
 
 ### "Skill loads but the model ignores its instructions"
 
-The body conflicts with the parent system prompt or with another skill's body. Lower-scope skills (project) win over user-global, but two project-local skills can still collide. Use `/skill-info` to see what is actually loaded into context.
+The body conflicts with the parent system prompt or with another skill's body. Lower-scope skills (project) win over user-global, but two project-local skills can still collide. Run `/context` to see what is actually loaded into context. After heavy compaction, re-invoke the skill — only the first ~5,000 tokens of each invoked skill are carried forward.
 
 ### "Skill loaded but a tool call inside failed"
 
-Either the tool is denied by `permissions`, or the required MCP server is not connected. Check `claude mcp status` and `permissions.allow` in `settings.json`.
+Either the tool is denied by `permissions`, or the required MCP server is not connected. Check `/mcp` and `permissions.allow` in `settings.json`. For project skills, `allowed-tools` grants only apply after you accept the workspace trust dialog.
 
 ### "Skill ran in the wrong scope (e.g. project skill ran in unrelated session)"
 
-You started `claude` from a directory inside the project. Project skills load whenever the cwd is under the project root. Move to a different directory or temporarily disable the skill with `claude skills disable <name>`.
+You started `claude` from a directory inside the project. Project skills load from `.claude/skills/` in the starting directory and every parent up to the repository root. Move to a different directory, or hide the skill via the `/skills` menu (highlight it and press `Space` to cycle visibility states, which writes a `skillOverrides` entry to `.claude/settings.local.json`).
 
 ---
 

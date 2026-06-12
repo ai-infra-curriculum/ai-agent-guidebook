@@ -2,7 +2,7 @@
 
 Beyond the basics: sampling, notifications, session resumption, multi-tenant servers, telemetry, security, federation, and bridging non-MCP tools.
 
-> **Last updated**: 2026-05-24 · Tracks MCP spec **2025-06-18**.
+> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
 
 ---
 
@@ -37,7 +37,7 @@ const result = await server.server.createMessage({
     { role: "user", content: { type: "text", text: "Summarize this PR diff in 3 bullets..." } },
   ],
   modelPreferences: {
-    hints: [{ name: "claude-3-5-sonnet" }],
+    hints: [{ name: "claude-sonnet-4-5" }],
     costPriority: 0.3,
     speedPriority: 0.5,
     intelligencePriority: 0.8,
@@ -48,20 +48,34 @@ const result = await server.server.createMessage({
 return { content: [{ type: "text", text: result.content.text }] };
 ```
 
-`modelPreferences` is a hint system, not a contract. The host's user controls which model actually runs and can override. `hints` let you suggest model families ("a Claude 3.5-class model would work"); the priorities let the host trade off cost / latency / capability.
+`modelPreferences` is a hint system, not a contract. The host's user controls which model actually runs and can override. `hints` let you suggest model families ("a Sonnet-class model would work"); the priorities let the host trade off cost / latency / capability.
 
 ### Server-side (Python)
 
+In the official `mcp` SDK, the FastMCP `Context` exposes sampling through the underlying session via `ctx.session.create_message(...)`:
+
 ```python
+from mcp.server.fastmcp import Context
+from mcp.types import SamplingMessage, TextContent
+
 @mcp.tool()
 async def summarize_pr(diff: str, ctx: Context) -> str:
-    result = await ctx.sample(
-        messages=[{"role": "user", "content": f"Summarize this diff in 3 bullets:\n\n{diff}"}],
+    result = await ctx.session.create_message(
+        messages=[
+            SamplingMessage(
+                role="user",
+                content=TextContent(
+                    type="text",
+                    text=f"Summarize this diff in 3 bullets:\n\n{diff}",
+                ),
+            )
+        ],
         max_tokens=500,
-        model_preferences={"intelligencePriority": 0.8, "speedPriority": 0.5},
     )
-    return result.content.text
+    return result.content.text if result.content.type == "text" else str(result.content)
 ```
+
+(The third-party `fastmcp` 2.x package — a separate project from the official SDK — wraps this in a `ctx.sample(...)` convenience method; don't mix the two APIs.)
 
 ### Host responsibilities
 
@@ -231,7 +245,10 @@ Production deployments typically swap `InMemoryEventStore` for Redis or another 
 For pure request/response tools (no streaming, no subscriptions), use stateless mode — no session, no SSE, just POST in / JSON out. Simpler to scale; loses notifications.
 
 ```python
-mcp.run(transport="streamable-http", stateless_http=True, json_response=True)
+# stateless_http and json_response are FastMCP constructor args, not run() params
+mcp = FastMCP("notes", stateless_http=True, json_response=True)
+# ... register tools ...
+mcp.run(transport="streamable-http")
 ```
 
 Pick stateless for: simple CRUD MCPs hosted on serverless platforms. Pick stateful for: anything with progress, subscriptions, or long-running ops.
@@ -486,7 +503,7 @@ This is the spirit of MCP — narrow, typed, observable tool surfaces over the m
 ## Where to go next
 
 - The official spec: <https://spec.modelcontextprotocol.io/>
-- SEP process (Specification Enhancement Proposals): <https://github.com/modelcontextprotocol/specification/blob/main/SEP.md>
+- SEP process (Specification Enhancement Proposals): <https://modelcontextprotocol.io/community/sep-guidelines>
 - Reference server source code as production examples: <https://github.com/modelcontextprotocol/servers>
 - [`catalog.md`](./catalog.md) — the catalog of available servers, including the governance & trust section.
 - [`building.md`](./building.md) — basics if you skipped here directly.

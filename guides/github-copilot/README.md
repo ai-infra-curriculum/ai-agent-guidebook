@@ -11,7 +11,7 @@ Complete guide to using GitHub Copilot, GitHub's AI pair programmer for IDE and 
 - [Copilot in IDE](#copilot-in-ide)
 - [Copilot CLI](#copilot-cli)
 - [Copilot Chat](#copilot-chat)
-- [Copilot Workspace](#copilot-workspace)
+- [Copilot Coding Agent](#copilot-coding-agent)
 - [Best Practices](#best-practices)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
@@ -37,19 +37,23 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 - Slash commands for common tasks
 
 **GitHub Copilot CLI**
-- Command-line assistance with `gh copilot`
-- Generate and explain shell commands
-- Git command help
-- Available via GitHub CLI
+- Standalone agentic terminal assistant, invoked as `copilot`
+- Plans and executes tasks: edits files, runs commands (with approval)
+- MCP support, model selection, custom instructions
+- Replaces the retired `gh copilot` extension (dead since Oct 25, 2025)
 
-**GitHub Copilot Workspace** (Preview)
-- Task-oriented development
-- Multi-file editing
-- Plan → Build → Test workflow
+**Copilot Coding Agent**
+- Assign a GitHub issue to Copilot; it opens a draft PR
+- Runs in an ephemeral GitHub Actions environment
+- Successor to the sunset Copilot Workspace preview
 
 ### Key Features
 
 - ✅ **Real-time Completions** - Suggestions as you type
+- ✅ **Agent Mode** - Autonomous multi-step tasks in IDE, CLI, and cloud
+- ✅ **Model Picker** - Choose among Claude, GPT, and Gemini models per task
+- ✅ **Custom Instructions** - Repo conventions via `.github/copilot-instructions.md`
+- ✅ **MCP Support** - Extend Copilot with Model Context Protocol servers
 - ✅ **Multi-language Support** - Python, JavaScript, TypeScript, Go, Ruby, and more
 - ✅ **Context-Aware** - Understands your codebase
 - ✅ **Comment-to-Code** - Generate code from comments
@@ -70,8 +74,8 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 
 1. **Subscribe to Copilot**
    - Visit https://github.com/features/copilot
-   - Choose plan (Individual, Business, Enterprise)
-   - Free for students and verified open-source maintainers
+   - Choose plan (Free, Pro, Pro+, Business, Enterprise)
+   - Free tier available; expanded free access for students and verified open-source maintainers
 
 2. **Authorize in Settings**
    - Go to https://github.com/settings/copilot
@@ -108,19 +112,23 @@ Plug 'github/copilot.vim'
 
 ### Install Copilot CLI
 
+> The old `gh copilot` GitHub CLI extension stopped working on October 25, 2025. Install the standalone CLI instead:
+
 ```bash
-# Install GitHub CLI first (if not installed)
-# macOS
-brew install gh
+# npm (all platforms)
+npm install -g @github/copilot
 
-# Linux
-# See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+# macOS/Linux via Homebrew
+brew install copilot-cli
 
-# Install Copilot CLI extension
-gh extension install github/gh-copilot
+# Windows via WinGet
+winget install GitHub.Copilot
 
-# Verify installation
-gh copilot --version
+# macOS/Linux via install script
+curl -fsSL https://gh.io/copilot-install | bash
+
+# Launch
+copilot
 ```
 
 ---
@@ -255,9 +263,11 @@ Optimize this code for performance
 - `/explain` - Explain selected code
 - `/fix` - Propose fix for problems
 - `/tests` - Generate unit tests
-- `/help` - Get help with Copilot
+- `/doc` - Add documentation comments
+- `/optimize` - Suggest performance improvements
 - `/clear` - Clear chat history
-- `/api` - Ask about API usage
+- `/help` - Get help with Copilot
+- `/new` - Start a fresh thread
 
 **Example:**
 ```
@@ -284,143 +294,101 @@ create a function to handle password reset with email verification
 
 ## Copilot CLI
 
-### Basic Commands
+The standalone Copilot CLI is an agentic terminal assistant — it plans tasks, edits files, and runs shell commands with your approval, in the same product family as Claude Code.
 
-**Get command suggestions:**
-```bash
-gh copilot suggest "command description"
-```
-
-**Examples:**
+### Interactive Use
 
 ```bash
-# Git commands
-gh copilot suggest "undo last commit but keep changes"
-# Suggests: git reset --soft HEAD~1
+# Start a session in your project directory
+copilot
 
-# File operations
-gh copilot suggest "find all python files modified in last 7 days"
-# Suggests: find . -name "*.py" -mtime -7
-
-# Process management
-gh copilot suggest "kill process using port 3000"
-# Suggests: lsof -ti:3000 | xargs kill -9
+# Then ask in plain language:
+> Fix the failing test in tests/test_orders.py and explain the bug
+> Find all files over 100MB in this directory
 ```
 
-**Explain commands:**
-```bash
-gh copilot explain "tar -xzvf archive.tar.gz"
-# Explains each flag and what the command does
+Useful in-session tricks:
+
+```text
+@path/to/file.py      # pull a file into context
+!git status           # run a shell command directly (no model call)
+Shift+Tab             # toggle plan mode (plan before code)
 ```
 
-### Interactive Mode
+### Key Slash Commands
 
-```bash
-# Start interactive session
-gh copilot suggest -t shell
-
-# Then ask questions interactively
-? What would you like the shell command to do?
-> find all large files over 100MB
-
-# Copilot suggests command
-# You can revise or execute
+```text
+/login        # authenticate with GitHub
+/model        # pick the model for the session
+/mcp add      # add an MCP server (GitHub's is pre-configured)
+/agent        # select a built-in or custom agent
+/usage        # session stats, including AI Credits used
+/feedback     # send feedback
 ```
 
-### Git Commands
+### Programmatic Use
 
 ```bash
-gh copilot suggest -t git "create branch from main"
-# Suggests: git checkout -b new-branch main
+# One-shot prompt (scripts, CI)
+copilot --prompt "list TODO comments in src/ grouped by file"
 
-gh copilot suggest -t git "show changes in last commit"
-# Suggests: git show HEAD
-
-gh copilot suggest -t git "interactive rebase last 3 commits"
-# Suggests: git rebase -i HEAD~3
+# Resume your last session
+copilot --continue
 ```
 
-### GitHub CLI Commands
+### Approvals
 
-```bash
-gh copilot suggest -t gh "create issue with title and body"
-# Suggests: gh issue create --title "..." --body "..."
+Copilot asks before running any tool that modifies files or executes programs. Approve once, approve for the session, or reject with feedback. `--allow-all` skips approvals — only use it in disposable environments.
 
-gh copilot suggest -t gh "list open pull requests"
-# Suggests: gh pr list --state open
-```
-
-### Aliases
-
-**Create shortcuts:**
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-alias gcs='gh copilot suggest'
-alias gce='gh copilot explain'
-
-# Usage
-gcs "list docker containers"
-gce "docker ps -a"
-```
+See the [full CLI guide](cli-guide.md) for installation, MCP configuration, custom agents, and migration from the dead `gh copilot` extension.
 
 ---
 
-## Copilot Workspace
+## Copilot Coding Agent
 
-> **Note**: Copilot Workspace is in preview and may not be available to all users.
+> **Note**: Copilot Workspace (the browser-based preview) was sunset on May 30, 2025. Its issue-to-PR workflow lives on in the **Copilot coding agent**, available on all paid Copilot plans.
 
-### What is Workspace?
+### What is the Coding Agent?
 
-Copilot Workspace is a task-oriented development environment that helps you:
-- Plan features and fixes
-- Generate code across multiple files
-- Run and validate changes
-- Create pull requests
+The coding agent works asynchronously in the cloud: hand it a task and it researches your repo, implements the change on a branch, runs tests, and opens a draft pull request for review.
 
 ### Workflow
 
-**1. Start from Issue**
+**1. Hand off a task**
 ```
-Open GitHub issue → Click "Open in Workspace"
+Assign a GitHub issue to "Copilot" — or start a task from
+the agents panel at https://github.com/copilot/agents,
+or comment @copilot on an existing PR
 ```
 
-**2. Specification Phase**
-- Copilot analyzes issue
-- Generates implementation plan
-- Lists files to modify
+**2. The agent works**
+- Spins up an ephemeral GitHub Actions environment
+- Explores the code, plans, and implements on a branch
+- Runs your tests and linters
 
-**3. Implementation Phase**
-- Review proposed changes
-- Modify plan if needed
-- Generate code
+**3. Review the draft PR**
+- Read the agent's description and session log
+- Leave PR comments; the agent pushes revisions
+- Merge when satisfied — the agent can't bypass branch protections
 
-**4. Validation Phase**
-- Run tests
-- Fix issues
-- Iterate
+### Setup
 
-**5. Pull Request**
-- Review all changes
-- Create PR from Workspace
-- Link to original issue
+- **Environment**: preinstall your toolchain in `.github/workflows/copilot-setup-steps.yml` (job must be named `copilot-setup-steps`)
+- **Conventions**: encode build/test commands and style rules in `.github/copilot-instructions.md` or `AGENTS.md`
+- **MCP**: GitHub and Playwright MCP servers are enabled by default; add more in repo settings
 
 ### Best Practices
 
 ✅ **Clear Issue Descriptions**
-- Provide context and requirements
-- Include acceptance criteria
-- Mention relevant files
+- Acceptance criteria, relevant files, constraints, how to verify
 
-✅ **Review Generated Plans**
-- Validate approach before implementation
-- Adjust if needed
-- Consider edge cases
+✅ **Review Like a Teammate's PR**
+- Check the diff against the issue; push back via PR comments
 
-✅ **Iterate**
-- Test early and often
-- Refine as you go
-- Use feedback loops
+✅ **Invest in Setup and Instructions**
+- Fix recurring environment failures in `copilot-setup-steps.yml`, not per-issue
+
+See the [full coding agent guide](workspace-guide.md) for details and limitations.
 
 ---
 
@@ -654,16 +622,24 @@ https://github.com/settings/copilot
 - Providing examples in comments
 - Keeping files focused and organized
 
-### CLI Not Installed
+### CLI Not Working
 
 ```bash
-# Reinstall Copilot CLI extension
-gh extension remove gh-copilot
-gh extension install github/gh-copilot
+# Reinstall the standalone CLI
+npm install -g @github/copilot
 
-# Check GitHub CLI authentication
-gh auth status
-gh auth login  # if not authenticated
+# Check that the npm global bin directory is on PATH
+npm prefix -g
+
+# Authenticate inside the CLI
+copilot
+/login
+```
+
+If you still have the old extension installed, remove it — it stopped working in October 2025:
+
+```bash
+gh extension remove gh-copilot
 ```
 
 ### Rate Limiting
@@ -694,10 +670,10 @@ gh auth login  # if not authenticated
 ### CLI
 
 ```bash
-gh copilot suggest   # Get command suggestion
-gh copilot explain   # Explain command
-gh copilot suggest -t git    # Git commands
-gh copilot suggest -t gh     # GitHub CLI commands
+copilot                     # Start interactive session
+copilot --prompt "..."      # One-shot prompt
+copilot --continue          # Resume last session
+copilot help                # Full command reference
 ```
 
 ---
@@ -708,7 +684,7 @@ gh copilot suggest -t gh     # GitHub CLI commands
 
 - **Copilot Docs**: https://docs.github.com/copilot
 - **VS Code Extension**: https://marketplace.visualstudio.com/items?itemName=GitHub.copilot
-- **Copilot CLI**: https://githubnext.com/projects/copilot-cli
+- **Copilot CLI**: https://github.com/github/copilot-cli
 
 ### Community Resources
 
@@ -724,25 +700,35 @@ gh copilot suggest -t gh     # GitHub CLI commands
 
 ## Pricing
 
-**GitHub Copilot Individual**
-- $10/month or $100/year
-- For personal use
+> **Billing change (June 1, 2026):** Copilot moved from "premium requests" to **GitHub AI Credits** — usage-based, token-metered billing where 1 credit = $0.01 and cost depends on the model and tokens used. Each paid plan includes a monthly credit allowance; overage and budgets are managed in billing settings.
+
+**GitHub Copilot Free**
+- $0 — limited completions and chat per month
+- Includes Copilot CLI
+
+**GitHub Copilot Pro**
+- $10/month
+- Unlimited completions, coding agent, code review
+- Monthly AI Credit allowance included
+
+**GitHub Copilot Pro+**
+- $39/month
+- Everything in Pro, larger AI Credit allowance, premium models
 
 **GitHub Copilot Business**
 - $19/user/month
-- For organizations
-- Additional management features
+- Organization license and policy management, pooled AI Credits
 
 **GitHub Copilot Enterprise**
 - $39/user/month
-- Includes Workspace
-- Custom models on your codebase
-- Advanced security
+- Everything in Business, GitHub.com-native integration, codebase indexing, larger pooled credits
 
 **Free Access:**
-- Verified students
-- Open-source maintainers
+- Verified students and teachers
+- Maintainers of popular open-source projects
 - Apply at https://education.github.com/
+
+Current details: https://github.com/features/copilot/plans
 
 ---
 
@@ -762,3 +748,7 @@ gh copilot suggest -t gh     # GitHub CLI commands
 - [Gemini CLI Guide](../gemini-cli/README.md)
 - [Feature Comparison](../../comparisons/feature-matrix.md)
 - [Best Practices](../../best-practices/prompting.md)
+
+---
+
+**Last Updated**: 2026-06-11

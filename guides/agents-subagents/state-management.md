@@ -351,7 +351,7 @@ Don't dump all memory into the prompt. Retrieve targeted slices.
 
 ### 7.5 Forgetting
 
-Long-term memory needs an unforgetting strategy too — what stays forever, what fades.
+Long-term memory needs a forgetting strategy too — what stays forever, what fades.
 
 - **Time decay.** Facts older than N months lose weight in retrieval.
 - **Recency reinforcement.** Facts confirmed by recent interactions get refreshed timestamps.

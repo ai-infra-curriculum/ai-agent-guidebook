@@ -373,15 +373,16 @@ validator_verdict: pass | fail | inconclusive
 Cron / Airflow / Dagster:
 
 ```text
-# Every 15 minutes
-claude code --agents AGENTS.md --mcp mcp-config.json --task "Run the schema-watcher agent."
+# Every 15 minutes — headless run from the repo root (AGENTS.md and
+# .claude/agents/ are picked up automatically)
+claude --mcp-config mcp-config.json -p "Run the schema-watcher agent."
 ```
 
 Reactive (triggered by event presence):
 
 ```text
 # Triggered by a new event.yaml landing in .pipeline/drift-events/
-claude code --task "Process drift event drift-2026-05-24-001 from authoring through deployment."
+claude -p "Process drift event drift-2026-05-24-001 from authoring through deployment."
 ```
 
 The reactive orchestrator runs author → validator → deployer in sequence. They never run in parallel — validator needs author's output, deployer needs validator's.

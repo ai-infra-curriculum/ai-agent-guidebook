@@ -62,47 +62,33 @@ curl -sS https://api.anthropic.com/v1/messages \
 **Fix:**
 
 - If `curl` returns 401: key is revoked or wrong. Generate a new key at `console.anthropic.com/settings/keys` and re-export.
-- If `curl` works but `claude` fails: an OAuth session is shadowing the env var. Run `claude logout`, then retry.
+- If `curl` works but `claude` fails: an OAuth session may be interfering. Run `/status` in-session to see which auth method is active, `/logout`, then retry.
 - If the key is in 1Password / Keychain, ensure the env var is actually set in the shell where you launched `claude`. `echo "${ANTHROPIC_API_KEY:0:12}..."` should print `sk-ant-`.
 - For Bedrock/Vertex backends: ensure `CLAUDE_CODE_USE_BEDROCK=1` (or `_VERTEX=1`) is set *and* the underlying cloud credentials work (`aws sts get-caller-identity`, `gcloud auth print-access-token`).
 
 ### 2. Login flow opens browser but never completes
 
-**Symptoms:** `claude login` opens `claude.ai/oauth/...`, you approve, but the CLI doesn't proceed.
+**Symptoms:** `/login` opens `claude.ai/oauth/...`, you approve, but the CLI doesn't proceed.
 
 **Diagnosis:** The browser callback is hitting a port the CLI isn't listening on, usually because of a firewall, a different default browser, or a stale local server from a previous attempt.
 
 **Fix:**
 
-```bash
-# Kill any stuck claude processes
-pkill -f "claude.*login"
-
-# Retry, copying the URL manually if the browser handoff fails
-claude login --no-browser
-# CLI prints a URL and a code. Open the URL in any browser, paste the code.
-```
-
-If the manual flow also fails: check whether `localhost:54321` (or whichever port the CLI reports) is reachable from your browser. Corporate firewalls sometimes block loopback ports above 1024.
+- Kill any stuck `claude` processes and retry `/login`.
+- If the automatic handoff fails, the login flow offers a manual path: copy the URL into any browser and paste the resulting code back into the terminal.
+- Check whether the local callback port the CLI reports is reachable from your browser. Corporate firewalls sometimes block loopback ports above 1024.
 
 ### 3. Logged in but Claude Code still asks me to authenticate
 
-**Symptoms:** `claude login` succeeds, then the very next session prompts for login again.
+**Symptoms:** `/login` succeeds, then the very next session prompts for login again.
 
-**Diagnosis:**
-
-```bash
-# Where is the credential file expected?
-claude doctor --verbose
-```
-
-If macOS Keychain isn't writable (locked, encrypted volume not mounted), the credential isn't persisted.
+**Diagnosis:** The credential isn't being persisted — commonly a locked macOS Keychain or an unwritable `~/.claude/` directory.
 
 **Fix:**
 
 - macOS: unlock Keychain (`security unlock-keychain`).
-- Linux/WSL: ensure `~/.config/claude-code/` exists and is writable.
-- If on a corporate-managed machine where Keychain is read-only, fall back to API key auth (`ANTHROPIC_API_KEY` env var).
+- Linux/WSL: ensure `~/.claude/` exists and is writable.
+- If on a corporate-managed machine where Keychain is read-only, fall back to API key auth (`ANTHROPIC_API_KEY` env var) or `claude setup-token`.
 
 ---
 
@@ -110,13 +96,13 @@ If macOS Keychain isn't writable (locked, encrypted volume not mounted), the cre
 
 ### 4. MCP server won't start
 
-**Symptoms:** `claude mcp status` shows `failed` for one or more servers.
+**Symptoms:** `claude mcp list` shows `failed` for one or more servers.
 
 **Diagnosis:**
 
 ```bash
-# Inspect the per-server log
-tail -50 ~/.claude/logs/mcp/<server-name>.log
+# Watch startup errors and server stderr
+claude --debug
 
 # Try running the server manually
 GITHUB_TOKEN=$GITHUB_TOKEN npx -y @modelcontextprotocol/server-github
@@ -128,25 +114,20 @@ GITHUB_TOKEN=$GITHUB_TOKEN npx -y @modelcontextprotocol/server-github
 - Missing env var: server logs "GITHUB_TOKEN required". Set it in the shell that launches `claude`, not in `.bashrc` of a different shell.
 - Wrong arguments: server logs argparse error. Compare your `args` against the server's README.
 - For `npx` servers: a `npm install` failure mid-startup. Pre-install with `npm i -g <package>` so `npx` doesn't have to download every time.
+- Slow startup: raise the startup timeout with `MCP_TIMEOUT=10000 claude`.
 - For HTTP/SSE servers: server is down or URL is wrong. `curl -v <url>`.
 
 ### 5. MCP server connects but tools missing
 
-**Symptoms:** `claude mcp status` shows the server connected, but `mcp__<server>__*` tools don't appear, or the model says "I don't have access to that."
+**Symptoms:** the server shows as connected, but `mcp__<server>__*` tools don't appear, or the model says "I don't have access to that."
 
-**Diagnosis:**
-
-```bash
-claude mcp list --json | jq '.servers[] | {name, tool_count}'
-```
-
-If `tool_count: 0`, the server connected but exposed no tools. Almost always a config or auth problem within the server.
+**Diagnosis:** Run `/mcp` — it shows the tool count next to each connected server and flags servers that advertise the tools capability but expose no tools. A zero tool count is almost always a config or auth problem within the server.
 
 **Fix:**
 
-- Check server logs for "skipping tool X due to missing scope" or similar.
-- Some servers (Notion, Linear) require post-connection OAuth. Trigger one tool call to start the flow.
-- If deferred tools are enabled, schemas are loaded on demand. The tool exists; the model just hasn't fetched it. Try `ToolSearch(query="select:mcp__<server>__<tool>")` or disable deferred mode to verify.
+- Check server output (`claude --debug`) for "skipping tool X due to missing scope" or similar.
+- Some servers (Notion, Linear) require OAuth. Run `/mcp` and complete the authentication flow.
+- Tool search (on by default) loads schemas on demand. The tool exists; the model just hasn't fetched it. Ask the model to use it, or set `ENABLE_TOOL_SEARCH=false` to load everything upfront and verify.
 
 ### 6. MCP tool call hangs forever
 
@@ -156,17 +137,10 @@ If `tool_count: 0`, the server connected but exposed no tools. Almost always a c
 
 **Fix:**
 
-```bash
-# Watch the server log live
-tail -f ~/.claude/logs/mcp/<server-name>.log
-
-# In another terminal, cancel the current tool call
-# (Press Ctrl+C in the claude session)
-```
-
-- For upstream-API stalls: set `timeout` in the server config (`"timeout": 30000`). The call aborts cleanly after the timeout.
+- Cancel the current tool call (press `Esc` in the claude session) and inspect with `claude --debug`.
+- For upstream-API stalls: set a per-server `"timeout"` (ms) in its config, or `MCP_TOOL_TIMEOUT` globally. The call aborts cleanly after the timeout.
 - For oversized responses: many servers accept a `limit` parameter. Ask the agent to request fewer rows / smaller pages.
-- For repeated hangs: restart the server (`claude mcp restart <name>`) — long-running stdio servers can wedge.
+- For repeated hangs: restart the session — long-running stdio servers can wedge, and stdio servers are not auto-reconnected.
 
 ---
 
@@ -201,11 +175,7 @@ tail -f ~/.claude/logs/mcp/<server-name>.log
 
 **Symptoms:** `git status` (or some other trivially safe command) gets blocked.
 
-**Diagnosis:** A `PreToolUse` hook is rejecting it. Check:
-
-```bash
-tail -20 ~/.claude/logs/hooks.log
-```
+**Diagnosis:** A `PreToolUse` hook is rejecting it. Run `/hooks` to see registered hooks, or `claude --debug` to watch them fire.
 
 **Fix:**
 
@@ -221,13 +191,7 @@ tail -20 ~/.claude/logs/hooks.log
 
 **Symptoms:** `Stop` or `PreToolUse` hook exits 2 and blocks the agent from finishing or committing.
 
-**Diagnosis:**
-
-```bash
-tail -20 ~/.claude/logs/hooks.log
-```
-
-Look for the blocking hook and its exit message.
+**Diagnosis:** Run with `claude --debug` and look for the blocking hook and its exit message.
 
 **Fix:**
 
@@ -256,43 +220,23 @@ Look for the blocking hook and its exit message.
 
 **Symptoms:** `Task(...)` was dispatched 5+ minutes ago and hasn't returned.
 
-**Diagnosis:**
-
-```bash
-ls ~/.claude/sessions/<session-id>/agents/
-# Find the active sub-agent ID
-
-tail -f ~/.claude/sessions/<session-id>/agents/<agent-id>/transcript.jsonl
-```
-
-If the transcript is still growing, the agent is making progress — just slow. If it's static, the agent is stuck on a single tool call.
+**Diagnosis:** Open `/agents` and check the **Running** tab to see live sub-agents, or watch the in-session task indicator. If the sub-agent's activity is still advancing, it's making progress — just slow. If it's static, the agent is stuck on a single tool call.
 
 **Fix:**
 
 - Stuck on a tool: that tool is hanging (see #6 for MCP, #12 for Bash).
-- Genuinely long task: increase patience or interrupt. `TaskStop(agent_id="<id>")` interrupts at the next tool boundary.
+- Genuinely long task: increase patience or interrupt (press `Esc`, or stop it from the `/agents` Running tab).
 - Recurring hangs on the same task type: break the task in half; spawn two agents instead of one.
 
 ### 11. Sub-agent never picked despite matching description
 
 **Symptoms:** You wrote a sub-agent with description "Use when reviewing security." User says "review this for security." Orchestrator dispatches `general-purpose` anyway.
 
-**Diagnosis:**
-
-```bash
-claude agents list | grep -i security
-```
-
-Confirm the agent is loaded. If missing: frontmatter error.
+**Diagnosis:** Run `/agents` and check the **Library** tab. Confirm the agent is listed. If missing: frontmatter error (`name` and `description` are required), or the file was added on disk mid-session — agent files load at session start, so restart.
 
 **Fix:**
 
-- Validate frontmatter:
-
-  ```bash
-  claude agents validate
-  ```
-
+- Check the YAML frontmatter parses (no tab characters, quoted strings containing colons).
 - Sharpen the description. "Use when reviewing security" is vague. Try:
 
   > "Use PROACTIVELY after any change to authentication, authorization, payment, or user input handling code. Reviews for OWASP Top 10 issues, hardcoded secrets, injection risks, and auth bypasses. Use when the user mentions 'security review', 'audit', 'pentest', or 'vulnerability scan'."
@@ -307,47 +251,36 @@ Confirm the agent is loaded. If missing: frontmatter error.
 
 **Symptoms:** "Context window exceeded" error. The session refuses new prompts.
 
-**Diagnosis:** Check `/cost` for current usage. If you're near the model's window (200k for Sonnet 4.6, 1M for the 1M-context variant), compaction either didn't fire or didn't recover enough.
+**Diagnosis:** Check `/context` and `/cost` for current usage. Sonnet 4.6 and Fable 5 support up to a 1M-token context window; if you're hitting the ceiling, compaction either didn't fire or didn't recover enough.
 
 **Fix:**
 
-- `/compact` to force compaction.
-- Switch to the 1M-context Opus variant for this session if available: `/model claude-opus-4-7-1m`.
+- `/compact` to force compaction, or `/rewind` → "Summarize up to here" to compress just the early part.
 - Spawn a sub-agent for the next big task — its context is independent.
-- Worst case: checkpoint, restart, resume with a fresh context.
+- Worst case: restart and resume (`claude --continue`) with a fresh context.
 
 Prevent recurrence:
 
-- Enable deferred MCP tools (see [advanced.md](advanced.md#deferred-tools-and-toolsearch)).
-- Lower `context.compactThreshold` from 0.75 to 0.6 so compaction kicks in earlier.
+- Keep MCP tool search on (the default) so tool schemas stay out of context (see [advanced.md](advanced.md#deferred-tools-and-toolsearch)).
 - Trim unused MCP servers and skills.
 
 ### 13. Lost session state after restart
 
 **Symptoms:** Terminal crashed, restart, no way back into the session.
 
-**Diagnosis:**
-
-```bash
-ls ~/.claude/sessions/ | head -20
-# Sessions are sorted newest first; pick the right one
-```
+**Diagnosis:** Session transcripts live under `~/.claude/projects/<munged-project-path>/` as JSONL files.
 
 **Fix:**
 
 ```bash
-claude --resume <session-id>
-# Or interactive picker
+# Continue the most recent session in this directory
+claude --continue
+
+# Or pick from the interactive picker
 claude --resume
 ```
 
-If the session dir is corrupted (rare), recover the transcript manually:
-
-```bash
-cat ~/.claude/sessions/<id>/transcript.jsonl | jq -r 'select(.role=="user" or .role=="assistant") | .content[0].text'
-```
-
-Paste the relevant context into a new session.
+If the session file is corrupted (rare), skim the JSONL transcript under `~/.claude/projects/` manually with `jq` and paste the relevant context into a new session.
 
 ### 14. Auto-compaction lost critical info
 
@@ -357,10 +290,10 @@ Paste the relevant context into a new session.
 
 **Fix:**
 
-- Restore from a pre-compaction checkpoint if you have one.
+- `/rewind` to a pre-compaction prompt if the work since then is disposable.
 - Re-state the constraint explicitly. The agent will respect it for current context, just not past inferences.
-- Going forward: checkpoint before letting context grow past 50%, so you can roll back.
-- For sessions where exact history matters: disable auto-compaction (`"autoCompact": false`) and manage manually.
+- Going forward: put durable constraints in `CLAUDE.md` so they survive compaction.
+- For sessions where exact history matters: disable auto-compaction (via `/config`) and manage manually with `/compact`.
 
 ---
 
@@ -379,9 +312,9 @@ Paste the relevant context into a new session.
 
 **Fix:**
 
-- Enable deferred tools (lazy schema fetch).
+- Keep MCP tool search on (the default) so schemas load lazily.
 - Pre-install `npx` packages: `npm i -g @modelcontextprotocol/server-github` etc.
-- Disable servers you don't need this session: `claude mcp disable <name>`.
+- Remove servers you don't need: `claude mcp remove <name>`.
 - Move large skill bodies to `runbook.md` referenced from `SKILL.md`.
 - Use a closer Anthropic region (Bedrock/Vertex if relevant).
 
@@ -399,10 +332,10 @@ Shows current model.
 
 **Fix:**
 
-- Per-session: `/model claude-sonnet-4-6`.
+- Per-session: `/model claude-sonnet-4-6` (aliases work too: `/model sonnet`, `opus`, `haiku`, `fable`).
 - Persistent: edit `model` in `~/.claude/settings.json`.
 - Per-agent: set `model:` in the agent definition frontmatter.
-- On Bedrock/Vertex, model IDs differ (`anthropic.claude-opus-4-7-v1:0`). Use the provider-prefixed ID.
+- On Bedrock/Vertex, model IDs differ (Bedrock uses region-prefixed `us.anthropic.claude-*` IDs). Use the provider-prefixed ID from your provider's console.
 
 ### 17. Costs spiking
 
@@ -419,17 +352,17 @@ Shows session breakdown by input / output / cache / thinking tokens.
 Usually one of:
 
 - Many parallel Opus sub-agents.
-- High `thinkingBudget` left at 32k for every routine task.
+- A high thinking budget left at 32k for every routine task.
 - Long sessions without compaction — each turn pays for the entire growing history.
-- An auto-running `/loop` that has been forgotten.
+- A recurring loop or scheduled job that has been forgotten.
 
 **Fix:**
 
 - Use Haiku for fan-out workers; reserve Opus for orchestration and hard reasoning.
-- Lower `thinkingBudget` for routine sessions: `MAX_THINKING_TOKENS=4000`.
-- Enable prompt caching (`cache.enabled: true`, on by default — confirm).
-- Audit `/loop` jobs: `/loop-cancel` any forgotten ones.
-- For team installs: send `/cost --json` output to a dashboard so cost surprises don't hide until end of month.
+- Lower the thinking budget for routine sessions: `MAX_THINKING_TOKENS=4000`.
+- Prompt caching is automatic — long stable prefixes (system prompt, CLAUDE.md, skills) are cheap on subsequent turns; avoid churning them.
+- Audit any recurring loops or scheduled agents and cancel forgotten ones.
+- For team installs: export usage via OpenTelemetry (`CLAUDE_CODE_ENABLE_TELEMETRY=1`) to a dashboard so cost surprises don't hide until end of month.
 
 ---
 
@@ -439,26 +372,15 @@ Usually one of:
 
 **Symptoms:** `/my-skill` produces "Unknown command" or runs as plain text.
 
-**Diagnosis:**
-
-```bash
-claude skills list | grep my-skill
-```
-
-If missing: skill didn't register.
+**Diagnosis:** Run `/skills` and look for the skill in the list. If missing: it didn't register.
 
 **Fix:**
 
-- Validate frontmatter:
-
-  ```bash
-  claude skills validate
-  ```
-
+- Check the YAML frontmatter parses (no tab characters; quote strings containing colons).
 - File must be named `SKILL.md` (case-sensitive) and live in `~/.claude/skills/<name>/` or `<repo>/.claude/skills/<name>/`.
-- `name:` field must match the slash command exactly (case-sensitive).
+- The slash command is the *directory* name (case-sensitive), not the frontmatter `name` field.
 - For plugin-bundled skills, the invocation is `/plugin-name:skill-name`.
-- Reload: `claude skills reload` or restart the session.
+- Skill directories are watched live, so edits apply without restarting — but creating a top-level skills directory that didn't exist at session start requires a restart.
 
 ### 19. Skill loads but instructions ignored
 
@@ -467,17 +389,17 @@ If missing: skill didn't register.
 **Diagnosis:**
 
 ```
-/skill-info my-skill
+/context
 ```
 
-Confirms what is actually loaded into context.
+Shows what is actually occupying context, including loaded skills.
 
 **Fix:**
 
 - Skill body conflicts with system prompt or another loaded skill. Lower-scope (project) skills win over user-global, but two project skills can collide.
 - Instructions are too vague. "Try to do X" → "Do X. If you cannot, output exactly 'CANNOT: ' followed by the reason."
-- Tool the skill needs is denied. Check `permissions` and MCP status.
-- Multi-step skills sometimes lose track after long tool sequences. Add explicit "Next step: ..." prompts in the skill body to re-anchor.
+- Tool the skill needs is denied. Check `permissions` and `/mcp` status.
+- Multi-step skills sometimes lose track after long tool sequences. Add explicit "Next step: ..." prompts in the skill body to re-anchor. After compaction, re-invoke the skill — only the first ~5,000 tokens of each invoked skill are carried forward.
 
 ---
 
@@ -522,46 +444,43 @@ For Bedrock/Vertex behind corp network: those route through your cloud provider'
 When something is broken and you don't know where to start:
 
 ```bash
-# Overall health
+# Overall health (installation, version, auto-update status)
 claude doctor
 
-# What model, what auth, what mode
-claude config show
-
 # What MCP servers and their status
-claude mcp status
-claude mcp list --json
+claude mcp list
+claude mcp get <name>
+```
 
-# What agents and skills are loaded
-claude agents list
-claude skills list
+Inside a session:
 
-# Recent logs
-tail -50 ~/.claude/logs/main.log
-tail -50 ~/.claude/logs/hooks.log
-ls ~/.claude/logs/mcp/
-
-# Current session details
-ls ~/.claude/sessions/ | head -5
-cat ~/.claude/sessions/<id>/metadata.json
+```
+/status        # version, model, auth method, connectivity
+/config        # view and change settings
+/context       # what's occupying the context window
+/mcp           # MCP server status, tool counts, OAuth
+/agents        # registered sub-agents (Library) and running ones
+/skills        # available skills and their visibility
+/permissions   # active permission rules and their sources
+/hooks         # registered hooks
 ```
 
 Verbose mode for a single session:
 
 ```bash
-CLAUDE_DEBUG=1 MCP_DEBUG=1 claude
+claude --debug
 ```
 
-Logs everything to `~/.claude/logs/debug.log`. Use sparingly — log volume is heavy.
+Use sparingly — log volume is heavy. Session transcripts live under `~/.claude/projects/`.
 
 ---
 
 ## When All Else Fails
 
-1. **Update.** `npm update -g @anthropic-ai/claude-code` or `brew upgrade claude-code`. Many issues are fixed within days.
+1. **Update.** `claude update` (or `npm install -g @anthropic-ai/claude-code@latest`, `brew upgrade claude-code`). Many issues are fixed within days.
 2. **Bisect by config.** Move `~/.claude/settings.json` aside (`mv ~/.claude/settings.json{,.bak}`) and run with defaults. If it works, narrow which setting broke it.
 3. **Bisect by project.** Run `claude` from `/tmp` instead of your project. If it works there, a project-local config (`.claude/`) is the culprit.
-4. **File a bug.** `gh issue create -R anthropics/claude-code` with `claude doctor --verbose` output. The maintainers actively triage.
+4. **File a bug.** `gh issue create -R anthropics/claude-code` with `claude doctor` output (or use the in-session `/bug` command). The maintainers actively triage.
 5. **Ask in discussions.** `github.com/anthropics/claude-code/discussions` — community has often hit the same thing.
 
 ---

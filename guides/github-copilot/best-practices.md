@@ -243,7 +243,7 @@ Copilot's training data has a cutoff. APIs that changed since then (React Router
 **Counters:**
 - For new library code, copy a relevant snippet from current docs into the file as a comment, then trigger completion.
 - Or write the first call yourself; Copilot follows your example.
-- For chat, prefer participants like `@perplexity` or paste current docs in.
+- For chat, paste current docs into the prompt, or configure an MCP server that provides documentation or web search. (The old `@perplexity` Extension no longer exists — Copilot Extensions were sunset in November 2025 in favor of MCP.)
 
 ### Bias: Imitation Without Understanding
 
@@ -280,28 +280,41 @@ For organizations:
 
 **When to turn it off:** personal scratch work or research code that you won't ship.
 
-### What Copilot Doesn't See
+### Content Exclusion — the Real Mechanism
 
-Even with all permissions enabled, Copilot does not see:
-- Files excluded by `.copilotignore` (VS Code, JetBrains).
-- Files matched by content-exclusion rules at the org level.
+⚠️ **There is no `.copilotignore` file.** GitHub Copilot does not read any local ignore file — no dotfile in your repo or home directory hides content from it. Guides that describe a `.copilotignore` are wrong, and the failure mode is dangerous: teams commit such a file, assume their secrets and sensitive paths are excluded, and they are not.
 
-`.copilotignore` syntax mirrors `.gitignore`:
+The real mechanism is **content exclusion**, configured in settings on github.com:
 
+- **Repository level**: repo `Settings` → `Code & automation` → `Copilot` → `Content exclusion` (repository admins).
+- **Organization level**: org `Settings` → `Copilot` → `Content exclusion` (org owners).
+- **Enterprise level**: `AI controls` → `Copilot` → `Content exclusion`.
+
+Patterns use fnmatch-style matching and are case-insensitive. Repository-level example:
+
+```yaml
+- "/scripts/**"
+- "secrets.json"
+- "secret*"
+- "*.cfg"
 ```
-# .copilotignore
-secrets/
-.env*
-**/*.key
-**/*.pem
-config/production.yml
+
+Organization-level rules additionally scope patterns to repositories:
+
+```yaml
+REPOSITORY-REFERENCE:
+  - "/PATH/TO/DIRECTORY/OR/FILE"
 ```
 
-### Content Exclusions (Business / Enterprise)
+Changes can take up to 30 minutes to propagate to IDEs that already have settings loaded.
 
-Admins can configure path patterns that Copilot will never read or complete from — useful for legal sensitivities (proprietary algorithms), regulatory ones (PHI under HIPAA), or just sanity (auto-generated code that pollutes context).
+**Critical limitations to plan around:**
 
-Configure under: org Settings → Copilot → Content exclusions.
+- **Not all surfaces honor it.** Per GitHub's docs, Copilot CLI, the Copilot coding agent, and agent mode in IDE chat **do not support content exclusion**. Exclusions apply to code completions and regular chat contexts — not to the agentic surfaces.
+- **It is not a secrets-management control.** Excluding a path keeps Copilot from using it as context; it does nothing about secrets already committed to the repo. Keep secrets out of the repository entirely (environment variables, secret managers) and rotate anything that has been committed.
+- Semantic information from excluded files can still leak indirectly (e.g., other files that reference their symbols).
+
+Treat content exclusion as a context-hygiene and policy tool, with real secret handling done by secret managers and secret scanning.
 
 ---
 
@@ -367,7 +380,7 @@ When multiple engineers use Copilot across an org, individual reviews aren't eno
 - **Content exclusions** for paths Copilot shouldn't read.
 - **Duplicate-detection blocking** enforced org-wide.
 - **Telemetry opt-out** for Business / Enterprise plans (default but verify).
-- **Audit logs** for Copilot usage (Enterprise only as of 2026).
+- **Audit logs** for Copilot usage (available on higher tiers — Pro+ and Enterprise as of 2026).
 
 ### Policy Documentation
 
@@ -445,5 +458,9 @@ Five habits that compound:
 
 - [Copilot IDE Guide](ide-guide.md) — surface-by-surface controls
 - [Copilot Chat Guide](chat-guide.md) — getting more out of chat
-- [Copilot Workspace Guide](workspace-guide.md) — reviewing Workspace output
+- [Copilot Coding Agent Guide](workspace-guide.md) — reviewing the coding agent's PRs
 - [Main Copilot README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

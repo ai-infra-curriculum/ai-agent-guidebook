@@ -2,7 +2,7 @@
 
 Errors AI coding tools surface vs errors AI coding tools cause. How to retry, fall back, log, and escalate.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -83,7 +83,7 @@ Mitigations:
 The model truncates code, leaves `// TODO`, or returns "the rest follows the same pattern."
 
 Triggers:
-- Output token cap (64K on Claude 4.x, 32K on GPT-5 Codex, 8K on Gemini 2.5 Pro)
+- Output token cap (64K on Claude 4.x, 128K on the GPT-5 family including Codex, 65,536 on Gemini 2.5 Pro)
 - Long file edits exceeding output budget
 - Reasoning tokens (extended thinking) consuming output budget
 
@@ -91,7 +91,7 @@ Responses:
 - **Split the work.** Edit file A, then file B. Don't ask for a 5-file rewrite in one turn.
 - **Use diff/patch tool calls** (Edit, MultiEdit, str_replace_editor) instead of "rewrite the file" — these don't echo the unchanged content back through output tokens.
 - **Lower extended-thinking budget** if you're hitting the cap with reasoning still going. `MAX_THINKING_TOKENS=8000` in Claude Code.
-- **Switch to a larger output cap** model: Sonnet/Opus 64K beats GPT-5 Codex 32K beats Gemini 8K.
+- **Switch to a larger output cap** model: GPT-5-family 128K beats Gemini 2.5 Pro 65,536 and Claude Sonnet/Opus 64K.
 
 ### Wrong-but-confident
 
@@ -152,8 +152,8 @@ Default tool timeouts:
 | Claude Code Bash | 120s (max 600s) | `timeout` parameter |
 | Claude Code tool call (overall) | ~10 min | `--timeout` flag or env |
 | Cursor MCP call | 30s | per-server config |
-| Gemini CLI shell | 60s | `--exec-timeout` |
-| Copilot Workspace task | per-task budget | configurable in workspace settings |
+| Gemini CLI shell | 60s | shell-tool timeout in `settings.json` |
+| Copilot coding agent task | per-task budget | managed by the service |
 
 Timeouts often mean:
 - The command hung (no output, no exit)
@@ -169,7 +169,7 @@ Returned as 400 with `context_length_exceeded` or similar. The model received mo
 Response (in order):
 1. **Compact.** Remove tool-call results you no longer need.
 2. **Drop redundant files** from context.
-3. **Switch model tier.** Sonnet 200K → Opus 1M, or Gemini 2.5 Pro 2M.
+3. **Switch to a 1M-context model.** Fable 5, Opus 4.8, and Sonnet 4.6 all support 1M context at standard pricing; Gemini 2.5 Pro is also 1M.
 4. **Restart with a summary.** Don't keep stuffing.
 
 ### Auth errors (401/403)
@@ -275,7 +275,7 @@ The model handles structured errors better than raw stack traces.
 
 For any tool call that mutates state (write file, send message, run migration), use an idempotency key when the underlying API supports it:
 
-- Stripe, Anthropic Messages API, GitHub create-issue, and many MCP servers accept `Idempotency-Key`.
+- Stripe and a number of other APIs accept `Idempotency-Key`. Note that the Anthropic Messages API and GitHub's create-issue endpoint do **not** — for those, dedupe on your side (e.g., check for an existing issue before creating).
 - Generate the key from the call's logical identity: hash of (tool name, args, current turn).
 - Retries with the same key are safe.
 
@@ -298,15 +298,15 @@ When the circuit is open, fail fast and escalate, instead of stalling the whole 
 When the primary model fails (refusal, overload, capacity), fall back through a ladder:
 
 ```text
-Opus 4.7 (1M)  →  Sonnet 4.6  →  Haiku 4.5
-                                        ↓
-                                    (escalate to human)
+Fable 5 / Opus 4.8  →  Sonnet 4.6  →  Haiku 4.5
+                                            ↓
+                                        (escalate to human)
 ```
 
 Cross-provider ladder:
 
 ```text
-Claude Sonnet 4.6  →  GPT-5  →  Gemini 2.5 Pro
+Claude Sonnet 4.6  →  GPT-5.5  →  Gemini 2.5 Pro
                                         ↓
                                     (escalate to human)
 ```
@@ -457,7 +457,7 @@ Avoid the failure mode where the agent says "I encountered an error; please advi
 - Bash tool errors include exit code; check it before assuming success.
 - Anthropic API errors come through as `[error: ...]` in the transcript. The model can react.
 - `--print` mode (non-interactive) exits non-zero on uncaught errors, which is good for CI.
-- The `MAX_RETRIES` environment variable bounds internal retries.
+- API-level retries are handled internally; if you need bounded retries around Claude Code itself, wrap the CLI invocation in your own retry logic.
 
 ### Cursor
 
@@ -468,13 +468,15 @@ Avoid the failure mode where the agent says "I encountered an error; please advi
 ### Gemini CLI
 
 - Quota errors are common on the free tier; switch to a billed key if you're working seriously.
-- `/exec` timeouts cause silent skips by default — set `--exec-timeout` higher.
+- Shell-tool timeouts are configured in Gemini CLI's `settings.json` (there is no `--exec-timeout` flag); raise the tool timeout there for long-running commands.
 
-### Copilot Workspace
+### Copilot coding agent
 
-- Task failures are visible in the workspace UI as red checkmarks.
-- Workspace will sometimes "succeed" with wrong output; always review the diff.
-- Long-running tasks may be terminated by Workspace's own budgets, separate from Copilot rate limits.
+(Successor to Copilot Workspace, which was sunset in May 2025.)
+
+- Task failures are visible in the agent session logs and on the draft PR it opens.
+- The agent will sometimes "succeed" with wrong output; always review the diff before merging.
+- Long-running tasks may be terminated by the agent's own session budgets, separate from Copilot rate limits.
 
 ### LangChain / LangGraph
 

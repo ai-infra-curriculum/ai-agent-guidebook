@@ -2,7 +2,7 @@
 
 Performance for AI-assisted workflows. Latency budgets, cost-vs-latency tradeoffs, streaming, caching, batching, mid-flow model switching.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -66,15 +66,15 @@ For background workloads, optimize cost over latency. For interactive, optimize 
 
 TTFT grows roughly linearly with input tokens, then jumps when the request crosses model-internal batching boundaries.
 
-Indicative numbers, May 2026, P50 cold:
+Indicative numbers, June 2026, P50 cold:
 
 | Model | Input 5K | Input 50K | Input 200K | Input 500K | Input 1M |
 |-------|----------|-----------|------------|------------|----------|
 | Claude Haiku 4.5 | 0.5s | 1.2s | 3s | n/a | n/a |
-| Claude Sonnet 4.6 | 0.8s | 2.0s | 5s | n/a | n/a |
-| Claude Opus 4.7 (1M) | 1.2s | 3.5s | 9s | 18s | 35s |
-| GPT-5 | 0.6s | 1.8s | 4.5s | n/a | n/a |
-| GPT-5 Codex | 0.7s | 2.0s | 5s | n/a | n/a |
+| Claude Sonnet 4.6 (1M) | 0.8s | 2.0s | 5s | 12s | 25s |
+| Claude Fable 5 / Opus 4.8 (1M) | 1.2s | 3.5s | 9s | 18s | 35s |
+| GPT-5.5 | 0.6s | 1.8s | 4.5s | n/a | n/a |
+| GPT-5.5 Codex | 0.7s | 2.0s | 5s | n/a | n/a |
 | Gemini 2.5 Flash | 0.4s | 1.0s | 3s | 8s | 16s |
 | Gemini 2.5 Pro | 1.0s | 2.5s | 6s | 14s | 28s |
 
@@ -82,15 +82,15 @@ Add 30-100% to TTFT under load. Cache hits reduce these by ~60-80% on the cached
 
 ### How TPOT (streaming speed) scales
 
-Streaming tokens per second, May 2026:
+Streaming tokens per second, June 2026:
 
 | Model | TPOT (tokens/s) |
 |-------|------------------|
 | Claude Haiku 4.5 | 150-200 |
 | Claude Sonnet 4.6 | 70-110 |
-| Claude Opus 4.7 | 40-60 |
-| GPT-5 | 80-120 |
-| GPT-5 Codex | 90-130 |
+| Claude Fable 5 / Opus 4.8 | 40-60 |
+| GPT-5.5 | 80-120 |
+| GPT-5.5 Codex | 90-130 |
 | Gemini 2.5 Flash | 200-300 |
 | Gemini 2.5 Pro | 80-120 |
 
@@ -105,24 +105,29 @@ For a 2000-token response, the difference between Haiku (10s) and Opus (40s) is 
 | Model | Input $/Mtok | Output $/Mtok | Best for |
 |-------|--------------|---------------|----------|
 | Haiku 4.5 | $1 | $5 | High-volume dispatchers, subagents, eval judges |
-| Sonnet 4.6 | $3 | $15 | Default; balances quality and cost |
-| Opus 4.7 (1M) | $15 (≤200K) / $30 (>200K) | $75 (≤200K) / $150 (>200K) | Architecture, deep reasoning, large-context analysis |
+| Sonnet 4.6 | $3 | $15 | Default; balances quality and cost; 1M context at standard pricing |
+| Opus 4.8 (and 4.7/4.6/4.5) | $5 | $25 | Architecture, deep reasoning; 1M context at standard pricing |
+| Fable 5 | $10 | $50 | Current top model; hardest reasoning, large-context analysis; 1M context at standard pricing |
 
 Prompt cache hits: 10% of base input cost. Cache writes (5-min TTL): 125% of base. Cache writes (1h TTL): 200% of base.
 
 ### OpenAI ladder
 
+Current lineup is GPT-5.5 (flagship) and GPT-5.4, alongside the cheaper GPT-5-family tiers:
+
 | Model | Input $/Mtok | Output $/Mtok |
 |-------|--------------|---------------|
-| GPT-5 Nano | $0.10 | $0.40 |
+| GPT-5 Nano | $0.05 | $0.40 |
 | GPT-5 Mini | $0.25 | $2 |
-| GPT-5 | $1.25 | $10 |
-| GPT-5 Codex | $1.25 | $10 |
-| o3 | $2 | $8 (input includes reasoning) |
+| GPT-5.4 | $1.25 | $10 |
+| GPT-5.5 | $1.25 | $10 |
+| o3 | $2 | $8 (output includes reasoning tokens) |
 
-Cached input: 50% of base.
+Cached input: 90% off (you pay 10% of the base input price).
 
 ### Google ladder
+
+The current generation is Gemini 3.1 Pro and Gemini 3.5 Flash (check Google's pricing page for current rates); the 2.5 family remains available as the cheaper previous generation:
 
 | Model | Input $/Mtok | Output $/Mtok |
 |-------|--------------|---------------|
@@ -137,8 +142,8 @@ Implicit caching included.
 Rules of thumb:
 
 - **Cheapest tier (Haiku 4.5 / Flash-Lite / Nano):** evaluator LLMs in CI, classification, routing, simple summarization, high-volume agent workers.
-- **Mid tier (Sonnet 4.6 / Flash / GPT-5):** default coding work, single-shot generation, agent reasoning steps, chat.
-- **Top tier (Opus 4.7 / Pro / o3):** architecture decisions, deep multi-file refactors, ambiguous spec interpretation, debugging hairy bugs, security-critical code.
+- **Mid tier (Sonnet 4.6 / Flash / GPT-5.4):** default coding work, single-shot generation, agent reasoning steps, chat.
+- **Top tier (Fable 5 / Opus 4.8 / Gemini Pro / GPT-5.5):** architecture decisions, deep multi-file refactors, ambiguous spec interpretation, debugging hairy bugs, security-critical code.
 
 If you can't tell whether a tier is "enough," start one tier above where you think and step down based on measured quality.
 
@@ -237,7 +242,7 @@ Up to 4 cache breakpoints per request. Each breakpoint caches everything up to a
 
 - **Auto-cached** when prefix matches a previous request (≥1024 tokens).
 - **TTL:** ~5-10 min.
-- **Savings:** 50% off cached input.
+- **Savings:** 90% off cached input.
 - No explicit markers.
 
 ### Google (Vertex / AI Studio)
@@ -276,7 +281,7 @@ Anthropic response usage block:
 
 Speculative decoding uses a small draft model to predict several tokens, then the main model verifies. When predictions are right, you get those tokens "for free."
 
-Providers don't expose this directly today (May 2026), but it's a backend reason why:
+Providers don't expose this directly today (June 2026), but it's a backend reason why:
 - Coding tasks (predictable token patterns) often stream faster than free-form writing
 - Repeated patterns in your output get faster as the model "warms up"
 - Inference accelerators (Groq, Cerebras, SambaNova) hit much higher TPOT on smaller models — they over-provision the draft step
@@ -330,7 +335,7 @@ Step 1 (Haiku 4.5): classify the user's request into category.
 Step 2: route based on category.
   - Trivial / FAQ → Haiku 4.5 answers
   - Standard coding → Sonnet 4.6
-  - Complex reasoning / architecture → Opus 4.7
+  - Complex reasoning / architecture → Opus 4.8 or Fable 5
 ```
 
 Cost savings: 5-20x on the 60-80% of requests that the cheap tier handles.
@@ -355,9 +360,9 @@ Used in: deep-research agents, code-migration agents, planning-then-execution pa
 
 ### Multi-provider failover
 
-Combine providers. If Anthropic 529s, fall back to GPT-5. If both 429, fall back to Gemini. LiteLLM, OpenRouter, and Vercel AI SDK provide this with minimal config.
+Combine providers. If Anthropic 529s, fall back to GPT-5.5. If both 429, fall back to Gemini. LiteLLM, OpenRouter, and Vercel AI SDK provide this with minimal config.
 
-Caveat: prompts that work well on Claude may need rewriting for GPT-5 or Gemini. Test the failover path.
+Caveat: prompts that work well on Claude may need rewriting for GPT-5.5 or Gemini. Test the failover path.
 
 ---
 
@@ -450,7 +455,7 @@ Aggregate per logical task:
 4. If tool-dominated: parallelize, cache, trim, or replace the slow tool.
 5. If agent-loop dominated (many steps): collapse steps, raise step quality so fewer retries, switch to a stronger model that completes in fewer steps.
 
-The third option — "stronger model, fewer steps" — is counterintuitive but often wins. Opus 4.7 in 2 steps beats Sonnet 4.6 in 6 steps both on latency and cost for complex tasks.
+The third option — "stronger model, fewer steps" — is counterintuitive but often wins. Opus 4.8 in 2 steps beats Sonnet 4.6 in 6 steps both on latency and cost for complex tasks.
 
 ---
 

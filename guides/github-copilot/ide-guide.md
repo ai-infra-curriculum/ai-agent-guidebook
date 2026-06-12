@@ -12,7 +12,7 @@ Deep, IDE-by-IDE guide to running GitHub Copilot inside the editor — including
 - [Visual Studio](#visual-studio)
 - [Neovim and Vim](#neovim-and-vim)
 - [Emacs](#emacs)
-- [JupyterLab](#jupyterlab)
+- [Jupyter Notebooks](#jupyter-notebooks)
 - [Keyboard Shortcut Reference](#keyboard-shortcut-reference)
 - [Per-IDE Troubleshooting](#per-ide-troubleshooting)
 
@@ -30,7 +30,7 @@ Copilot ships three families of in-IDE features. They are largely the same acros
 
 This guide assumes you have an active Copilot subscription and have signed in once via your IDE. See the [main README](README.md#installation) for sign-up steps.
 
-> **As of 2026**: Copilot Workspace is GA, the GPT-style "ask, edit, agent" mode triad is the default in VS Code, and the JetBrains plugin has reached parity with VS Code for inline chat and slash commands.
+> **As of 2026**: the "ask, edit, agent" mode triad is the default in VS Code, the JetBrains plugin has reached parity with VS Code for inline chat and slash commands, and the cloud-side analog to agent mode is the [Copilot coding agent](workspace-guide.md) (Copilot Workspace was sunset in May 2025).
 
 ---
 
@@ -114,7 +114,7 @@ A good rule: if you can express the task by pointing at code, use inline chat. I
 
 ### Edits Mode (Multi-File Edits)
 
-Edits mode is the bridge between inline chat (one file) and Workspace (full task). Open it from the chat panel dropdown (or `Cmd+Shift+I` then switch mode).
+Edits mode is the bridge between inline chat (one file) and agent-style workflows (full task). Open it from the chat panel dropdown (or `Cmd+Shift+I` then switch mode).
 
 **Workflow:**
 
@@ -130,7 +130,7 @@ Edits mode is the bridge between inline chat (one file) and Workspace (full task
 
 **When it doesn't:**
 - The working set exceeds ~10 files or ~50k tokens — quality degrades sharply.
-- The task requires running commands or reading external docs (use Workspace or agent mode instead).
+- The task requires running commands or reading external docs (use agent mode, or hand it to the coding agent).
 
 ### Agent Mode
 
@@ -140,9 +140,21 @@ Agent mode in VS Code as of 2026 supports:
 - Running tasks defined in `tasks.json`.
 - Executing arbitrary terminal commands (with confirmation).
 - Reading and writing files outside the current selection.
-- MCP servers configured in `settings.json` under `"chat.mcp.servers"`.
+- MCP servers configured in `.vscode/mcp.json` (workspace) or a user-level `mcp.json` — run `MCP: Add Server` or `MCP: Open User Configuration` from the command palette. MCP availability is gated by the `chat.mcp.enabled` setting (and org policy on managed accounts).
 
-**Caveat:** agent mode is more expensive (counts against premium request quota on Pro/Business plans) and slower than Edits mode. Use it when the task genuinely needs tool use.
+```jsonc
+// .vscode/mcp.json
+{
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp"
+    }
+  }
+}
+```
+
+**Caveat:** agent mode is more expensive (it burns GitHub AI Credits faster than Edits mode) and slower. Use it when the task genuinely needs tool use.
 
 ### Workspace Indexing
 
@@ -326,7 +338,7 @@ let g:copilot_filetypes = {
   },
   build = "make tiktoken",
   opts = {
-    model = "gpt-4o", -- or "claude-3.5-sonnet" if your Copilot plan permits
+    model = "claude-sonnet-4.5", -- or another model your Copilot plan permits (see :CopilotChatModels)
   },
 }
 ```
@@ -339,7 +351,7 @@ Commands:
 
 ### Vim (Not Neovim)
 
-Vim 9.0+ works with `github/copilot.vim` for completions. No chat plugin exists for classic Vim — use the CLI (`gh copilot`) or jump to a terminal for chat-style work.
+Vim 9.0+ works with `github/copilot.vim` for completions. No chat plugin exists for classic Vim — use the [Copilot CLI](cli-guide.md) (`copilot`) in a terminal for chat- and agent-style work.
 
 ---
 
@@ -380,37 +392,19 @@ Open with `M-x copilot-chat-display`. Slash commands work as in VS Code.
 
 ---
 
-## JupyterLab
+## Jupyter Notebooks
 
-Two routes: the official **GitHub Copilot for JupyterLab** extension (released late 2025), or run notebooks inside VS Code's notebook editor.
-
-### Official Extension
-
-```bash
-pip install jupyterlab-github-copilot
-jupyter labextension install @github/copilot-jupyter
-```
-
-After restarting JupyterLab, sign in via `Settings` → `GitHub Copilot` → `Sign In`.
-
-Features supported:
-- Inline completions inside code cells.
-- `/explain`, `/fix`, `/tests` via a per-cell chat affordance.
-- Markdown-cell completions (Q&A drafting, captioning).
-
-**Not** supported:
-- Edits across multiple cells in one go.
-- `%magic` aware suggestions (Copilot completes magics as if they were Python).
+There is **no official GitHub Copilot extension for JupyterLab**. The supported route for notebook work with Copilot is VS Code's notebook editor.
 
 ### VS Code Notebook Route
 
-If you'd rather use VS Code's notebook editor:
-
-1. Install `Jupyter` extension in VS Code.
+1. Install the `Jupyter` extension in VS Code.
 2. Open `.ipynb` files.
-3. All Copilot features (completions, chat, Edits mode) work cell-by-cell.
+3. All Copilot features (completions, chat, Edits mode, agent mode) work cell-by-cell.
 
-For heavy notebook work this is the better experience — Edits mode can update multiple cells together (e.g., refactor a function defined in cell 3 and its usage in cell 7).
+Edits mode can update multiple cells together (e.g., refactor a function defined in cell 3 and its usage in cell 7), which no in-browser JupyterLab assistant matches.
+
+If you must stay in the JupyterLab UI, the AI assistants available there are third-party/community projects, not GitHub Copilot — evaluate them separately.
 
 ---
 
@@ -453,7 +447,7 @@ Consolidated table — verify against your current keymap, since defaults drift 
 4. `GitHub Copilot: Sign Out`, then sign in again.
 
 **Chat replies are empty / cut off:**
-- Premium-request quota exhausted on Pro plan. Switch model in chat to `gpt-4o-mini` (free tier) or wait for monthly reset.
+- GitHub AI Credits exhausted for the month. Switch to a lighter included model (e.g., GPT-5 mini or Claude Haiku 4.5), wait for the monthly reset, or add a budget at <https://github.com/settings/billing>.
 
 **`@workspace` returns "no relevant code found":**
 - Workspace index not built. Run `GitHub Copilot: Build Local Workspace Index`.
@@ -505,14 +499,11 @@ github_copilot_enable = false
 **`TAB` cycles candidates instead of accepting:**
 - `company-mode` is intercepting. Bind Copilot's accept to `C-<tab>` or `M-<tab>` to avoid the conflict.
 
-### JupyterLab
+### Notebooks (VS Code)
 
 **Completions appear in some cells but not others:**
-- Likely Markdown cells — toggle the extension's "Enable in Markdown" setting.
-- Or the cell language differs (e.g., `%%bash` magics): unsupported.
-
-**Extension fails to load after JupyterLab upgrade:**
-- The extension pins to specific JupyterLab versions. `pip install -U jupyterlab-github-copilot` and rebuild: `jupyter lab build`.
+- Check the cell language — cells using shell magics (e.g., `%%bash`) may not get language-appropriate suggestions.
+- Markdown cells follow your `github.copilot.enable` setting for `markdown`.
 
 ---
 
@@ -522,7 +513,7 @@ If Copilot is your primary AI tool and you have flexibility in editor choice:
 
 - **VS Code** — always the most complete experience. Edits mode, agent mode, MCP integration ship here first.
 - **JetBrains** — strong second choice for Java/Kotlin/Go/Python; you gain great refactor tooling but lose multi-file edits.
-- **Vim / Neovim** — completions only (with community chat); fine if you live in the terminal and use `gh copilot` for chat.
+- **Vim / Neovim** — completions only (with community chat); fine if you live in the terminal and use the Copilot CLI (`copilot`) for chat and agent work.
 - **Visual Studio** — best for .NET-heavy work; Copilot here has good solution awareness but trails VS Code by months.
 - **Emacs** — works, community-maintained, expect rough edges.
 
@@ -531,7 +522,11 @@ If Copilot is your primary AI tool and you have flexibility in editor choice:
 ## Related Guides
 
 - [Copilot Chat Guide](chat-guide.md) — deeper coverage of chat features and `@`-participants
-- [Copilot Workspace Guide](workspace-guide.md) — GA task-oriented workflow
+- [Copilot Coding Agent Guide](workspace-guide.md) — the cloud-side, issue-to-PR workflow
 - [Copilot Best Practices](best-practices.md) — getting good output reliably
 - [Copilot CLI Guide](cli-guide.md) — terminal companion
 - [Main Copilot README](README.md)
+
+---
+
+**Last Updated**: 2026-06-11

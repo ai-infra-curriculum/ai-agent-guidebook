@@ -1,15 +1,15 @@
 # Context Management
 
-How to budget tokens, structure context windows, and cache aggressively across Claude Code, Cursor, Gemini CLI, Copilot Workspace, and Cody.
+How to budget tokens, structure context windows, and cache aggressively across Claude Code, Cursor, Gemini CLI, GitHub Copilot, and Cody.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
 ## Table of Contents
 
 - [Why Context Management Matters](#why-context-management-matters)
-- [Context Windows by Tool](#context-windows-by-tool-may-2026)
+- [Context Windows by Tool](#context-windows-by-tool-june-2026)
 - [Token Budgeting](#token-budgeting)
 - [What to Include vs Exclude](#what-to-include-vs-exclude)
 - [Ignore Files](#ignore-files)
@@ -34,23 +34,23 @@ The goal is **just enough context, structured to be cached, with stable content 
 
 ---
 
-## Context Windows by Tool (May 2026)
+## Context Windows by Tool (June 2026)
 
 | Tool | Model | Context | Output cap | Notes |
 |------|-------|---------|------------|-------|
-| Claude Code | Opus 4.7 (1M) | 1,000,000 | 64K | Premium tier; cache 5-min TTL, optional 1h |
-| Claude Code | Sonnet 4.6 | 200,000 | 64K | Default for most workflows |
+| Claude Code | Fable 5 / Opus 4.8 | 1,000,000 | 64K | Current flagships; 1M context at standard pricing; cache 5-min TTL, optional 1h |
+| Claude Code | Sonnet 4.6 | 1,000,000 | 64K | Default for most workflows; 1M at standard pricing |
 | Claude Code | Haiku 4.5 | 200,000 | 64K | Cheap dispatcher / subagent |
-| Cursor | Claude Sonnet 4.6 | 200,000 | 64K | Same upstream model, smaller effective window in chat |
-| Cursor | GPT-5 / GPT-5 Codex | 400,000 | 32K | Codex variant tuned for code |
-| Cursor | Gemini 2.5 Pro | 2,000,000 | 8K | Use for whole-repo analysis |
-| Gemini CLI | Gemini 2.5 Pro | 2,000,000 | 8K | Largest window in common use |
-| Gemini CLI | Gemini 2.5 Flash | 1,000,000 | 8K | Cheap fast tier |
-| GitHub Copilot (chat) | GPT-5 / Claude Sonnet 4.6 | ~128K effective | ~16K | Workspace surfaces share this budget |
-| Copilot Workspace | GPT-5 backend | ~200K | ~16K | Includes spec + plan + diff state |
+| Cursor | Claude Sonnet 4.6 | 1,000,000 | 64K | Same upstream model, smaller effective window in chat |
+| Cursor | GPT-5.5 / GPT-5.4 | 400,000 | 128K | Current OpenAI lineup; Codex variants tuned for code |
+| Cursor | Gemini 2.5 Pro | 1,048,576 | 65,536 | Use for whole-repo analysis |
+| Gemini CLI | Gemini 2.5 Pro | 1,048,576 | 65,536 | 1M-class window |
+| Gemini CLI | Gemini 2.5 Flash | 1,048,576 | 65,536 | Cheap fast tier |
+| GitHub Copilot (chat) | GPT-5.x / Claude Sonnet 4.6 | ~128K effective | ~16K | Chat surfaces share this budget |
+| Copilot coding agent | GPT-5.x backend | ~200K | ~16K | Issue-to-PR flow; includes plan + diff state |
 | Sourcegraph Cody | Claude Sonnet 4.6 | 200K | 64K | Plus repo-graph context injection |
-| Sourcegraph Cody | Gemini 2.5 Pro | 2M | 8K | Used for whole-repo Q&A |
-| Codeium / Windsurf Cascade | Mixed (Sonnet, GPT-5) | 200K | 32K | Cascade plans use ~30K for planning state |
+| Sourcegraph Cody | Gemini 2.5 Pro | 1M | 65,536 | Used for whole-repo Q&A |
+| Codeium / Windsurf Cascade | Mixed (Sonnet, GPT-5.x) | 200K | 32K | Cascade plans use ~30K for planning state |
 
 **"Effective" vs "advertised" context.** Advertised window is the model's API limit. Effective window is what the tool surface actually feeds the model after subtracting:
 
@@ -98,7 +98,7 @@ A sustainable budget for a Sonnet 4.6 session:
 
 ### Budget allocations (1M-class window)
 
-For Opus 4.7 (1M) or Gemini 2.5 Pro:
+For Fable 5 / Opus 4.8 or Gemini 2.5 Pro:
 
 | Slot | Tokens | Notes |
 |------|--------|-------|
@@ -155,81 +155,41 @@ For Opus 4.7 (1M) or Gemini 2.5 Pro:
 
 ## Ignore Files
 
-### `.claudeignore`
+### Claude Code: `permissions.deny`
 
-Claude Code respects `.claudeignore` (gitignore syntax) for file reads and globs. Recommended baseline:
+Claude Code does **not** support a `.claudeignore` file. The supported mechanism for keeping files out of context is `permissions.deny` entries in `.claude/settings.json` (project) or `~/.claude/settings.json` (global). Recommended baseline:
 
-```gitignore
-# Dependencies
-node_modules/
-vendor/
-.venv/
-venv/
-__pycache__/
-target/
-*.egg-info/
-
-# Build output
-dist/
-build/
-out/
-.next/
-.nuxt/
-.turbo/
-.parcel-cache/
-
-# Lockfiles (unless debugging)
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-Cargo.lock
-poetry.lock
-uv.lock
-
-# Generated code
-**/*_pb2.py
-**/*.pb.go
-**/generated/
-
-# Large data
-*.csv
-*.parquet
-*.sqlite
-*.db
-*.log
-
-# Media and binaries
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.webp
-*.mp4
-*.mov
-*.wav
-*.mp3
-*.pdf
-*.zip
-*.tar.gz
-
-# Secrets (defense in depth — never commit these in the first place)
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-secrets/
-
-# IDE
-.idea/
-.vscode/
-.DS_Store
-*.swp
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./node_modules/**)",
+      "Read(./vendor/**)",
+      "Read(./dist/**)",
+      "Read(./build/**)",
+      "Read(./package-lock.json)",
+      "Read(./yarn.lock)",
+      "Read(./pnpm-lock.yaml)",
+      "Read(./**/*.log)"
+    ]
+  }
+}
 ```
+
+Notes:
+
+- Deny rules block the `Read` tool from opening those paths; they are permission rules, not a search-index filter.
+- They are most valuable for secrets (`.env`, keys). For noise like lockfiles and build output, they mainly stop accidental reads from blowing your token budget.
+- Anthropic documents deny rules as defense in depth, not an absolute security boundary — never keep real secrets in the working tree.
 
 ### `.geminiignore`
 
-Gemini CLI uses `.geminiignore` with the same syntax. The same baseline applies. Gemini's 2M window makes the temptation to load everything stronger — resist it. Even at 2M, signal-to-noise drops fast when you load lockfiles and generated code.
+Gemini CLI uses `.geminiignore` (gitignore syntax). A gitignore-style baseline — dependencies, build output, lockfiles, generated code, large data, media, secrets — applies here. Gemini's 1M window makes the temptation to load everything stronger — resist it. Even at 1M, signal-to-noise drops fast when you load lockfiles and generated code.
 
 ### `.cursorignore`
 
@@ -358,7 +318,7 @@ This works because recent tokens have the most attention weight. It pulls the mo
 
 - **Claude Code** has `/compact` (manual) and auto-compaction when the window fills. Auto-compact summarizes earlier turns into a synthetic message and continues. You see a `[Compacted]` marker.
 - **Cursor** does not auto-compact but offers "New chat with summary" in the chat menu.
-- **Gemini CLI** has `/compact` similar to Claude Code.
+- **Gemini CLI** has `/compress`, which serves the same purpose as Claude Code's `/compact`.
 - **Copilot Chat** does not compact; start a new chat manually.
 
 ### What to keep when compacting
@@ -414,7 +374,7 @@ For Gemini, the cache-friendly structure is the same: put stable content at the 
 
 ### GPT-5 / OpenAI prompt caching
 
-OpenAI offers automatic prompt caching for prompts ≥1024 tokens with the same prefix discipline. Cached input is 50% of base cost. Cache lasts 5-10 minutes typically. No explicit markers required.
+OpenAI offers automatic prompt caching for prompts ≥1024 tokens with the same prefix discipline. Cached input is discounted 90% (you pay 10% of the base input price). Cache lasts 5-10 minutes typically. No explicit markers required.
 
 ### Practical cache strategy
 
@@ -463,7 +423,7 @@ No auto-compaction. When you hit the limit, the model errors with a context-leng
 
 ### Gemini CLI
 
-Similar to Claude Code. `/compact` is manual; the CLI will warn when nearing the limit.
+Similar to Claude Code. `/compress` is manual; the CLI will warn when nearing the limit.
 
 ### Copilot Chat
 
@@ -500,7 +460,7 @@ Settings → Models → "Show context usage" enables a live indicator in the cha
 
 ```bash
 /stats             # tokens, cache hits
-/compact
+/compress
 ```
 
 ### Copilot Chat
@@ -525,7 +485,7 @@ curl https://api.anthropic.com/v1/messages/count_tokens \
 
 Before a long session:
 
-- [ ] `.claudeignore` / `.geminiignore` / `.cursorignore` in place
+- [ ] `permissions.deny` (Claude Code) / `.geminiignore` / `.cursorignore` in place
 - [ ] Lock files and build artifacts excluded
 - [ ] CLAUDE.md / AGENTS.md / .cursorrules in place at repo root
 - [ ] Stable references (architecture, glossary) defined in a file you can load once
@@ -547,7 +507,7 @@ When things degrade:
 - [ ] Compact and re-prime
 - [ ] Start a fresh session with a structured handoff
 - [ ] Reduce the working set; close subagent threads
-- [ ] Switch to a larger window only if you need it — Opus 1M / Gemini 2M / Cursor Gemini 2M
+- [ ] Switch to a larger window only if you need it — Fable 5 / Opus 1M / Gemini 1M
 
 ---
 

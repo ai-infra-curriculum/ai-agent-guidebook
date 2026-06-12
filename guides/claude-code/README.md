@@ -50,9 +50,15 @@ Claude Code is an interactive CLI tool that helps with software engineering task
 
 ### Prerequisites
 
-- Node.js 18+ or Bun
-- macOS or Linux (Windows via WSL)
-- API access to Claude
+- macOS 13+, Windows 10 1809+ (native or WSL 2), or Linux (Ubuntu 20.04+, Debian 10+)
+- Node.js 18+ (only if installing via npm)
+- A Claude subscription (Pro/Max/Team/Enterprise) or Anthropic API access
+
+### Install via native installer (recommended)
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
 
 ### Install via npm
 
@@ -63,25 +69,24 @@ npm install -g @anthropic-ai/claude-code
 ### Install via Homebrew (macOS)
 
 ```bash
-brew install anthropic/claude/claude-code
+brew install --cask claude-code
 ```
 
 ### First Run
 
 ```bash
-# Start Claude Code
-claude-code
-
-# Or specify a directory
-claude-code /path/to/project
+# Start Claude Code from your project directory
+cd /path/to/project
+claude
 ```
 
 ### Configuration
 
 Claude Code looks for configuration in:
-- `~/.config/claude-code/mcp.json` - MCP servers
-- `~/.config/claude-code/.env` - Environment variables
-- Project-specific: `.claude/` directory
+- `~/.claude/settings.json` - User settings (model, permissions, hooks)
+- `~/.claude.json` - User- and local-scoped MCP servers
+- `.mcp.json` (project root) - Project-scoped MCP servers, committed to version control
+- Project-specific: `.claude/` directory (settings, skills, agents, hooks)
 
 ---
 
@@ -111,7 +116,7 @@ Claude Code can:
 - Automatically understands project structure
 - Reads relevant files on demand
 - Maintains conversation context
-- Uses `.claudeignore` to exclude files
+- Uses `permissions.deny` rules (e.g. `"Read(./.env)"`) in `.claude/settings.json` to keep sensitive files out of reach
 
 ### 4. Tool Integration
 
@@ -140,7 +145,21 @@ MCP servers provide external functionality:
 
 ### Configuration
 
-**Location**: `~/.config/claude-code/mcp.json`
+Add servers with the `claude mcp` CLI:
+
+```bash
+# stdio server (local process) — everything after -- runs the server
+claude mcp add github -- npx -y @modelcontextprotocol/server-github
+
+# HTTP server (remote)
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+
+# Pass environment variables, share with your team via .mcp.json
+claude mcp add --scope project --env GITHUB_TOKEN=ghp_xxx github -- \
+  npx -y @modelcontextprotocol/server-github
+```
+
+Storage by scope: `local` and `user` scopes live in `~/.claude.json`; `project` scope lives in `.mcp.json` at the repo root (committed to version control):
 
 ```json
 {
@@ -152,22 +171,9 @@ MCP servers provide external functionality:
         "GITHUB_TOKEN": "${GITHUB_TOKEN}"
       }
     },
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/path/to/project"
-      ]
-    },
-    "memory": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory",
-        "--memory-path",
-        "/path/to/memory"
-      ]
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp"
     }
   }
 }
@@ -231,7 +237,7 @@ Agents are autonomous Claude instances that:
 - Focus on specific sub-tasks
 - Run independently with their own context
 - Report results back to the orchestrator
-- Can spawn their own sub-agents
+- Cannot spawn further sub-agents (nesting is limited to one level)
 
 ### Agent Types
 
@@ -243,7 +249,7 @@ Agents are autonomous Claude instances that:
 
 **Custom Agents:**
 
-Define in project's `AGENTS.md` file (see templates).
+Define as Markdown files with YAML frontmatter in `.claude/agents/` (project) or `~/.claude/agents/` (user). Manage interactively with the `/agents` command.
 
 ### Using Agents
 
@@ -260,23 +266,22 @@ Define in project's `AGENTS.md` file (see templates).
 
 ### Agent Configuration
 
-**Project file**: `AGENTS.md`
+**Project file**: `.claude/agents/<name>.md`
 
 ```markdown
-# Project Agents
+---
+name: code-reviewer
+description: Review code for best practices and potential issues. Use after any code change.
+tools: Read, Grep, Glob
+model: sonnet
+---
 
-## code-reviewer
-Review code for best practices and potential issues.
-Tools: Read, Grep, Quality-Guard MCP
-
-## test-generator
-Generate comprehensive test suites.
-Tools: Read, Write, pytest, code-checker MCP
-
-## documentation-writer
-Create API documentation and guides.
-Tools: Read, Write, filesystem MCP
+You are a code reviewer. For each file named by the orchestrator, check
+naming, error handling, and test coverage, and report issues with
+file:line references.
 ```
+
+Only `name` and `description` are required. The `description` is what the orchestrator uses to decide when to delegate; the markdown body becomes the agent's system prompt.
 
 ### Agent Communication
 
@@ -338,9 +343,9 @@ Skills package:
 ### Available Skills
 
 Skills are defined in:
-- System skills (built-in)
+- Bundled skills (ship with Claude Code and plugins)
 - Project skills (`.claude/skills/`)
-- User skills (`~/.config/claude-code/skills/`)
+- User skills (`~/.claude/skills/`)
 
 ### Creating Skills
 
@@ -348,25 +353,22 @@ Skills are defined in:
 
 ```
 my-skill/
-├── skill.json          # Skill metadata
-├── prompt.md           # Main prompt
-├── tools.json          # Required tools/MCP servers
+├── SKILL.md            # YAML frontmatter + instructions
+├── runbook.md          # Optional supporting reference
+├── scripts/            # Optional helper scripts
 └── examples/           # Example usage
 ```
 
-**skill.json:**
-```json
-{
-  "name": "code-validator",
-  "description": "Validate code quality through automated checks",
-  "version": "1.0.0",
-  "tools": ["ruff-mcp", "code-checker"],
-  "triggers": ["validate", "check code quality"]
-}
-```
-
-**prompt.md:**
+**SKILL.md:**
 ```markdown
+---
+name: code-validator
+description: |
+  Validate code quality through automated checks. Use when the user asks to
+  "validate", "check code quality", or before a release.
+allowed-tools: Bash(ruff *), Bash(pytest *)
+---
+
 # Code Validator Skill
 
 Validate code quality through automated linting, testing, and security scanning.
@@ -387,6 +389,8 @@ Provide a summary of:
 - Actionable recommendations
 ```
 
+The directory name becomes the slash command (`/code-validator`); the `description` is what Claude uses to decide when to load the skill automatically.
+
 See: [Skills Guide](../skills/guide.md)
 
 ---
@@ -404,41 +408,54 @@ Hooks are shell commands that run:
 
 ### Hook Types
 
-- `user-prompt-submit-hook` - After user submits prompt
-- `tool-call-hook` - Before/after tool calls
-- `session-start-hook` - When session starts
-- `session-end-hook` - When session ends
+Core lifecycle events:
+
+- `UserPromptSubmit` - After the user submits a prompt, before the model sees it
+- `PreToolUse` / `PostToolUse` - Before/after tool calls
+- `SessionStart` / `SessionEnd` - When the session starts/ends
+- `Stop` - When the assistant turn ends
 
 ### Configuration
 
-**Settings**: Preferences → Hooks
+Configured in `settings.json` (`~/.claude/settings.json` or `.claude/settings.json`):
 
 ```json
 {
   "hooks": {
-    "user-prompt-submit-hook": "echo 'Processing...'",
-    "tool-call-hook": "./scripts/validate-tool-call.sh"
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/validate-tool-call.sh" }
+        ]
+      }
+    ]
   }
 }
 ```
+
+Hooks receive a JSON event description on stdin (including `tool_name` and `tool_input`). Exit code 2 blocks the action and surfaces stderr to the model.
 
 ### Example Hooks
 
 **Pre-commit validation:**
 ```bash
 #!/bin/bash
-# .claude/hooks/pre-commit.sh
+# .claude/hooks/pre-commit.sh — wire to PreToolUse with matcher "Bash"
+input=$(cat)
+command=$(echo "$input" | jq -r '.tool_input.command // ""')
 
 # Run tests before git commit
-if [[ "$TOOL_NAME" == "Bash" ]] && [[ "$COMMAND" == git\ commit* ]]; then
-  pytest tests/ || exit 1
+if [[ "$command" == git\ commit* ]]; then
+  pytest tests/ || { echo "Tests failing — fix before committing." >&2; exit 2; }
 fi
 ```
 
 **Logging:**
 ```bash
-# Log all tool calls
-echo "$(date): $TOOL_NAME - $DESCRIPTION" >> .claude/tool-log.txt
+# Log all tool calls (PostToolUse, matcher "*")
+input=$(cat)
+echo "$(date): $(echo "$input" | jq -r '.tool_name')" >> .claude/tool-log.txt
 ```
 
 ---
@@ -449,15 +466,18 @@ echo "$(date): $TOOL_NAME - $DESCRIPTION" >> .claude/tool-log.txt
 
 **Optimize token usage:**
 
-```bash
-# Create .claudeignore
-cat > .claudeignore << EOF
-node_modules/
-*.log
-.git/
-dist/
-build/
-EOF
+There is no `.claudeignore` file — keep noise and secrets out of context with `permissions.deny` rules in `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  }
+}
 ```
 
 **Provide focused context:**
@@ -467,12 +487,7 @@ EOF
 
 ### 2. Checkpoint System
 
-Save progress for long-running tasks:
-
-```
-"Save a checkpoint of the current progress"
-"Resume from the last checkpoint"
-```
+Claude Code automatically checkpoints the state of your code before each edit; every user prompt creates a new checkpoint. To undo, run `/rewind` (or press `Esc` twice with an empty prompt) and choose whether to restore the code, the conversation, or both. Note: files changed by bash commands are not tracked.
 
 ### 3. Parallel Operations
 
@@ -500,21 +515,24 @@ Add custom tools via MCP servers:
 
 ```typescript
 // my-custom-tool/index.ts
-import { MCPServer } from '@modelcontextprotocol/sdk';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-const server = new MCPServer({
+const server = new McpServer({
   name: 'my-custom-tool',
   version: '1.0.0'
 });
 
-server.tool({
-  name: 'custom-operation',
-  description: 'Perform custom operation',
-  parameters: { /* ... */ },
-  handler: async (params) => {
+server.registerTool(
+  'custom-operation',
+  {
+    description: 'Perform custom operation',
+    inputSchema: { /* zod shape */ }
+  },
+  async (params) => {
     // Implementation
+    return { content: [{ type: 'text', text: 'done' }] };
   }
-});
+);
 ```
 
 ---
@@ -550,10 +568,14 @@ server.tool({
 - Define workflows
 - List key conventions
 
+✅ **Define sub-agents in `.claude/agents/`**
+- One Markdown file per agent, with frontmatter
+- Document agent responsibilities in sharp `description` fields
+- Restrict each agent's `tools` to the minimum needed
+
 ✅ **Use AGENTS.md**
-- Define specialized agents
-- Document agent responsibilities
-- Define communication protocols
+- A shared instructions file read by many coding agents
+- Document project conventions for any agent tool, not just Claude Code
 
 ✅ **Configure MCP Servers**
 - Install relevant servers
@@ -578,7 +600,7 @@ server.tool({
 ✅ **Never Commit Secrets**
 ```bash
 # Use environment variables
-GITHUB_TOKEN=xxx claude-code
+GITHUB_TOKEN=xxx claude
 
 # Or .env files (add to .gitignore)
 echo "GITHUB_TOKEN=xxx" > .env
@@ -602,11 +624,12 @@ echo "GITHUB_TOKEN=xxx" > .env
 
 **Solution**:
 ```bash
-# Check MCP configuration
-cat ~/.config/claude-code/mcp.json
+# Check configured servers
+claude mcp list
+claude mcp get <name>
 
-# Add missing server
-# Edit mcp.json to include server
+# Add the missing server
+claude mcp add <name> -- <command> [args...]
 ```
 
 #### Tool Execution Failed
@@ -625,10 +648,10 @@ cat ~/.config/claude-code/mcp.json
 **Problem**: "Context window exceeded"
 
 **Solution**:
-- Use .claudeignore
+- Run `/compact` to summarize older turns
 - Be more specific about files to read
 - Use agents for sub-tasks
-- Clear conversation and start fresh
+- Clear conversation (`/clear`) and start fresh
 
 #### Agent Timeout
 
@@ -641,7 +664,7 @@ cat ~/.config/claude-code/mcp.json
 
 ### Getting Help
 
-- **Documentation**: https://docs.claude.com/claude-code
+- **Documentation**: https://code.claude.com/docs/en/overview
 - **GitHub Issues**: https://github.com/anthropics/claude-code/issues
 - **Community**: https://github.com/anthropics/claude-code/discussions
 
@@ -659,7 +682,7 @@ cat ~/.config/claude-code/mcp.json
 
 ## Resources
 
-- **Official Docs**: https://docs.claude.com/claude-code
+- **Official Docs**: https://code.claude.com/docs/en/overview
 - **MCP Specification**: https://spec.modelcontextprotocol.io/
 - **Awesome MCP**: https://github.com/wong2/awesome-mcp-servers
 - **MCP Directory**: https://mcpservers.org/

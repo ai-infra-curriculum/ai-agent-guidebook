@@ -2,7 +2,7 @@
 
 Matrix of common development scenarios mapped to the AI coding tools that fit best, with rationale.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -34,7 +34,7 @@ Last updated 2026-05.
 
 For each scenario there's a primary recommendation, often a secondary, and the rationale. "Primary" means "the tool that wins outright for this task." "Secondary" means "good enough if you don't have the primary, or excels in a specific subcase."
 
-Recommendations are based on tool capabilities and observable behavior as of May 2026. Specific model and feature releases change the picture; revisit quarterly.
+Recommendations are based on tool capabilities and observable behavior as of June 2026. Specific model and feature releases change the picture; revisit quarterly.
 
 ---
 
@@ -44,10 +44,10 @@ The tools considered in this matrix:
 
 - **Claude Code** — Anthropic's terminal-based agent, MCP-rich, multi-agent, deep extensibility
 - **Cursor** — VS Code fork with first-class AI integration, Composer agent mode, multi-model
-- **GitHub Copilot** — inline completions + chat in IDEs, Workspace for spec-to-PR flows
-- **Gemini CLI** — Google's terminal client with 2M context Gemini 2.5 Pro
+- **GitHub Copilot** — inline completions + chat in IDEs, autonomous coding agent for spec-to-PR flows (Copilot Workspace was sunset May 2025)
+- **Gemini CLI** — Google's terminal client with 1M-context Gemini models (3.1 Pro / 2.5 Pro), MCP support, and a generous free tier
 - **Sourcegraph Cody** — IDE plugin with repo-graph context, multi-repo aware
-- **Codeium / Windsurf** — competitor to Cursor with Cascade agent mode
+- **Windsurf** (formerly Codeium; acquired by Cognition) — competitor to Cursor with Cascade agent mode
 - **JetBrains AI Assistant** — built into JetBrains IDEs, integrates with multiple model providers
 - **Tabnine** — older completion tool, privacy-focused, supports self-host
 - **Continue (.dev)** — open-source IDE plugin, bring-your-own-model
@@ -61,10 +61,10 @@ The tools considered in this matrix:
 | Greenfield app | Claude Code | Cursor | Multi-agent planning + tool use beats single-threaded IDE |
 | Legacy refactor (multi-file) | Claude Code | Cursor Composer | Agent mode + MCP tooling for navigation |
 | Docs from code | Claude Code | Gemini CLI | MCP doc tools + structured output |
-| Code from spec | Copilot Workspace | Claude Code | Workspace is purpose-built for spec→PR |
+| Code from spec | Copilot coding agent | Claude Code | Purpose-built spec→PR flow, GitHub-native |
 | Single-file edit | Cursor | Copilot | IDE feels right, fastest loop |
 | Inline completion while typing | Copilot | Cursor Tab | Mature; lowest TTFT |
-| Whole-repo Q&A | Gemini CLI | Cursor (Gemini) | 2M context wins on bulk reading |
+| Whole-repo Q&A | Gemini CLI | Cursor (Gemini) | 1M context, cheap bulk reading on the free tier |
 | Multi-repo Q&A | Cody | Claude Code (with MCP) | Cody's repo graph is unique |
 | Security audit | Claude Code | Cursor | Agent dispatch + MCP scanners |
 | Debugging hard bug | Cursor Composer | Claude Code | IDE-integrated repro + iteration is faster than terminal switching |
@@ -79,7 +79,7 @@ The tools considered in this matrix:
 | Background agent (PR triage, etc.) | Claude Code | Custom (LangChain) | First-class hooks and non-interactive mode |
 | Quick scratch / one-off | Copilot Chat | Cursor | Lowest friction |
 | Pair-programming feel | Cursor | Copilot | Tight IDE loop |
-| Onboarding a new repo | Cody | Gemini CLI | Repo-graph + 2M context for orientation |
+| Onboarding a new repo | Cody | Gemini CLI | Repo-graph + 1M context for orientation |
 
 ---
 
@@ -147,7 +147,7 @@ Claude Code wins because:
 - Can be wired as a CI job that updates docs on every merge.
 
 Gemini CLI wins when:
-- The codebase is too large to read in 200K tokens. 2M context handles entire mid-size repos.
+- You want to load an entire mid-size repo in one pass — the 1M context handles it cheaply, especially on the free tier.
 - You want a single-pass summary rather than file-by-file generation.
 
 Both fall short on:
@@ -158,19 +158,19 @@ Both fall short on:
 
 ## Code from Spec
 
-**Primary: Copilot Workspace. Secondary: Claude Code.**
+**Primary: Copilot coding agent. Secondary: Claude Code.**
 
 You have a spec (issue, PRD, design doc) and you want code that implements it.
 
-Copilot Workspace wins because:
-- The product is literally designed for this: spec → plan → diff → PR, all in one workspace.
-- Integrates with GitHub Issues / Projects.
-- Reviewers can interact with the plan before code is written.
+The Copilot coding agent (GA since September 2025; it replaced Copilot Workspace, which was sunset in May 2025) wins because:
+- The product is literally designed for this: assign an issue to Copilot and the agent plans, implements in a GitHub Actions sandbox, and opens a draft PR.
+- Integrates natively with GitHub Issues / Projects and supports MCP tools.
+- Reviewers iterate by leaving PR review comments; the agent responds with new commits.
 
 Claude Code wins when:
-- The spec is ambiguous and the model needs to ask clarifying questions.
-- The implementation spans services / repos Workspace doesn't reach.
-- You want the agent to run tests, not just write code.
+- The spec is ambiguous and the model needs to ask clarifying questions interactively.
+- The implementation spans services / repos the coding agent doesn't reach.
+- You want the agent iterating against local tests and tooling mid-flight, not just in CI.
 
 Bad fit:
 - Specs that are too vague. Both tools will produce something plausible-looking and wrong. Sharpen the spec first.
@@ -359,15 +359,15 @@ For any migration:
 
 ## Whole-Repo Q&A
 
-**Primary: Gemini CLI. Secondary: Cursor (with Gemini 2.5 Pro selected).**
+**Primary: Gemini CLI. Secondary: Cursor (with Gemini 3.1 Pro selected).**
 
 "How does authentication work in this codebase?" "Where are all the places we call Stripe?" "What's the data flow from request to DB?"
 
-Gemini wins on raw context — 2M tokens lets you load entire mid-size repos and ask questions without precise search.
+Gemini wins on raw context economics — 1M tokens lets you load entire mid-size repos and ask questions without precise search, often within the free tier.
 
 Cody is competitive for multi-repo: its repo-graph indexes give it dense semantic search beyond what brute-force context can match.
 
-Claude Code (200K Sonnet) or Cursor (Sonnet) work fine for repos under ~50K LOC if you use Grep / @codebase smartly. Past that, you need a larger window.
+Claude Code and Cursor are no longer window-limited here — Sonnet 4.6 supports a 1M context too. In practice, grep-first navigation (Grep / @codebase) is usually cheaper and faster than loading everything; reserve the full-window load for questions that genuinely span the whole repo.
 
 ---
 
@@ -381,7 +381,7 @@ Copilot has had years of polish here. Lowest TTFT, best in-line acceptance UX, d
 
 Cursor Tab uses similar tech with Cursor's own predictive completion. Comparable quality, sometimes faster because Cursor batches in-window prediction differently.
 
-Tabnine and Codeium / Windsurf also compete here. All four are good enough for daily completion; pick on price and IDE feel.
+Tabnine and Windsurf (formerly Codeium) also compete here. All four are good enough for daily completion; pick on price and IDE feel.
 
 ---
 
@@ -420,7 +420,7 @@ Most teams end up using more than one tool. Common combinations:
 ### Cursor + Gemini CLI
 - Cursor for everything daily
 - Gemini CLI for whole-repo questions and large analysis
-- Use Cursor's Gemini 2.5 Pro option to consolidate where possible
+- Use Cursor's Gemini 3.1 Pro option to consolidate where possible
 
 ### Cody + Copilot
 - Cody for repo / multi-repo Q&A

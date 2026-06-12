@@ -2,7 +2,7 @@
 
 The first hour. Install one tool, authenticate, run hello-world, hit one MCP server, write one skill.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -45,7 +45,7 @@ This walkthrough covers three paths. Pick one based on the [getting-started](get
 
 - **Path A: Claude Code** — terminal-first, agentic, MCP-rich
 - **Path B: Cursor** — IDE-first, integrated agent mode
-- **Path C: GitHub Copilot** — IDE-first, inline completions + chat + Workspace
+- **Path C: GitHub Copilot** — IDE-first, inline completions + chat + coding agent
 
 The setup steps differ. The principles (auth, project rules, MCP, skills) are similar.
 
@@ -99,10 +99,10 @@ Two options:
 **Option 1: Claude Pro / Max subscription.**
 
 ```bash
-claude /login
+claude
 ```
 
-Opens a browser, log in with your Anthropic account. Subscription usage tracked there.
+Then type `/login` inside the session. Opens a browser, log in with your Anthropic account. Subscription usage tracked there.
 
 **Option 2: API key.**
 
@@ -202,7 +202,7 @@ For chat: `Cmd/Ctrl + I` opens inline chat, or click the Copilot Chat icon in th
 
 MCP (Model Context Protocol) servers are tools your AI tool can call. We'll connect the simplest one: a filesystem server.
 
-This step applies to Claude Code primarily; Cursor supports MCP similarly; Copilot does not natively support MCP.
+This step applies to Claude Code primarily; Cursor supports MCP similarly; GitHub Copilot also supports MCP in agent mode (generally available) and in the Copilot coding agent, configured per-repo or in VS Code settings.
 
 ### Path A: Claude Code
 
@@ -235,7 +235,7 @@ The model should call the filesystem MCP server's `list_directory` tool.
 
 ### Path B: Cursor (MCP support)
 
-Cursor 0.42+ supports MCP via Settings → MCP Servers. Same config format. Restart Cursor after editing.
+Cursor has supported MCP since ~0.45 (early 2025) via Settings → MCP Servers. Same config format. Restart Cursor after editing.
 
 ### Add a more useful MCP server
 
@@ -280,13 +280,13 @@ Produce a PR description in this exact format:
 Keep it under 200 words. Focus on the why, not just the what.
 ```
 
-In a Claude Code session:
+In a Claude Code session, invoke it by name as a slash command:
 
 ```text
-/skill git-pr-summary
+/git-pr-summary
 ```
 
-The skill loads and Claude follows the instructions.
+The skill loads and Claude follows the instructions. (Claude also invokes skills automatically when the request matches the skill's description.)
 
 ### Path B: Cursor (project rules)
 
@@ -320,7 +320,7 @@ When suggesting code in this repo:
 - No inline styles; use Tailwind utility classes
 ```
 
-Copilot reads this when generating code in the repo (Enterprise + Pro Plus tiers; check current behavior).
+Copilot reads this when generating code in the repo. Repository custom instructions work on all Copilot plans.
 
 ---
 
@@ -403,7 +403,7 @@ You're ready for [first-steps.md](first-steps.md) — the first week.
 **"Invalid API key"**
 - Check `echo $ANTHROPIC_API_KEY` returns the right key.
 - Verify it's active at [console.anthropic.com](https://console.anthropic.com).
-- For subscription users, run `claude /login` instead.
+- For subscription users, run `claude` and type `/login` instead.
 
 **MCP server not loading**
 - Check `~/.claude.json` is valid JSON (`jq . ~/.claude.json`).

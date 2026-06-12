@@ -272,6 +272,7 @@ async def generate_curriculum(topic: str, orchestrator: Orchestrator) -> str:
     research = await orchestrator.researcher.run(outline)
 
     draft = None
+    review = None
     feedback = None
     for round_num in range(MAX_REVIEW_ROUNDS):
         draft = await orchestrator.writer.run(outline, research, feedback)
@@ -282,7 +283,12 @@ async def generate_curriculum(topic: str, orchestrator: Orchestrator) -> str:
         if orchestrator.cost_so_far() > COST_CEILING:
             break  # ship best-effort, note in metadata
 
-    return await orchestrator.publisher.run(draft, approved=(review.approved))
+    if draft is None:
+        # MAX_REVIEW_ROUNDS == 0 or the loop never produced a draft
+        raise CurriculumGenerationError(f"no draft produced for {topic!r}")
+
+    approved = review.approved if review is not None else False
+    return await orchestrator.publisher.run(draft, approved=approved)
 ```
 
 ### State strategy

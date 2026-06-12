@@ -2,7 +2,7 @@
 
 The first week. Common early tasks: bringing an existing repo into the workflow, your first multi-file edit, your first agent dispatch, your first hook.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -24,13 +24,13 @@ Last updated 2026-05.
 
 Pick a real repo you work on. Not a toy project. The goal is to make AI tools useful for actual work today.
 
-### Add ignore files
+### Add ignore files and read-deny rules
 
 In the repo root:
 
 `.gitignore` — should already be present and proper. If not, fix that first.
 
-`.claudeignore` and/or `.cursorignore` — same syntax as gitignore:
+`.cursorignore` — same syntax as gitignore:
 
 ```gitignore
 node_modules/
@@ -83,6 +83,25 @@ secrets/
 ```
 
 `.geminiignore` for Gemini CLI — same content.
+
+For Claude Code, there is no `.claudeignore` file — add `permissions.deny` entries to `.claude/settings.json` instead. Prioritize secrets, then the noisiest paths:
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Read(./node_modules/**)",
+      "Read(./dist/**)",
+      "Read(./package-lock.json)"
+    ]
+  }
+}
+```
 
 For GitHub Copilot, configure content exclusions at the org level (Settings → Copilot → Content exclusion) since Copilot doesn't read per-repo ignore files.
 
@@ -201,7 +220,7 @@ Show me the plan first, then execute.
 
 **Cursor Composer:** open Composer with Cmd/Ctrl+I. Give it the prompt. Composer shows you all proposed diffs in one panel before applying.
 
-**Copilot:** weakest at multi-file. Use Copilot Workspace if you have access; otherwise this is a Claude Code or Cursor task.
+**Copilot:** weakest at multi-file in the editor. Hand the task to the Copilot coding agent (assign an issue to Copilot) if you have access; otherwise this is a Claude Code or Cursor task.
 
 ### Time budget: 30 minutes including verification
 
@@ -284,7 +303,7 @@ The most useful first hook: **run the linter and type checker after every file e
 
 ### Claude Code hooks
 
-Edit `~/.claude/settings.json`:
+Edit `~/.claude/settings.json`. Hooks are nested under each matcher, and the command receives the tool-call JSON on stdin — read the edited file's path from `tool_input.file_path` (there is no `$FILE_PATH` environment variable):
 
 ```json
 {
@@ -292,20 +311,25 @@ Edit `~/.claude/settings.json`:
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "cd \"$(dirname \"$FILE_PATH\")\" && (eslint --fix \"$FILE_PATH\" 2>&1 || true) && (tsc --noEmit --pretty false 2>&1 | head -50 || true)"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path'); (eslint --fix \"$f\" 2>&1 || true); (tsc --noEmit --pretty false 2>&1 | head -50 || true)"
+          }
+        ]
       }
     ]
   }
 }
 ```
 
-Now every Write or Edit triggers eslint + tsc. The output goes back into the conversation, so Claude sees errors and can fix them.
+Now every Write or Edit triggers eslint + tsc. The output goes back into the conversation, so Claude sees errors and can fix them. (A hook that exits with code 2 blocks the action and feeds stderr back to Claude — useful for enforcement rather than just feedback.)
 
 Restart Claude Code. Try a code change. You should see the hook output in the conversation.
 
 ### Cursor hooks
 
-Cursor 0.42+ supports rules-based hooks (Settings → Rules). For format/lint, the more reliable path is to use existing IDE features (Format on Save, ESLint extension's "Fix on Save") — these aren't AI-specific, they just always run.
+Cursor's hooks arrived in the 1.x releases (2025) (Settings → Rules / Hooks). For format/lint, the more reliable path is to use existing IDE features (Format on Save, ESLint extension's "Fix on Save") — these aren't AI-specific, they just always run.
 
 ### Copilot hooks
 
@@ -376,10 +400,10 @@ Constraints:
 - No emojis
 ```
 
-Use it:
+Use it (skills are invoked by name as a slash command):
 
 ```text
-/skill pr-description
+/pr-description
 ```
 
 ### Path B: Install an MCP server
@@ -472,7 +496,7 @@ In Composer or chat:
 
 ### Copilot
 
-In the GitHub PR review UI (after pushing), Copilot Pro+ tier offers PR review. Or use Copilot Chat with the PR context.
+In the GitHub PR review UI (after pushing), Copilot code review is available on all paid Copilot tiers. Or use Copilot Chat with the PR context.
 
 ### Then
 
@@ -539,7 +563,7 @@ After your first week, the depth options:
 
 **If you want to go deeper on the tool itself:**
 - [Claude Code Guide](claude-code/) — full feature surface
-- [GitHub Copilot Guide](github-copilot/) — IDE, Workspace, agent
+- [GitHub Copilot Guide](github-copilot/) — IDE, coding agent, agent mode
 - [Gemini CLI Guide](gemini-cli/) — large-context patterns
 
 **If you want to build with the AI, not just use it:**

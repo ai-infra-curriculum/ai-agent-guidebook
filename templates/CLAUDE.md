@@ -32,10 +32,12 @@ project-root/
 ├── docs/                  # Documentation
 ├── scripts/               # Automation scripts
 ├── .claude/               # Claude Code configuration
+│   ├── agents/           # Custom sub-agent definitions
 │   ├── skills/           # Custom skills
-│   └── hooks/            # Event hooks
+│   └── hooks/            # Event hook scripts
+├── .mcp.json             # Project-scoped MCP servers
 ├── CLAUDE.md             # This file
-├── AGENTS.md             # Multi-agent configuration
+├── AGENTS.md             # Shared agent instructions (read by many agent tools)
 └── README.md             # User-facing documentation
 ```
 
@@ -121,7 +123,7 @@ npm run deploy  # or kubectl apply -f k8s/
 
 ### MCP Configuration
 
-**Location**: `~/.config/claude-code/mcp.json`
+**Location**: `.mcp.json` at the project root (committed to version control). Add entries with `claude mcp add --scope project <name> -- <command> [args...]` or edit directly:
 
 ```json
 {
@@ -200,7 +202,7 @@ PROJECT_ROOT=/path/to/project
 
 ### Available Agents
 
-See [AGENTS.md](AGENTS.md) for detailed agent definitions.
+Sub-agents are defined as Markdown files with YAML frontmatter in `.claude/agents/` (managed via the `/agents` command). [AGENTS.md](AGENTS.md) carries shared instructions read by agent tools.
 
 **Quick Reference:**
 
@@ -573,9 +575,9 @@ npm audit  # or pip-audit
 #### Claude Code Not Working
 
 **Check:**
-- MCP servers configured correctly
+- MCP servers configured correctly (`claude mcp list`, `/mcp`)
 - Environment variables set
-- `.claudeignore` not excluding needed files
+- `permissions.deny` rules in `.claude/settings.json` not blocking needed files
 - Project structure matches CLAUDE.md
 
 ---
@@ -654,6 +656,9 @@ npm audit  # or pip-audit
 
 ## Changelog
 
+### Version 1.0.1 (2026-06-11)
+- Updated Claude Code integration details (MCP config in `.mcp.json`, agents in `.claude/agents/`, `permissions.deny` for file exclusions)
+
 ### Version 1.0.0 (2025-11-04)
 - Initial project setup
 - Core functionality implemented
@@ -661,8 +666,8 @@ npm audit  # or pip-audit
 
 ---
 
-**Last Updated**: 2025-11-04
+**Last Updated**: 2026-06-11
 
 **Claude Code Compatible**: ✅ Yes
 
-**AGENTS.md**: See [AGENTS.md](AGENTS.md) for multi-agent configuration
+**AGENTS.md**: See [AGENTS.md](AGENTS.md) for shared agent instructions

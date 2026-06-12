@@ -26,10 +26,9 @@ export SEMGREP_APP_TOKEN=...                 # optional, for managed rule packs
 Launch:
 
 ```bash
-claude code \
-  --agents examples/code-review/AGENTS.md \
-  --mcp .review/mcp-config.json \
-  --working-dir $(pwd)
+# Run from the repo root — CLAUDE.md, AGENTS.md, and .claude/agents/ are
+# picked up automatically. Load the example's MCP servers explicitly:
+claude --mcp-config .review/mcp-config.json
 ```
 
 ---

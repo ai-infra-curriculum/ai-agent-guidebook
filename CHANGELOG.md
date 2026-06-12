@@ -16,6 +16,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-06-11
+
+### Fixed — full accuracy audit against official documentation and package registries
+
+#### Claude Code mechanics (verified against code.claude.com/docs)
+- Removed `.claudeignore` (never a Claude Code feature) everywhere; replaced with `permissions.deny` rules in `.claude/settings.json`
+- Hooks examples rewritten to the real nested schema (`hooks` array, `type: command`, stdin JSON, exit-code-2 semantics) — flat `{"matcher","command"}` examples were invalid and silently did nothing
+- Skills: `allowed-tools` moved to top-level SKILL.md frontmatter (nesting under `metadata:` is not enforced — security-relevant); invocation corrected to `/skill-name`
+- Subagent definition corrected to `.claude/agents/*.md` frontmatter / `/agents`; `templates/AGENTS.md` reframed (AGENTS.md is the cross-tool instructions standard, not an agent registry)
+- `claude mcp add` syntax, config locations (`.mcp.json`, `~/.claude.json`), `"type"` vs `"transport"` keys, real CLI flags in all examples
+
+#### MCP (verified against modelcontextprotocol.io and npm/PyPI)
+- Spec references updated to revision 2025-11-25
+- Catalog and `templates/mcp-config.json` purged of nonexistent/archived packages and fabricated version pins; archived reference servers marked legacy with maintained replacements
+- Python SDK examples corrected to the official `mcp` API (`ctx.session.create_message`, FastMCP constructor args)
+
+#### GitHub Copilot
+- CLI guide rewritten for the standalone agentic Copilot CLI (`npm install -g @github/copilot`) — the `gh copilot` extension stopped working 2025-10-25
+- Workspace guide replaced with a Copilot coding agent guide (Workspace sunset 2025-05-30, never GA)
+- Copilot Extensions content replaced with MCP migration guidance (Extensions sunset 2025-11-10)
+- Fictional `.copilotignore` replaced with real content-exclusion settings (security-relevant)
+- Pricing updated (Free/Pro/Pro+/Business/Enterprise; GitHub AI Credits as of 2026-06-01)
+
+#### Gemini CLI
+- All four guides rewritten around the real `@google/gemini-cli` (OAuth login, `GEMINI.md`, `settings.json`, `@file` context, `-p`/`-o json`, `/chat save|resume`, MCP) — previous content documented fabricated subcommands, flags, and config paths
+- "2M token context" corrected to 1M everywhere; retired model names removed
+
+#### Pricing & models (all comparison and best-practice docs)
+- Current model lineups: Claude Fable 5 / Opus 4.8 / Sonnet 4.6 / Haiku 4.5; GPT-5.5/5.4; Gemini 3.1 Pro / 3.5 Flash
+- Opus pricing corrected ($5/$25 — was overstated 3x with a fictitious >200K surcharge); 1M context is standard pricing on current Claude models
+- OpenAI cached-input discount corrected to 90% (was stated as 50%)
+
+### Added
+- `examples/content-generation/WALKTHROUGH.md` and `AGENTS.md` (completes the example set)
+- Fixed fabricated `claude code --agents/--mcp/--task` launch commands in all four examples
+
+---
+
 ## [1.1.0] - 2026-05-24
 
 ### Added

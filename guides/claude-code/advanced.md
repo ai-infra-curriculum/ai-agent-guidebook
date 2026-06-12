@@ -24,48 +24,27 @@ Power-user features: checkpoints, background tasks, scheduled wakeups, dynamic l
 
 ## Checkpoints: Save and Restore
 
-A checkpoint is a named snapshot of session state: full conversation, tool history, active agent set, current working directory. They let you experiment with a destructive change and roll back if it doesn't work.
+Checkpointing is automatic. Claude Code captures the state of your code before each edit, and every user prompt creates a new checkpoint. That safety net lets you pursue ambitious, wide-scale changes knowing you can return to a prior state.
 
-```
-/checkpoint save before-refactor
-```
+To roll back, run `/rewind` (or press `Esc` twice with an empty prompt) to open the rewind menu. Pick the prompt you want to return to, then choose:
 
-Now do exploratory work — refactor a module, run agents, edit files. If you don't like the outcome:
+- **Restore code and conversation** — revert both to that point.
+- **Restore conversation** — rewind the chat, keep current code.
+- **Restore code** — revert file changes, keep the conversation.
+- **Summarize from here / up to here** — compress part of the conversation into a summary to free context, without touching files.
 
-```
-/checkpoint restore before-refactor
-```
+Two important limits:
 
-Conversation returns to the saved state. **Filesystem changes are not reverted** — the checkpoint is conversational, not a git stash. Pair with git for actual file rollback:
+- **Bash-driven file changes are not tracked.** `rm`, `mv`, `cp`, and script outputs cannot be undone through rewind — only edits made through Claude's file-editing tools.
+- **Not a replacement for git.** Checkpoints are session-level "local undo"; keep using version control for permanent history. For risky filesystem-level experiments, pair with `git stash`.
 
-```
-git stash push -m "before-refactor"
-/checkpoint save before-refactor
-# ... experiment ...
-/checkpoint restore before-refactor
-git stash pop
-```
+Checkpoints persist across sessions (so `claude --resume` can still rewind) and are cleaned up with session data after 30 days by default.
 
-List and clean up:
+**When to lean on rewind:**
 
-```
-/checkpoint list
-/checkpoint delete before-refactor
-```
-
-Checkpoints live in `~/.claude/sessions/<session-id>/checkpoints/`. They survive session restart; `claude --resume <session-id>` can hop straight to one.
-
-**When to checkpoint:**
-
-- Before a multi-file refactor.
-- Before letting an agent run autonomously on an ambiguous task.
-- Before context-compaction (auto-compaction is harder to recover from cleanly).
-- At natural stable points in long sessions.
-
-**When not to checkpoint:**
-
-- After every small change. Overhead and clutter.
-- If the session is short enough that just restarting is simpler.
+- After a multi-file refactor went sideways.
+- After letting an agent run autonomously on an ambiguous task.
+- To compress a verbose side-quest (`Summarize from here`) while keeping early context intact.
 
 ---
 
@@ -161,33 +140,29 @@ A scheduled loop runs unattended. Anything destructive belongs behind explicit p
 
 ## Output Styles
 
-`outputStyle` in `settings.json` controls how the assistant formats responses:
+`outputStyle` in `settings.json` controls how the assistant communicates:
 
 ```json
 {
-  "outputStyle": "concise"
+  "outputStyle": "Explanatory"
 }
 ```
 
-Options:
+Built-in options:
 
 | Style | Behavior |
 |-------|----------|
-| `default` | Conversational; prose explanations and code blocks |
-| `concise` | Minimal prose; emphasizes tool calls and direct answers |
-| `verbose` | Full explanations, alternatives, caveats |
-| `markdown` | Heavy structure: headings, bullets, tables |
-| `plain` | No markdown; for pipes into non-Markdown consumers |
+| `default` | Standard software-engineering focus; concise, tool-driven |
+| `Explanatory` | Adds educational "insights" about implementation choices as it works |
+| `Learning` | Collaborative learn-by-doing mode; asks you to write small pieces yourself |
 
-`concise` is what most experienced users settle on. The default is gentler for newcomers but can feel chatty after a while.
+You can also define custom output styles (Markdown files with frontmatter under `~/.claude/output-styles/` or `.claude/output-styles/`) that replace parts of the system prompt.
 
 Switch per-session:
 
 ```
-/output-style concise
+/output-style explanatory
 ```
-
-Per-skill output styles are also possible — a skill body can include `Output style: plain.` and the model honors it for that skill's responses.
 
 ---
 
@@ -195,10 +170,10 @@ Per-skill output styles are also possible — a skill body can include `Output s
 
 Covered in detail in [mcp-servers.md](mcp-servers.md#deferred-tools-and-toolsearch). Recap:
 
-With many MCP servers configured, eagerly loading every tool's full schema into context burns 30-80k tokens before the user types anything. Deferred mode loads only names; full schemas are fetched on demand.
+With many MCP servers configured, eagerly loading every tool's full schema into context burns 30-80k tokens before the user types anything. Deferred mode (MCP tool search) loads only names; full schemas are fetched on demand. It is enabled by default and controlled with the `ENABLE_TOOL_SEARCH` environment variable (`true` / `auto` / `false`):
 
-```json
-{ "mcp": { "deferredTools": true } }
+```bash
+ENABLE_TOOL_SEARCH=auto claude   # load upfront if schemas fit in 10% of the window
 ```
 
 The model uses `ToolSearch` to load schemas it actually needs:
@@ -214,24 +189,24 @@ Tradeoffs:
 
 - Saves context when servers are many. Saves a lot.
 - Adds a turn of latency on the first call to each unseen tool.
-- Breaks down when the model needs to choose between unfamiliar tools on the same turn — it sees only names, not capability schemas.
+- Requires a model that supports `tool_reference` blocks (Haiku models don't; tool search is disabled by default on Vertex AI and non-first-party proxies).
 
-Enable when configured tool count exceeds ~50 or initial context exceeds 25k tokens.
+Keep the default unless your tool count is tiny or you are on an unsupported backend — then use `auto` or `false`.
 
 ---
 
 ## Plan Mode and ExitPlanMode
 
-Plan mode is a read-only state. The agent can read files, search, run non-mutating Bash, but cannot Write, Edit, or run mutating commands. Toggle from any session:
+Plan mode is a read-only state. The agent can read files, search, run non-mutating Bash, but cannot Write, Edit, or run mutating commands. Cycle into it from any session with `Shift+Tab`, or start in it:
 
-```
-/plan
+```bash
+claude --permission-mode plan
 ```
 
 Or set as default in `settings.json`:
 
 ```json
-{ "permissionMode": "plan" }
+{ "permissions": { "defaultMode": "plan" } }
 ```
 
 Use plan mode for:
@@ -298,24 +273,15 @@ What's lost:
 - Specific tool outputs from earlier turns.
 - Conversation nuance.
 
-The agent receives a compaction notification and tries to preserve key facts during the summary. It is good enough for most workflows but imperfect for tasks that require recalling a 3-hour-old error message verbatim.
+The agent receives a compaction notification and tries to preserve key facts during the summary. It is good enough for most workflows but imperfect for tasks that require recalling a 3-hour-old error message verbatim. (The originals remain in the session transcript on disk.)
 
-Controls:
-
-```json
-{
-  "context": {
-    "autoCompact": true,
-    "compactThreshold": 0.75,
-    "preserveRecentTurns": 10
-  }
-}
-```
+Auto-compaction can be toggled via `/config`. For targeted compression, `/rewind` offers "Summarize from here" / "Summarize up to here", which compact only one side of a chosen message.
 
 Manual compaction:
 
 ```
 /compact
+/compact focus on the database migration work   # optional instructions
 ```
 
 Forces compaction immediately. Useful right before a context-heavy operation (e.g. spawning a sub-agent that will return a large payload).
@@ -330,7 +296,7 @@ Forces compaction immediately. Useful right before a context-heavy operation (e.
 - Long sessions that have wandered through unrelated topics.
 - Right before a high-value reasoning step where you want all available context for the new question, not the chat history.
 
-Pairs well with checkpoints: checkpoint before compacting, so you can roll back if the compaction loses something critical.
+If compaction loses something critical, `/rewind` to a pre-compaction prompt, or pull details back from the on-disk transcript.
 
 ---
 
@@ -343,7 +309,7 @@ Extended thinking (the model's private chain-of-thought) is on by default for Op
 ```json
 {
   "alwaysThinkingEnabled": true,
-  "thinkingBudget": 16000
+  "env": { "MAX_THINKING_TOKENS": "16000" }
 }
 ```
 
@@ -366,23 +332,26 @@ Toggle in-session: Option+T (macOS) / Alt+T (Linux/WSL).
 
 See the thinking output as it streams: Ctrl+O.
 
-Thinking tokens cost the same as output tokens. A session with 32k budget per turn can get expensive fast. Lower it for routine work; raise it for the one turn that needs it (with `/think harder` to bump a single turn's budget).
+Thinking tokens cost the same as output tokens. A session with 32k budget per turn can get expensive fast. Lower it for routine work; raise it for the one turn that needs it (asking the model to "think harder" in the prompt nudges a single turn).
 
-For Haiku, thinking is unavailable. Setting a budget has no effect.
+Newer models also support an `effortLevel` setting (`low` through `max`) that trades depth for speed and cost.
 
 ---
 
 ## Session Resume and Branching
 
-Every session is saved under `~/.claude/sessions/<id>/`. Resume:
+Every session transcript is saved under `~/.claude/projects/<munged-project-path>/`. Resume:
 
 ```bash
-claude --resume <session-id>
+claude --resume <session-id-or-name>
 # or list and pick
 claude --resume
+
+# or just continue the most recent session in this directory
+claude --continue
 ```
 
-The session restores with full state: history, agents, checkpoints, working directory, MCP connections. Useful when:
+Name sessions for easier resumption: `claude -n "auth-refactor"`, then `claude --resume auth-refactor`. The session restores with full state: history, checkpoints, working directory. Useful when:
 
 - A session crashed or you restarted your terminal.
 - You want to pick up tomorrow on the same task.
@@ -391,7 +360,7 @@ The session restores with full state: history, agents, checkpoints, working dire
 To fork rather than resume:
 
 ```bash
-claude --resume <id> --fork
+claude --resume <id> --fork-session
 ```
 
 The new session has the same starting state but a new ID. Edits to the fork don't affect the original. Use for "let me try this alternative approach without losing the current one."
@@ -434,10 +403,10 @@ Modes:
 - `json` — structured response with full tool history, costs, message timestamps.
 - `stream-json` — newline-delimited JSON events as they happen. For real-time consumption.
 
-JSON output is the right primitive when wiring Claude Code into a larger system — CI checks, dashboards, automation. Combine with `--no-interactive` to run Claude Code as a one-shot CLI:
+JSON output is the right primitive when wiring Claude Code into a larger system — CI checks, dashboards, automation. `--print` (`-p`) is already non-interactive:
 
 ```bash
-claude --print --no-interactive --output-format json \
+claude --print --output-format json \
   "Summarize CHANGELOG.md since v2.0" \
   | jq -r '.result'
 ```
@@ -446,23 +415,29 @@ claude --print --no-interactive --output-format json \
 
 ## Performance Knobs Reference
 
+Settings (`settings.json`):
+
 | Knob | Purpose | Default |
 |------|---------|---------|
-| `model` | Which model | `claude-sonnet-4-6` |
-| `thinkingBudget` | Extended-thinking token cap | 32000 |
-| `alwaysThinkingEnabled` | Thinking on by default | true |
-| `mcp.deferredTools` | Lazy-load MCP schemas | false |
-| `context.autoCompact` | Auto-summarize long contexts | true |
-| `context.compactThreshold` | When to compact (fraction of window) | 0.75 |
-| `context.preserveRecentTurns` | Verbatim recent turn count | 10 |
-| `permissionMode` | Tool-call gating | `ask` |
-| `outputStyle` | Response formatting | `default` |
-| `parallelism.maxConcurrentAgents` | Sub-agent cap | 5 |
-| `bash.defaultTimeoutMs` | Bash blocking timeout | 120000 |
-| `network.timeoutMs` | API timeout | 120000 |
-| `cache.enabled` | Prompt-cache write+read | true |
+| `model` | Which model | account default (Sonnet 4.6 for most) |
+| `effortLevel` | Reasoning effort (`low`…`max`) on supported models | model-dependent |
+| `alwaysThinkingEnabled` | Extended thinking on by default | true |
+| `permissions.defaultMode` | Tool-call gating (`default`, `acceptEdits`, `plan`, `bypassPermissions`, …) | `default` |
+| `outputStyle` | Response style (`default`, `Explanatory`, `Learning`, custom) | `default` |
+| `autoUpdatesChannel` | `latest` or `stable` release channel | `latest` |
 
-Most users tune three: `model`, `permissionMode`, `outputStyle`. Beyond that, change one at a time and measure.
+Environment variables (settable in the `env` block of `settings.json`):
+
+| Variable | Purpose |
+|----------|---------|
+| `MAX_THINKING_TOKENS` | Extended-thinking token cap |
+| `ENABLE_TOOL_SEARCH` | Defer MCP tool schemas (`true`/`auto`/`false`) |
+| `MCP_TIMEOUT` | MCP server startup timeout (ms) |
+| `MCP_TOOL_TIMEOUT` | MCP tool execution timeout (ms) |
+| `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` | Bash tool timeouts |
+| `DISABLE_AUTOUPDATER` | Stop background updates |
+
+Most users tune three: `model`, `permissions.defaultMode`, `outputStyle`. Beyond that, change one at a time and measure.
 
 ---
 

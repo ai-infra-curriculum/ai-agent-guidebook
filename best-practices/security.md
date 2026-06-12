@@ -2,7 +2,7 @@
 
 Security for AI-assisted development. Secrets, prompt injection, tool sandboxing, output validation, supply chain, audit.
 
-Last updated 2026-05.
+Last updated 2026-06-11.
 
 ---
 
@@ -42,7 +42,7 @@ The non-negotiable principle: **treat the AI assistant as a junior contractor wi
 The first failure mode. AI tools amplify it because they happily commit files, generate `.env` examples, and paste credentials into chat without thinking.
 
 Rules:
-- No `.env` files in git. Add `.env`, `.env.*`, `!.env.example` to `.gitignore` *and* `.claudeignore` / `.cursorignore`.
+- No `.env` files in git. Add `.env`, `.env.*`, `!.env.example` to `.gitignore`. In Claude Code, also deny reads via `permissions.deny` in `.claude/settings.json` (e.g. `"Read(./.env)"`, `"Read(./.env.*)"`); in Cursor, add them to `.cursorignore`.
 - `.env.example` shows the variable names, never the values.
 - Credentials, certificates, kubeconfigs, SSH keys: never in source control.
 - Scan history with `gitleaks` or `trufflehog` before any open-sourcing or sharing.
@@ -232,6 +232,8 @@ In Claude Code, `~/.claude/settings.json`:
 
 The allow list reduces permission prompts; the deny list blocks even with auto-accept.
 
+One caveat: Bash permission rules are prefix-based (the canonical form is `Bash(git push:*)`), and Anthropic documents that deny rules can be bypassed by creative command construction — treat them as defense in depth, not a security boundary. Sandboxing (containers, egress controls) is the actual boundary.
+
 ### MCP server permissions
 
 Each MCP server is a tool. Audit:
@@ -270,7 +272,7 @@ Code the model produced is not safe code. Treat it like any unreviewed PR — be
 - **Secret scanners** (post-write, before commit): `gitleaks`, `trufflehog`.
 - **SAST**: Snyk Code, GitHub Advanced Security, SonarQube.
 
-Wire as hooks. In Claude Code, PostToolUse hooks run after every Write/Edit:
+Wire as hooks. In Claude Code, PostToolUse hooks run after every Write/Edit. The settings schema nests a `hooks` array under each matcher, and the hook command receives the tool-call JSON on stdin (there is no `$FILE_PATH` environment variable — read `tool_input.file_path` from stdin):
 
 ```json
 {
@@ -278,12 +280,19 @@ Wire as hooks. In Claude Code, PostToolUse hooks run after every Write/Edit:
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "eslint --fix \"$FILE_PATH\" && tsc --noEmit"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | xargs -I{} sh -c 'eslint --fix \"{}\" && tsc --noEmit'"
+          }
+        ]
       }
     ]
   }
 }
 ```
+
+Use `$CLAUDE_PROJECT_DIR` in commands that need the repo root. A hook that exits with code 2 blocks the action and feeds its stderr back to the model.
 
 ### Dynamic checks
 
@@ -456,7 +465,7 @@ These are not mutually exclusive. A typical production stack uses one for runtim
 - Hooks for static analysis on every write
 - Worktree isolation per task
 - Container image for risky workflows
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` from a secret manager, not `.env`
+- `ANTHROPIC_API_KEY` from a secret manager, not `.env`
 
 ### Cursor
 
@@ -491,7 +500,7 @@ Before deploying any AI-assisted workflow to anything that matters:
 
 **Secrets**
 - [ ] No secrets in repos (verified with gitleaks/trufflehog scan)
-- [ ] `.env*` in `.gitignore` and tool-specific ignores
+- [ ] `.env*` in `.gitignore` and tool-specific excludes (`permissions.deny` in Claude Code, `.cursorignore` in Cursor)
 - [ ] Secret manager in use for production credentials
 - [ ] Per-agent / per-environment keys with spend limits
 - [ ] Rotation cadence defined (90d minimum)
