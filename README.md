@@ -33,6 +33,9 @@ Complete documentation for major AI coding assistants:
 - **[Claude Code](guides/claude-code/)** - Anthropic's CLI tool with MCP servers, agents, and skills
 - **[GitHub Copilot](guides/github-copilot/)** - GitHub's AI pair programmer (CLI and IDE)
 - **[Gemini CLI](guides/gemini-cli/)** - Google's Gemini integration for command line
+- **[Cursor](guides/cursor/)** - AI-first code editor: Agent, Plan mode, `.cursor/rules`, and MCP
+- **[VS Code](guides/vscode/)** - VS Code as an agentic environment: agent mode, MCP, and custom instructions
+- **[Google Antigravity](guides/antigravity/)** - Agent-first IDE: Editor view + Agent Manager, built on Gemini
 
 ### 🔌 MCP Servers
 
