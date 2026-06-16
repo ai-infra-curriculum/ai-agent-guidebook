@@ -22,6 +22,30 @@ Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
 | **Code Context** | Very Large (1M tokens, current models) | Medium | Very Large (1M tokens) |
 | **Pricing** | API usage or Claude subscription ($20-200/mo) | $0-39/mo | Free tier + API usage |
 
+The table above covers the CLI / assistant tools. The three GUI editors and
+agent-first IDEs below are a distinct category — full editing environments
+rather than CLIs or extensions.
+
+### AI Editors & Agentic IDEs
+
+| Feature | Cursor | VS Code (agentic) | Google Antigravity |
+|---------|--------|-------------------|--------------------|
+| **Type** | AI-first editor (VS Code fork) | Editor + AI/agent layer (Copilot) | Agent-first IDE |
+| **Real-time Completions** | ✅ Tab | ✅ (via Copilot) | ⚠️ Agent-centric |
+| **Agent Mode** | ✅ Agent (`Cmd/Ctrl+I`) | ✅ Agent mode in chat | ✅ Agent Manager (core surface) |
+| **Plan Mode** | ✅ | ⚠️ Plan via agent | ✅ Plans / task lists |
+| **MCP Server Support** | ✅ `~/.cursor/mcp.json` | ✅ `.vscode/mcp.json` | ✅ |
+| **Custom Rules / Instructions** | ✅ `.cursor/rules/*.mdc`, AGENTS.md | ✅ instructions + `*.agent.md` | ✅ `.agents/` |
+| **Models** | Composer + frontier models, BYOK | Copilot models, BYOK | Gemini 3 Pro, Claude Sonnet 4.5, GPT-OSS |
+| **Multi-Agent** | ⚠️ Background/cloud agents | ⚠️ Agent mode | ✅ Multiple agents via Agent Manager |
+| **Platforms** | macOS, Windows, Linux | macOS, Windows, Linux | macOS, Windows, Linux |
+| **Pricing** | Free (Hobby) / Pro $20 / Pro+ $60 / Ultra $200 | Free editor; Copilot $0-39/mo | Public preview, free for individuals |
+
+> Specific model lists, exact pricing tiers, and some config paths for these
+> editors change frequently — see each tool's guide for current, source-cited
+> detail, and note the `needs-research` markers where official docs were
+> ambiguous at time of writing.
+
 ---
 
 ## Detailed Comparison
