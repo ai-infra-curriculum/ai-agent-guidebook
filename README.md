@@ -1,5 +1,9 @@
 # AI Agent Guidebook
 
+<!-- aicg:site-banner -->
+> 🎓 Part of the **[AI Infrastructure Curriculum](https://ai-infra-curriculum.github.io/)** — a free, open-source ladder of role-based AI-infrastructure programs. [Explore the ladder](https://ai-infra-curriculum.github.io/) · [Join the first live cohort](https://ai-infra-curriculum.github.io/junior.html)
+<!-- /aicg:site-banner -->
+
 Comprehensive guides for AI-powered coding assistants, multi-agent orchestration, and Model Context Protocol (MCP) servers.
 
 ---
@@ -406,7 +410,6 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 **Last Updated**: 2026-06-11
 
 **Status**: 🚀 Active Development — covering the current Claude models (Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5), the standalone GitHub Copilot CLI + coding agent, Gemini CLI (Gemini 3.x), and MCP spec revision 2025-11-25.
-
 
 ---
 
