@@ -154,6 +154,8 @@ ai-agent-guidebook/
 │   ├── claude-code/
 │   │   ├── README.md                   # Claude Code overview
 │   │   ├── installation.md             # Setup and installation
+│   │   ├── claude-md.md                # CLAUDE.md & memory files
+│   │   ├── settings-and-permissions.md # settings.json & permissions
 │   │   ├── mcp-servers.md              # MCP server integration
 │   │   ├── agents.md                   # Agent orchestration
 │   │   ├── skills.md                   # Claude Skills usage
@@ -208,6 +210,7 @@ ai-agent-guidebook/
 │   └── cost-analysis.md                # Cost comparison
 ├── best-practices/
 │   ├── prompting.md                    # Effective prompts
+│   ├── agentic-workflow.md             # Plan → execute → verify loop
 │   ├── context-management.md           # Managing context
 │   ├── error-handling.md               # Error recovery
 │   ├── security.md                     # Security practices

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Claude Code configuration best practices (verified against code.claude.com/docs)
+- `guides/claude-code/claude-md.md` — authoring lean, effective CLAUDE.md memory files (memory hierarchy, `/init`, the <~200-line rule, include/exclude, `#`, `@imports`, `CLAUDE.local.md`, compaction steering)
+- `guides/claude-code/settings-and-permissions.md` — `settings.json` precedence hierarchy, managed settings, `allow`/`ask`/`deny` rules (deny wins), rule syntax + path anchors, permission modes, `env`/`additionalDirectories`, worked example
+- `best-practices/agentic-workflow.md` — the plan → execute → verify loop: explore/plan/implement/commit, "give the agent a way to verify", `/clear` discipline, subagents for review, headless/CI
+- Navigation + Next Steps updated to surface the new configuration guides
+
 ### Planned
 - Sample skill catalog expansion
 - More real-world examples
