@@ -691,6 +691,9 @@ claude mcp add <name> -- <command> [args...]
 
 **Next Steps:**
 1. [Install Claude Code](#installation)
-2. [Configure MCP Servers](installation.md#mcp-server-setup)
-3. [Create CLAUDE.md](../../templates/CLAUDE.md) for your project
-4. [Try your first agent](agents.md#quick-start)
+2. [Write a lean CLAUDE.md](claude-md.md) for your project
+3. [Configure settings & permissions](settings-and-permissions.md) to cut approval prompts
+4. [Configure MCP Servers](mcp-servers.md)
+5. [Try your first agent](agents.md#quick-start)
+
+**Configuration deep dives:** [CLAUDE.md & memory](claude-md.md) · [Settings & permissions](settings-and-permissions.md) · [Event hooks](hooks.md) · [Advanced usage](advanced.md) — plus the cross-tool [agentic workflow](../../best-practices/agentic-workflow.md).
