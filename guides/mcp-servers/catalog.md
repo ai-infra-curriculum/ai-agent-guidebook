@@ -149,6 +149,39 @@ See the companion guides:
 
 ---
 
+### Hyperconsciousness MCP
+**Source**: [`louis030195/hyperconsciousness`](https://github.com/louis030195/hyperconsciousness) (Rust, MIT, developer alpha)
+
+**Features**:
+- Encrypted, append-only storage for signed knowledge records
+- Search and retrieval through scoped, expiring grants
+- Grant filters for record kinds, tags and sensitivity
+
+**Installation**:
+Follow the [source installation instructions](https://github.com/louis030195/hyperconsciousness#install-from-source), then [initialize an isolated store](https://github.com/louis030195/hyperconsciousness#try-an-isolated-store) and [create a read grant](https://github.com/louis030195/hyperconsciousness#give-an-agent-limited-access). Source builds require Rust 1.88.0 and the platform dependencies listed there.
+
+Add this entry inside your client's `mcpServers` object. Replace both absolute paths and `<grant-id>` with your local executable, initialized store and grant ID:
+
+```json
+{
+  "hyperconsciousness": {
+    "command": "/absolute/path/to/hc",
+    "args": ["mcp", "--as", "<grant-id>", "--dir", "/absolute/path/to/hc-demo"]
+  }
+}
+```
+
+**Use Cases**:
+- Retrieve project notes across coding sessions
+- Give an assistant temporary access to notes with selected tags
+
+**Limitations and troubleshooting**:
+This configuration uses a read grant. If access is denied or expected notes are absent, check the grant's expiry, kind, tags and sensitivity against the notes in the selected store. An expired grant requires a new grant ID in the configuration.
+
+APIs may change during the developer alpha. Grants do not sandbox the agent process, and plaintext returned to a hosted model leaves local storage. No independent security audit is claimed; review the [security limits](https://github.com/louis030195/hyperconsciousness/blob/main/docs/CONSTRAINTS.md).
+
+---
+
 ### Sequential Thinking MCP
 **Package**: `@modelcontextprotocol/server-sequential-thinking` · current `2025.12.18`
 
