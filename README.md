@@ -224,6 +224,7 @@ ai-agent-guidebook/
 │   ├── CLAUDE.md                       # Claude orchestration template
 │   ├── AGENTS.md                       # Multi-agent template
 │   ├── mcp-config.json                 # MCP configuration
+│   ├── k8s-mcp.toml                    # Read-only Kubernetes MCP config
 │   ├── skill-template/                 # Claude Skill template
 │   └── prompt-templates/               # Explore→Plan→Implement→Verify prompts
 ├── examples/

@@ -81,11 +81,13 @@
       "_comments": [
         "kubernetes-mcp-server (GitHub: containers/kubernetes-mcp-server).",
         "Reads the standard KUBECONFIG env var for cluster/context selection.",
-        "Runtime options now live in a TOML file (the CLI only accepts --config,",
-        "--config-dir, and --version). Put `read_only = true` (and the toolsets",
-        "you want) in that file. If you allow writes, scope by RBAC on the service",
-        "account that owns the KUBECONFIG, NOT by trusting the agent. Cluster admin",
-        "via agent = bad day waiting to happen."
+        "Runtime options live in a TOML file (the CLI only accepts --config,",
+        "--config-dir, and --version; read_only has NO flag or env var and",
+        "defaults to false). Copy templates/k8s-mcp.toml next to this file — it",
+        "sets read_only = true and disable_destructive = true. Without that file",
+        "the server is NOT read-only. If you allow writes, scope by RBAC on the",
+        "service account that owns the KUBECONFIG, NOT by trusting the agent.",
+        "Cluster admin via agent = bad day waiting to happen."
       ],
       "command": "npx",
       "args": [

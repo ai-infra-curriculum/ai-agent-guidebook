@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - CI markdown lint now covers every `.md` file (globs previously matched no files); repo lints clean
 - Root README: removed dead `gh extension install github/gh-copilot` instructions; repo tree lists all guides
+- **Security:** Kubernetes MCP examples are read-only by default again — new `templates/k8s-mcp.toml` (`read_only = true`, `disable_destructive = true`), since the server dropped its `--read-only` flag and defaults to full access
 
 ---
 

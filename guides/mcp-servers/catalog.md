@@ -305,15 +305,17 @@ See the companion guides:
 - Multi-cluster (kubeconfig context switching)
 - Toolsets (`core`, `config`, `helm`, …) and `read_only` mode via the TOML config
 
-**Installation (npx)**:
+**Installation (npx, read-only)**:
 ```json
 {
   "kubernetes": {
     "command": "npx",
-    "args": ["-y", "kubernetes-mcp-server@latest"]
+    "args": ["-y", "kubernetes-mcp-server@latest", "--config", "./k8s-mcp.toml"]
   }
 }
 ```
+
+> **Security**: `read_only` defaults to `false` and has no CLI flag or env var — it can only be set in the TOML config. Without a config file the agent gets every tool your kubeconfig allows, including delete. Start from [`templates/k8s-mcp.toml`](../../templates/k8s-mcp.toml) (`read_only = true`, `disable_destructive = true`), and scope the kubeconfig's RBAC regardless.
 
 **Use Cases**:
 - K8s resource creation

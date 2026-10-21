@@ -465,7 +465,7 @@ A realistic project `.mcp.json` covering most of the patterns above:
     },
     "k8s": {
       "command": "/opt/homebrew/bin/npx",
-      "args": ["-y", "kubernetes-mcp-server@latest"]
+      "args": ["-y", "kubernetes-mcp-server@latest", "--config", "/Users/me/.config/k8s-mcp.toml"]
     },
     "github": {
       "type": "http",
