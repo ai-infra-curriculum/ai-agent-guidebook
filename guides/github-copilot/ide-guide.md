@@ -1,6 +1,6 @@
 # GitHub Copilot IDE Guide
 
-Deep, IDE-by-IDE guide to running GitHub Copilot inside the editor — including completions, chat, Edits mode, and per-IDE quirks.
+Deep, IDE-by-IDE guide to running GitHub Copilot inside the editor — including completions, chat, agent mode, and per-IDE quirks.
 
 ---
 
@@ -26,126 +26,93 @@ Copilot ships three families of in-IDE features. They are largely the same acros
 |---------|--------------|----------|
 | **Ghost-text completions** | Inline suggestions as you type | Line and block completion, comment-to-code |
 | **Copilot Chat** | Side-panel / inline chat with `@`-mentions and slash commands | Q&A, refactors, explaining selected code |
-| **Edits mode** (VS Code) | Multi-file rewrites driven from chat | Cross-file refactors and feature scaffolding |
+| **Agent mode** | Multi-file edits, terminal commands, and MCP tools driven from chat | Cross-file refactors, feature work, fix-until-green loops |
 
 This guide assumes you have an active Copilot subscription and have signed in once via your IDE. See the [main README](README.md#installation) for sign-up steps.
 
-> **As of 2026**: the "ask, edit, agent" mode triad is the default in VS Code, the JetBrains plugin has reached parity with VS Code for inline chat and slash commands, and the cloud-side analog to agent mode is the [Copilot coding agent](workspace-guide.md) (Copilot Workspace was sunset in May 2025).
+> **As of October 2026**: agent mode is the center of gravity in every major Copilot IDE; the cloud-side analog is [Copilot cloud agent](workspace-guide.md) (formerly "coding agent"; Copilot Workspace was sunset in May 2025), and the terminal/desktop analogs are the [Copilot CLI](cli-guide.md) and the GitHub Copilot app.
 
 ---
 
 ## VS Code
 
-VS Code is the reference implementation. Every Copilot feature lands here first and tends to lag by months — or never appear — in other IDEs.
+VS Code is the reference implementation. New Copilot features usually land here (and in the Copilot CLI and desktop app) first, and can lag by months in other IDEs. This section covers Copilot specifics; the [VS Code guide](../vscode/README.md) goes deep on agent mode, harnesses, MCP, and customization.
 
-### Extensions to Install
+### Setup
 
-Two distinct extensions; install both.
+AI features are built into VS Code, and Microsoft has consolidated Copilot — including inline suggestions — into the single **GitHub Copilot Chat** extension (`GitHub.copilot-chat`); the older standalone `GitHub.copilot` completions extension was slated for deprecation. You don't need to install anything by hand:
 
-```bash
-code --install-extension GitHub.copilot
-code --install-extension GitHub.copilot-chat
-```
+1. Hover over the Copilot icon in the Status Bar and select **Use AI Features** — or run `GitHub Copilot: Sign in` from the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`).
+2. Sign in with GitHub (GitHub Enterprise users choose **Continue with GHE.com**). Your existing plan is used; otherwise you're enrolled in Copilot Free.
+3. The Status Bar Copilot dashboard shows how much of your monthly allowance you've used.
 
-- `GitHub.copilot` — ghost-text completions
-- `GitHub.copilot-chat` — chat panel, inline chat, Edits mode, agent mode
-
-### Sign-In
-
-1. Open Command Palette: `Cmd+Shift+P` (macOS) / `Ctrl+Shift+P` (Windows/Linux).
-2. Run `GitHub Copilot: Sign In`.
-3. Browser opens; authorize the device code.
-4. Status bar shows a Copilot icon — solid means connected, slashed means disabled for the current file type.
-
-Click the status-bar icon to toggle Copilot on or off per file or per language.
+To turn every AI feature off, set `chat.disableAIFeatures` to `true`.
 
 ### Inline Suggestions
 
-Ghost text appears in gray after a short debounce.
+Ghost text appears in gray as you type; **next edit suggestions (NES)** go further and predict the next edit you're likely to make elsewhere in the file.
 
 | Action | Mac | Windows / Linux |
 |--------|-----|-----------------|
 | Accept entire suggestion | `Tab` | `Tab` |
 | Accept next word | `Cmd+→` | `Ctrl+→` |
-| Accept next line | `Cmd+Enter` | `Ctrl+Enter` (via "Accept Line" command — bind manually) |
 | Next alternative | `Option+]` | `Alt+]` |
 | Previous alternative | `Option+[` | `Alt+[` |
 | Dismiss | `Esc` | `Esc` |
-| Open suggestions panel | `Ctrl+Enter` | `Ctrl+Enter` |
 | Trigger completion manually | `Option+\` | `Alt+\` |
 
-**Settings worth changing on day one:**
+Defaults drift between releases — confirm in **Keyboard Shortcuts** (search "inline suggest").
+
+**Settings worth knowing on day one:**
 
 ```jsonc
 {
-  // Disable in plain text, markdown, and YAML if you find it noisy
+  // Per-language enablement (these are the defaults)
   "github.copilot.enable": {
     "*": true,
     "plaintext": false,
-    "markdown": true,
-    "yaml": false,
+    "markdown": false,
     "scminput": false
   },
 
-  // Show suggestions in the comment box of your VCS panel (nice for commit messages)
-  "github.copilot.editor.enableAutoCompletions": true,
-
-  // How long to wait before showing ghost text (lower = snappier, slightly more network)
-  "editor.inlineSuggest.suppressSuggestions": false,
-
-  // Use the new "Next Edit Suggestions" model (predicts your next edit, not just the next token)
+  // Next edit suggestions (on by default)
   "github.copilot.nextEditSuggestions.enabled": true
 }
 ```
 
-### Side-Panel Chat vs Inline Chat
+### Chat Surfaces
 
-**Side-panel chat** (`Ctrl+Cmd+I` / `Ctrl+Alt+I`):
-- Persistent thread visible in the activity bar.
-- Best for explanations, planning, "how do I…" questions.
-- Has access to `@workspace`, `@vscode`, `@terminal`, `@github` participants.
+| Surface | Mac | Windows / Linux | Best for |
+|---------|-----|-----------------|----------|
+| **Chat view** | `Ctrl+Cmd+I` | `Ctrl+Alt+I` | Planning, explanations, multi-step agent work |
+| **Inline chat** (editor and terminal) | `Cmd+I` | `Ctrl+I` | "Rewrite this", "add error handling here" — previewed as a diff |
+| **Quick Chat** | `Shift+Option+Cmd+L` | `Ctrl+Shift+Alt+L` | One-shot questions without leaving the editor |
+| New chat session | `Cmd+N` (in chat) | `Ctrl+N` (in chat) | Clean context |
 
-**Inline chat** (`Cmd+I` / `Ctrl+I`):
-- Pops up directly over your selection.
-- Best for "rewrite this", "add error handling here", "convert to async".
-- Edits are previewed as a diff; accept with `Cmd+Enter` / `Ctrl+Enter`.
+A good rule: if you can express the task by pointing at code, use inline chat. If you need to talk about code that doesn't exist yet, use the Chat view.
 
-A good rule: if you can express the task by pointing at code, use inline chat. If you need to talk about code that doesn't exist yet, use the panel.
+### Built-In Agents: Ask, Plan, Agent
 
-### Edits Mode (Multi-File Edits)
+The agent picker in the Chat view offers three built-in agents (plus any [custom agents](../vscode/customization.md) you define):
 
-Edits mode is the bridge between inline chat (one file) and agent-style workflows (full task). Open it from the chat panel dropdown (or `Cmd+Shift+I` then switch mode).
+- **Ask** — answers questions about your code; no edits.
+- **Plan** (`/plan`) — researches the task and produces an implementation plan for you to approve before anything changes.
+- **Agent** — autonomously edits files across the workspace, runs terminal commands and tasks (subject to your permission level), uses MCP tools, and iterates until done. **Autopilot** is a permission mode for agent sessions that keeps going without check-ins.
 
-**Workflow:**
+> **Edit mode is gone.** The old "Edits" multi-file mode was deprecated in VS Code 1.110 and removed in 1.126. Use **Agent** for multi-file changes (review its diffs before keeping them) or **Plan** when you want to approve the approach first.
 
-1. Add files to the working set by dragging from Explorer or using `@file path/to/file.ts`.
-2. Describe the change: *"Add pagination to the listUsers handler and update the test file accordingly."*
-3. Copilot proposes diffs across every file in the working set.
-4. Review hunk-by-hunk. Each hunk has accept / discard / regenerate.
+**Harnesses:** since VS Code 1.143 (October 19, 2026), new agent sessions run on the **Copilot harness** — the same runtime as the Copilot CLI and the Copilot app — by default. You can also pick the older in-editor **Local** harness, the **Claude** or **Codex** harnesses, or a **Cloud** target that hands the session to [Copilot cloud agent](workspace-guide.md) (`/delegate` does the same from chat). Some features (prompt files, tool sets, chat participants) only work in the Local harness. See [VS Code agent mode](../vscode/agent-mode.md).
 
-**When Edits mode beats inline chat:**
-- Cross-cutting changes (rename a type used in 8 files).
-- Feature work that touches handler + model + test.
-- Adopting a new library and updating call sites.
+### MCP Servers
 
-**When it doesn't:**
-- The working set exceeds ~10 files or ~50k tokens — quality degrades sharply.
-- The task requires running commands or reading external docs (use agent mode, or hand it to the coding agent).
+Agent sessions can call tools from MCP servers. Where VS Code reads configuration depends on the harness:
 
-### Agent Mode
+- **Copilot harness (default):** `~/.copilot/mcp-config.json` (shared with the Copilot CLI) and a workspace-root `.mcp.json`, both using a top-level `mcpServers` key.
+- **Local harness:** `.vscode/mcp.json` or your profile's `mcp.json`, using a top-level `servers` key (plus `inputs` and `sandbox`). The add flow now labels `.vscode/mcp.json` as deprecated.
 
-The newer "Agent" mode in chat lets Copilot run tools (terminal, file system, browser) autonomously, similar to Claude Code or Cursor's composer. Toggle via the mode dropdown at the top of the chat panel.
-
-Agent mode in VS Code as of 2026 supports:
-- Running tasks defined in `tasks.json`.
-- Executing arbitrary terminal commands (with confirmation).
-- Reading and writing files outside the current selection.
-- MCP servers configured in `.vscode/mcp.json` (workspace) or a user-level `mcp.json` — run `MCP: Add Server` or `MCP: Open User Configuration` from the command palette. MCP availability is gated by the `chat.mcp.enabled` setting (and org policy on managed accounts).
-
-```jsonc
-// .vscode/mcp.json
+```json
 {
-  "servers": {
+  "mcpServers": {
     "github": {
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp"
@@ -154,20 +121,13 @@ Agent mode in VS Code as of 2026 supports:
 }
 ```
 
-**Caveat:** agent mode is more expensive (it burns GitHub AI Credits faster than Edits mode) and slower. Use it when the task genuinely needs tool use.
+Run **MCP: Add Server** from the Command Palette, or browse the MCP gallery with `@mcp` in the Extensions view (preview). On Business/Enterprise, MCP access is controlled by organization policy. Details in the [VS Code MCP guide](../vscode/mcp-servers.md).
 
-### Workspace Indexing
+**Caveat:** agent sessions burn GitHub AI Credits faster than ask-style chat (they make many model calls) and are slower. Use them when the task genuinely needs tool use.
 
-For repos over ~2k files, Copilot uses a remote index to answer `@workspace` questions. Configure:
+### Workspace Context
 
-```jsonc
-{
-  "github.copilot.chat.codesearch.enabled": true,
-  "github.copilot.chat.experimental.codeFeedback": true
-}
-```
-
-Check index status via `GitHub Copilot: Build Local Workspace Index` in the command palette.
+You no longer need `@workspace` to ask about the repo — in the Copilot harness, chat participants such as `@workspace` are deprecated and unsupported; just ask the agent, which searches the codebase itself. Semantic code search relies on the Copilot service (it isn't available with bring-your-own-key models alone). Use `#`-mentions (for example `#file`) to pin specific files into context.
 
 ---
 
@@ -202,15 +162,15 @@ Watch for keymap conflicts — JetBrains' default keymap binds `Alt+[`/`Alt+]` t
 
 `Tools` → `GitHub Copilot` → `Open Copilot Chat`, or click the Copilot icon in the right sidebar.
 
-JetBrains chat as of 2026 supports:
-- Slash commands (`/explain`, `/fix`, `/tests`, `/doc`, `/simplify`).
-- `@workspace`, `@project`, `@file` mentions.
-- Inline chat triggered via `Ctrl+Shift+G` (default).
+JetBrains chat supports slash commands for common tasks (type `/` to see the current list), file and project context references, inline chat, grouped chat turns with turn navigation, and copy/edit actions on your earlier messages. Shortcuts vary by keymap — search "Copilot" in `Settings` → `Keymap`.
 
-**What's missing vs VS Code:**
-- No first-class Edits mode (multi-file diffs land in the chat as code blocks; you apply manually).
-- Agent mode is in early preview on some products only.
-- MCP server config has to be done via plugin settings, not `settings.json`.
+**Agent mode, MCP, and customization in JetBrains:**
+- Copilot chat in JetBrains has an agent mode alongside ask mode (diagnostic **Fix** actions use agent mode when it's available).
+- MCP servers are configured in an `mcp.json` file opened from the Copilot MCP settings (or from agent mode's tools menu → add more tools); a setting lets you turn off automatic MCP server startup.
+- Chat reads personal, repository-wide (`.github/copilot-instructions.md`), and path-specific instructions; custom agents are in public preview.
+- Enterprise admins can set a managed default model for new conversations.
+
+**What still lags VS Code:** new agent features (Agents window, third-party agent hand-off, canvases, sandboxing) typically land in VS Code, the CLI, and the Copilot app first.
 
 ### IDE-Specific Settings
 
@@ -232,22 +192,21 @@ Then use the IDE's quick-fixes to clean up imports and formatting.
 
 ## Visual Studio
 
-For Visual Studio 2022 (17.8+) on Windows.
+For Visual Studio on Windows (2022 version 17.8 or later).
 
 ### Install
 
-1. `Extensions` → `Manage Extensions`.
-2. Search "GitHub Copilot".
-3. Install **GitHub Copilot** and **GitHub Copilot Chat**.
-4. Restart Visual Studio.
-5. `Tools` → `Options` → `GitHub` → `Copilot` → sign in.
+- **Visual Studio 2022 17.10 and later**: Copilot is included by default as a built-in component — just sign in with your GitHub account.
+- **17.8 / 17.9**: install the unified GitHub Copilot extension from `Extensions` → `Manage Extensions`, restart, then sign in.
+
+Visual Studio can also start Copilot cloud agent sessions directly.
 
 ### Features
 
 Visual Studio gets most of the Copilot feature set, with a few VS-specific niceties:
 
 - **Chat in the editor margin** — small chat icon next to method definitions for quick "explain this method".
-- **Solution-aware chat** — `@workspace` understands `.sln` structure, not just files.
+- **Solution-aware chat** — chat understands `.sln` structure, not just files.
 - **Inline rewriting** — `Alt+/` triggers inline chat on the current selection.
 
 ### Keyboard Shortcuts (default)
@@ -337,11 +296,11 @@ let g:copilot_filetypes = {
     { "nvim-lua/plenary.nvim" },
   },
   build = "make tiktoken",
-  opts = {
-    model = "claude-sonnet-4.5", -- or another model your Copilot plan permits (see :CopilotChatModels)
-  },
+  opts = {},
 }
 ```
+
+Pick a model your plan permits with `:CopilotChatModels` (or set `opts.model` to one of the IDs it lists) — Copilot's lineup changes monthly, so avoid hard-coding a model that may be retired.
 
 Commands:
 - `:CopilotChat` — open chat window
@@ -400,9 +359,9 @@ There is **no official GitHub Copilot extension for JupyterLab**. The supported 
 
 1. Install the `Jupyter` extension in VS Code.
 2. Open `.ipynb` files.
-3. All Copilot features (completions, chat, Edits mode, agent mode) work cell-by-cell.
+3. Copilot completions, chat, and agent mode work with notebook cells.
 
-Edits mode can update multiple cells together (e.g., refactor a function defined in cell 3 and its usage in cell 7), which no in-browser JupyterLab assistant matches.
+Agent mode can update multiple cells together (e.g., refactor a function defined in cell 3 and its usage in cell 7).
 
 If you must stay in the JupyterLab UI, the AI assistants available there are third-party/community projects, not GitHub Copilot — evaluate them separately.
 
@@ -422,15 +381,15 @@ Consolidated table — verify against your current keymap, since defaults drift 
 | Previous | `Option+[` | `Alt+[` | `Option+[` | `Alt+,` | `<M-[>` |
 | Dismiss | `Esc` | `Esc` | `Esc` | `Esc` | `<C-]>` |
 | Trigger | `Option+\` | `Alt+\` | `Option+\` | `Alt+\` | `<M-\>` |
-| Open panel | `Ctrl+Enter` | `Ctrl+Enter` | — | — | `:Copilot panel` |
+| Open panel | — | — | — | — | `:Copilot panel` |
 
 ### Chat
 
 | Action | VS Code (Mac) | VS Code (Win/Linux) | JetBrains | Visual Studio |
 |--------|---------------|---------------------|-----------|---------------|
 | Open chat panel | `Ctrl+Cmd+I` | `Ctrl+Alt+I` | Sidebar icon | `Alt+/` then `C` |
-| Inline chat | `Cmd+I` | `Ctrl+I` | `Ctrl+Shift+G` | `Alt+/` |
-| Quick chat (popup) | `Cmd+Shift+I` | `Ctrl+Shift+I` | — | — |
+| Inline chat | `Cmd+I` | `Ctrl+I` | See Keymap | `Alt+/` |
+| Quick chat (popup) | `Shift+Option+Cmd+L` | `Ctrl+Shift+Alt+L` | — | — |
 | Submit | `Enter` | `Enter` | `Enter` | `Enter` |
 | New line | `Shift+Enter` | `Shift+Enter` | `Shift+Enter` | `Shift+Enter` |
 
@@ -447,11 +406,11 @@ Consolidated table — verify against your current keymap, since defaults drift 
 4. `GitHub Copilot: Sign Out`, then sign in again.
 
 **Chat replies are empty / cut off:**
-- GitHub AI Credits exhausted for the month. Switch to a lighter included model (e.g., GPT-5 mini or Claude Haiku 4.5), wait for the monthly reset, or add a budget at <https://github.com/settings/billing>.
+- GitHub AI Credits exhausted for the month. Switch to Auto (discounted) or a lighter model such as Claude Haiku 5.5, wait for the monthly reset (00:00 UTC on the 1st), or add a budget at <https://github.com/settings/billing>.
 
-**`@workspace` returns "no relevant code found":**
-- Workspace index not built. Run `GitHub Copilot: Build Local Workspace Index`.
-- Repo too large — check `github.copilot.advanced.indexing.maxFiles`.
+**Agent can't find relevant code / ignores your MCP servers:**
+- Check which harness the session uses. The default Copilot harness doesn't support `@workspace`-style participants (just ask directly) and reads MCP servers from `~/.copilot/mcp-config.json` and `.mcp.json`, not `.vscode/mcp.json`.
+- Semantic code search requires the Copilot service; with BYOK-only setups it isn't available.
 
 ### JetBrains
 
@@ -511,8 +470,8 @@ github_copilot_enable = false
 
 If Copilot is your primary AI tool and you have flexibility in editor choice:
 
-- **VS Code** — always the most complete experience. Edits mode, agent mode, MCP integration ship here first.
-- **JetBrains** — strong second choice for Java/Kotlin/Go/Python; you gain great refactor tooling but lose multi-file edits.
+- **VS Code** — always the most complete experience. Agent harnesses, the Agents window, MCP, and third-party agents ship here first.
+- **JetBrains** — strong second choice for Java/Kotlin/Go/Python; you gain great refactor tooling, with agent features arriving somewhat later than in VS Code.
 - **Vim / Neovim** — completions only (with community chat); fine if you live in the terminal and use the Copilot CLI (`copilot`) for chat and agent work.
 - **Visual Studio** — best for .NET-heavy work; Copilot here has good solution awareness but trails VS Code by months.
 - **Emacs** — works, community-maintained, expect rough edges.
@@ -522,11 +481,12 @@ If Copilot is your primary AI tool and you have flexibility in editor choice:
 ## Related Guides
 
 - [Copilot Chat Guide](chat-guide.md) — deeper coverage of chat features and `@`-participants
-- [Copilot Coding Agent Guide](workspace-guide.md) — the cloud-side, issue-to-PR workflow
+- [Copilot Cloud Agent Guide](workspace-guide.md) — the cloud-side, issue-to-PR workflow
+- [VS Code Guide](../vscode/README.md) — agent mode, harnesses, MCP, and customization in depth
 - [Copilot Best Practices](best-practices.md) — getting good output reliably
 - [Copilot CLI Guide](cli-guide.md) — terminal companion
 - [Main Copilot README](README.md)
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

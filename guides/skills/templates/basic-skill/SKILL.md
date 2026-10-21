@@ -1,17 +1,14 @@
 ---
-name: basic-skill-template
+name: basic-skill
 description: |
   TEMPLATE: replace this with a sharp description. State what the skill does
   and the concrete triggers that should cause it to load. Example triggers:
   user mentions a specific command, file type, or workflow phrase. Add
   anti-triggers (skip-when) if the description risks over-matching.
-version: 0.1.0
 metadata:
-  allowed-tools:
-    - Read
-    - Edit
+  version: "0.1.0"
   category: example
-  tags: [template, starter]
+  tags: "template, starter"
 ---
 
 # Basic Skill Template
@@ -81,12 +78,18 @@ Delete this section before shipping.
 To turn this template into a working skill:
 
 1. **Rename the folder** from `basic-skill/` to your skill's actual name
-   (verb-noun, lowercase, hyphenated).
+   (verb-noun, lowercase, hyphenated), and set `name` to the same string —
+   the Agent Skills spec requires them to match.
 2. **Edit the frontmatter** — particularly the `name` and `description`.
    The description is the most important field; iterate on it. See the
-   description-writing section of `creating.md`.
-3. **Tighten `allowed-tools`** — list only the tools this skill genuinely
-   needs.
+   description-writing section of `creating.md`. Keep your own data
+   (version, category, tags) under `metadata` as string values.
+3. **Decide on `allowed-tools`** — this template has none, so every tool call
+   goes through the normal permission check. Add a top-level `allowed-tools`
+   line only for narrow, low-risk calls you want *pre-approved* (e.g.
+   `allowed-tools: Read Bash(npm test *)`). It grants; it doesn't restrict.
+   In Claude Code, add `disable-model-invocation: true` if the skill edits
+   files and should only run when a human types `/basic-skill`.
 4. **Rewrite the Procedure** with the actual steps of your workflow.
 5. **Fill or remove the References, Examples, Anti-Patterns sections**
    based on what your skill needs.

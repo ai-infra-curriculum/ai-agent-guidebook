@@ -1,333 +1,210 @@
 # Performance Comparison
 
-Benchmarks where measurable, methodology notes where they're contested. Numbers are from June 2026 and move fast.
+Published benchmark results with sources, plus a method for measuring latency, throughput, and cost per task on your own workload.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
+
+> **What changed in this revision.** Earlier versions of this page listed latency, throughput, and task-time tables without citations. They were removed: they described models that are now legacy, and the numbers couldn't be traced to a source. This page now cites only published results and shows how to measure the rest yourself.
 
 ---
 
 ## Table of Contents
 
 - [Methodology Notes](#methodology-notes)
-- [Latency Benchmarks](#latency-benchmarks)
-- [Throughput](#throughput)
-- [Context-Fill Latency](#context-fill-latency)
+- [Published Coding Benchmarks](#published-coding-benchmarks)
+- [Measuring Latency Yourself](#measuring-latency-yourself)
+- [Throughput and Rate Limits](#throughput-and-rate-limits)
 - [Agent Dispatch Overhead](#agent-dispatch-overhead)
-- [Real-World Task Times](#real-world-task-times)
 - [Cost Per Task](#cost-per-task)
 - [Cache Performance](#cache-performance)
-- [Headroom Under Load](#headroom-under-load)
+- [Behavior Under Load](#behavior-under-load)
+- [Quality-Adjusted Latency](#quality-adjusted-latency)
+- [When Performance Is Not the Right Metric](#when-performance-is-not-the-right-metric)
+- [Optimization Levers in Order of Leverage](#optimization-levers-in-order-of-leverage)
 - [Caveats](#caveats)
 
 ---
 
 ## Methodology Notes
 
-These numbers come from public benchmarks (SWE-bench, Aider polyglot, HumanEval Plus), provider-published latency dashboards, and reproducible test scripts. Where measurements vary, the range is shown.
+Three kinds of numbers show up in tool comparisons, and they deserve different levels of trust:
 
-Conditions:
-- US-East region tests (us-east-1 / us-east-2 / iad)
-- June 2026 model versions
-- P50 unless noted
-- Single-tenant, no rate-limiting hit
-- Network: residential gigabit; ~30ms to nearest provider POP
+1. **Vendor-reported benchmark scores** (from model launch posts and system cards). Useful for relative positioning within one vendor's table; effort settings, scaffolds, and safeguards differ across vendors, so cross-vendor comparisons are approximate.
+2. **Public leaderboards** (SWE-bench, Terminal-Bench). More comparable, but the harness and agent scaffold matter as much as the model.
+3. **Your own measurements.** The only numbers that predict how a tool behaves on your repo, your network, and your prompts.
 
-What these numbers don't capture:
-- Quality. A fast wrong answer is worse than a slow right one.
+What benchmarks don't capture:
+- Latency and cost on your workload.
 - Tail latency under sustained load.
-- Variance across geographies.
-- Regional model availability (Opus 1M not in every region).
+- Variance across regions.
+- How much human follow-up the output needs.
 
-Treat as directional. Re-measure in your conditions before you commit.
-
----
-
-## Latency Benchmarks
-
-### TTFT (time to first token)
-
-Cold-cache, average input ~5K tokens, simple coding task:
-
-| Model | TTFT (P50) | TTFT (P95) |
-|-------|------------|------------|
-| Claude Haiku 4.5 | 480ms | 1.1s |
-| Claude Sonnet 4.6 | 820ms | 1.9s |
-| Claude Opus 4.8 (1M) | 1.3s | 3.2s |
-| Claude Fable 5 (1M) | 1.5s | 3.8s |
-| GPT-5.4 Nano | 280ms | 700ms |
-| GPT-5.4 Mini | 450ms | 1.1s |
-| GPT-5.4 | 680ms | 1.6s |
-| GPT-5.5 | 720ms | 1.7s |
-| GPT-5.5 (extended reasoning) | 12s | 45s |
-| Gemini 2.5 Flash-Lite | 320ms | 800ms |
-| Gemini 3.5 Flash | 410ms | 1.0s |
-| Gemini 3.1 Pro | 1.1s | 2.7s |
-
-Notes:
-- Reasoning modes (GPT-5.5 extended reasoning, Gemini "thinking", Claude extended thinking) have multi-second TTFT by design — the "thinking" happens before any token streams.
-- Cache hits cut TTFT by 50-70% on the cached portion.
-
-### TTFT under input growth
-
-Same models, growing input size:
-
-| Model | 5K input | 50K input | 200K input | 500K input | 1M input |
-|-------|----------|-----------|------------|------------|----------|
-| Haiku 4.5 | 0.5s | 1.2s | 3.0s | — | — |
-| Sonnet 4.6 (1M) | 0.8s | 2.0s | 5.0s | 11s | 22s |
-| Opus 4.8 (1M) | 1.3s | 3.5s | 9.0s | 18s | 35s |
-| Fable 5 (1M) | 1.5s | 4.0s | 10s | 20s | 38s |
-| GPT-5.4 | 0.7s | 1.8s | 4.5s | — | — |
-| Gemini 3.5 Flash | 0.4s | 1.0s | 3.0s | 8s | 16s |
-| Gemini 3.1 Pro | 1.1s | 2.5s | 6.0s | 14s | 28s |
-
-The "— " means the model's window can't hold that input. Roughly linear scaling with input size until you hit batching/scheduling boundaries.
-
-### TPOT (tokens per second)
-
-Streaming speed once first token arrives:
-
-| Model | TPOT (P50) |
-|-------|------------|
-| Haiku 4.5 | 165 tok/s |
-| Sonnet 4.6 | 88 tok/s |
-| Opus 4.8 | 48 tok/s |
-| Fable 5 | 42 tok/s |
-| GPT-5.4 Nano | 320 tok/s |
-| GPT-5.4 Mini | 220 tok/s |
-| GPT-5.4 | 115 tok/s |
-| GPT-5.5 | 105 tok/s |
-| Gemini 2.5 Flash-Lite | 380 tok/s |
-| Gemini 3.5 Flash | 240 tok/s |
-| Gemini 3.1 Pro | 95 tok/s |
-
-For a typical 2000-token coding response:
-- Haiku: ~12s total
-- Sonnet: ~23s total
-- Opus: ~42s total
-- GPT-5.5: ~19s total
-- Gemini Flash: ~9s total
-- Gemini Pro: ~21s total
-
-Streaming hides this from a single-user perspective — feels faster than the total time because tokens appear continuously.
+Treat every number here as directional. Re-measure in your conditions before you commit.
 
 ---
 
-## Throughput
+## Published Coding Benchmarks
 
-Concurrent requests sustainable per API key without 429s:
+### Anthropic-reported results (Claude Opus 5.5 launch, September 22, 2026)
 
-| Provider | Default tier | Tier 4 / Enterprise |
-|----------|--------------|---------------------|
-| Anthropic | 50-100 concurrent | 1000+ |
-| OpenAI | 100-500 concurrent | 5000+ |
-| Google AI Studio | 60-300 | 1000+ |
-| Google Vertex AI | quota-based | configurable |
+Source: [Introducing Claude Opus 5.5](https://www.anthropic.com/news/claude-opus-5-5). GPT figures in this table are as reported by OpenAI and reproduced by Anthropic.
 
-Per-key tokens per minute:
+| Benchmark | Opus 5.5 | Fable 5.1 | Opus 5 | GPT-6 Astra | GPT-5.6 Sol |
+|-----------|----------|-----------|--------|-------------|-------------|
+| Terminal-Bench 4.0 (agentic coding) | 66.4% | 55.8% | 52.3% | 57.9% | 37.3% |
+| FrontierCode v1.1, Main (agentic coding) | 54.4% | 50.3% | 48.0% | 53.3% | 47.5% |
+| CursorBench 4.0 (agentic coding) | 57.8% | 51.8% | 46.6% | — | 41.7% |
+| OSWorld 2.1 (computer use) | 81.8% | 80.7% | 74.0% | — | — |
 
-| Provider | Default | High tier |
-|----------|---------|-----------|
-| Anthropic Sonnet | 400K input / 80K output | 8M / 1.6M |
-| Anthropic Opus | 200K input / 40K output | 4M / 800K |
-| OpenAI GPT-5.5 | 800K input / 200K output | 15M / 4M |
-| Gemini 3.1 Pro | 1M input / 250K output | unlimited (Vertex enterprise) |
+Notes from the source:
+- Opus 5.5 results use adaptive thinking at max effort, except Terminal-Bench 4.0 (xhigh effort). GPT-6 Astra on Terminal-Bench 4.0 is at high effort, as reported by OpenAI.
+- Terminal-Bench 4.0 standard error is about ±2.6 points for Opus 5.5 and ±1.6-2 points for the other Claude models, so gaps of a few points are within noise.
+- Opus 5.5 ran with production safeguards enabled; Anthropic notes this likely lowers its scores on some tasks.
+- Anthropic also notes that in its own use, the gap between Opus 5.5 and Fable 5.1 is narrower than these scores suggest.
 
-For agent fleets running > 100 RPS sustained, talk to providers about dedicated capacity. Anthropic, OpenAI, and Google all offer provisioned throughput or dedicated capacity at enterprise tiers.
+### Other vendors
+
+OpenAI (GPT-6 Astra, GPT-6.1 Sol) and Google (Gemini 4 Argon, Gemini 3.8 Flash) publish their own benchmark tables in their launch posts. Those pages weren't retrievable as primary sources for this revision, so their numbers aren't reproduced here. Read them directly, and note which benchmark versions and effort settings they use: the 2026 launch tables mostly report Terminal-Bench 4.0, DeepSWE, and FrontierSWE rather than SWE-bench Verified.
+
+### Public leaderboards
+
+- [SWE-bench](https://www.swebench.com/) (Verified, Multilingual, Multimodal, Bash Only)
+- [Terminal-Bench](https://www.tbench.ai/leaderboard) (4.0 is the current version)
+
+Leaderboard rows pair a model with an agent scaffold. A high-ranked "model + custom scaffold" entry doesn't tell you how that model performs inside Claude Code, Codex, Copilot, or Cursor.
 
 ---
 
-## Context-Fill Latency
+## Measuring Latency Yourself
 
-How long it takes a tool to *prepare* the context before sending to the model (file reads, grep, embedding lookups).
+Latency depends on prompt length, output length, thinking effort, region, and load, so measure it on prompts that look like yours. Track three numbers per model:
 
-| Tool | Small repo (10K LOC) | Medium repo (100K LOC) | Large repo (1M LOC) |
-|------|-----------------------|--------------------------|----------------------|
-| Claude Code (Read+Grep+Glob) | 200-500ms | 0.5-2s | 2-10s |
-| Cursor (@codebase semantic) | 100-300ms | 300-800ms | 1-3s (uses index) |
-| Cursor (@Files explicit) | < 100ms | < 100ms | < 100ms |
-| Gemini CLI (manual @file) | < 200ms | < 200ms | < 200ms |
-| Cody (repo-graph) | 200-500ms | 300-800ms | 500ms-2s (precomputed graph) |
-| Copilot (#codebase) | 100-300ms | 200-500ms | 500ms-1s (indexed) |
+- **TTFT** (time to first token): dominated by input size and thinking. Reasoning-heavy settings delay the first visible token by design.
+- **Output speed** (tokens per second after the first token).
+- **End-to-end task time**: the number users actually feel, including tool calls.
 
-Cursor and Cody invest in indexing — first-touch indexing of a large repo is minutes, then queries are sub-second. Claude Code does on-demand grep/read, so first query in a large repo is slower but no pre-warm needed.
+A minimal TTFT and output-speed probe for the Anthropic API:
 
-For interactive use, sub-second context fill is necessary. Past 2s users notice.
+```python
+import time
+
+import anthropic
+
+client = anthropic.Anthropic()
+
+
+def probe(model: str, prompt: str) -> dict:
+    """Measure TTFT and output speed for one streamed request."""
+    start = time.perf_counter()
+    first_token_at = None
+    with client.messages.stream(
+        model=model,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for _ in stream.text_stream:
+            if first_token_at is None:
+                first_token_at = time.perf_counter()
+        final = stream.get_final_message()
+    end = time.perf_counter()
+    ttft = (first_token_at or end) - start
+    output_tokens = final.usage.output_tokens
+    gen_seconds = max(end - (first_token_at or end), 1e-6)
+    return {
+        "model": model,
+        "ttft_s": round(ttft, 2),
+        "output_tok_per_s": round(output_tokens / gen_seconds, 1),
+    }
+
+
+for model_id in ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"]:
+    print(probe(model_id, "Write a Python function that parses ISO 8601 dates."))
+```
+
+Run each probe 20+ times at different hours and report P50 and P95, not a single run. Repeat the same pattern with the OpenAI and Gemini SDKs for cross-provider comparisons. Independent dashboards such as Artificial Analysis also track provider latency over time.
+
+Comparative latency from the vendor itself: Anthropic's [models overview](https://platform.claude.com/docs/en/about-claude/models/overview) ranks the current lineup as Haiku 5.5 (fastest), Sonnet 5.5 (fast), Opus 5.5 (moderate), Fable 5.1 (slower). Opus 5.5 also offers a paid **fast mode** ($8 / $40 per MTok) for significantly faster output.
+
+---
+
+## Throughput and Rate Limits
+
+Rate limits are per organization and tier, and they change. Read the current values from each provider rather than relying on a table:
+
+- Anthropic: [rate limits](https://platform.claude.com/docs/en/api/rate-limits)
+- OpenAI: rate limits shown per model on the [models pages](https://developers.openai.com/api/docs/models)
+- Google: [Gemini API rate limits](https://ai.google.dev/gemini-api/docs/rate-limits); Vertex AI uses project quotas
+
+For agent fleets running high sustained request rates, talk to providers about provisioned or dedicated capacity.
 
 ---
 
 ## Agent Dispatch Overhead
 
-The cost of spawning a subagent or starting an agent turn (before the model itself runs).
+Spawning a subagent costs more than a function call: the subagent initializes its own context (system prompt, tool definitions, project memory) before it does any work. Each hop adds model latency plus that setup.
 
-| Tool | Subagent spawn | Agent turn start | Note |
-|------|----------------|-------------------|------|
-| Claude Code | 1-2s | 300-500ms | Subagent has own context init |
-| Cursor Composer | 500ms-1s | 200-400ms | In-process |
-| LangGraph | 100-300ms per node | depends on node | Local; depends on tools |
-| CrewAI | 200-500ms per task | depends on agent | |
-| AutoGen | 300-800ms per agent | depends | Multi-process if configured |
+Facts worth knowing for Claude Code:
+- Background subagents run concurrently; Claude Code allows 20 at once by default (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` changes it) ([subagents docs](https://code.claude.com/docs/en/sub-agents)).
+- Subagents start with a fresh context, which is the point (isolation) and the cost (re-reading what the parent already knew).
 
-For agent-heavy workflows (10+ agent hops), this adds up. A 10-step Claude Code agent with subagents pays ~10s in pure orchestration overhead before any model time.
-
-Implication: collapsing steps in your agent design is high-leverage. A 3-agent topology often beats a 10-agent one on both latency and reliability.
-
----
-
-## Real-World Task Times
-
-Times observed on real tasks, June 2026, mid-range hardware, typical network:
-
-### "Implement a single REST endpoint with tests"
-
-| Tool/Model | Time | Notes |
-|------------|------|-------|
-| Cursor (Sonnet 4.6) | 45-90s | Including tests |
-| Claude Code (Sonnet 4.6) | 60-120s | Including tests + lint pass |
-| Copilot agent mode (GPT-5.4) | 90-180s | Plan → edit → verify loop in the IDE |
-| Gemini CLI (Gemini 3.1 Pro) | 50-100s | |
-
-### "Refactor a 500-line module into 3 smaller modules"
-
-| Tool/Model | Time |
-|------------|------|
-| Cursor Composer (Sonnet 4.6) | 2-5 min |
-| Claude Code (Sonnet 4.6) | 3-7 min (incl test runs) |
-| Claude Code (Opus 4.8) | 4-8 min |
-
-### "Audit a 50-file codebase for SQL injection patterns"
-
-| Tool/Model | Time |
-|------------|------|
-| Claude Code (Sonnet 4.6) + semgrep MCP | 5-15 min |
-| Gemini CLI (Gemini 3.1 Pro, single-shot) | 3-8 min |
-| Cursor (Sonnet 4.6) | manual; ~15-30 min for thorough |
-
-### "Migrate a project from Webpack 4 to Vite"
-
-| Tool/Model | Time |
-|------------|------|
-| Claude Code (Sonnet 4.6, agent mode) | 30-90 min (small project) |
-| Cursor Composer (Sonnet 4.6) | 30-90 min (small project) |
-| Manual | hours to days |
-
-For larger Webpack→Vite migrations, expect multi-hour sessions even with agents. The bulk of time is debugging the long tail of config-specific behaviors.
-
-### "Explain how authentication works in this repo (200K LOC)"
-
-| Tool/Model | Time |
-|------------|------|
-| Gemini CLI (3.1 Pro, load whole repo) | 2-5 min (mostly model time) |
-| Cody (Sonnet 4.6, repo-graph) | 30-90s |
-| Claude Code (Sonnet 4.6, grep + read) | 1-3 min |
-| Cursor (@codebase, Sonnet 4.6) | 1-2 min |
+Implication: collapsing steps in your agent design is high-leverage. A 3-agent topology often beats a 10-agent one on both latency and reliability. Measure the overhead in your own harness by timing an empty subagent dispatch.
 
 ---
 
 ## Cost Per Task
 
-Cost in USD, based on June 2026 prices ($/MTok: Sonnet 4.6 $3/$15, Opus 4.8 $5/$25, GPT-5.4 $2.50/$15, Gemini 3.1 Pro $2/$12), typical token consumption per task class:
+Cost per task = input tokens × input rate + output tokens × output rate, adjusted for cache hits. Measure token counts from your own runs (every API response reports usage), then apply current prices.
 
-| Task class | Sonnet 4.6 | Opus 4.8 | GPT-5.4 | Gemini 3.1 Pro | Gemini 3.5 Flash |
-|------------|------------|----------|---------|-----------------|-------------------|
-| Single endpoint + tests | $0.05-0.15 | $0.10-0.25 | $0.07-0.20 | $0.05-0.15 | $0.005-0.02 |
-| 500-line refactor | $0.10-0.40 | $0.25-0.85 | $0.20-0.55 | $0.10-0.35 | $0.01-0.05 |
-| Codebase audit (50 files) | $0.30-1.00 | $0.65-2.00 | $0.45-1.50 | $0.20-0.70 | $0.03-0.10 |
-| Library migration | $1.00-5.00 | $2.00-8.00 | $1.50-7.00 | $0.70-4.00 | $0.10-0.50 |
-| Whole-repo Q&A (200K LOC) | $0.10-0.30 | $0.15-0.50 | n/a | $0.60-1.80 | $0.05-0.20 |
+Prices used below are list rates per MTok as of October 2026 (see [cost-analysis.md](cost-analysis.md) for sources):
 
-Sonnet 4.6 and Opus 4.8 carry the full 1M window at standard pricing, so whole-repo Q&A no longer requires a price-tier jump on Anthropic. Gemini 3.1 Pro charges its >200K rate ($4/$18) for that workload.
+| Model | Input | Output | Cache read |
+|-------|-------|--------|------------|
+| Claude Sonnet 5.5 | $2.00 | $10.00 | $0.10 |
+| Claude Opus 5.5 | $4.00 | $20.00 | $0.20 |
+| GPT-6.1 Sol | $2.00 | $10.00 | $0.10 |
+| Gemini 3.8 Flash | $0.75 | $3.75 | $0.075 |
 
-Wide ranges because actual token usage varies 3-10x based on prompt structure, cache hits, and reasoning depth.
+**Worked example (illustrative token counts).** A task that reads 200K input tokens, of which 150K are cache hits, and writes 20K output tokens:
 
-Cost framing: a senior engineer at $200K total comp costs about $100/hour fully loaded. Even an Opus-heavy day at $10-20 in API calls is < 10% of one engineer-hour. The real cost question is opportunity cost of *not* getting the leverage.
+| Model | Uncached input | Cached input | Output | Total |
+|-------|----------------|--------------|--------|-------|
+| Sonnet 5.5 | 50K × $2 = $0.10 | 150K × $0.10 = $0.015 | 20K × $10 = $0.20 | ~$0.32 |
+| Opus 5.5 | 50K × $4 = $0.20 | 150K × $0.20 = $0.03 | 20K × $20 = $0.40 | ~$0.63 |
+
+Two things change the real answer more than the rate card:
+- **Token counts differ by model.** Claude 4.7-and-later models use a tokenizer that produces roughly 30% more tokens for the same text than earlier Claude models, and reasoning effort changes output length. Anthropic says Opus 5.5 costs about 40% less to run than Opus 5 at default settings, more than the token-price cut alone.
+- **Long-context surcharges.** OpenAI bills prompts over 272K input tokens at higher rates; Gemini 3.1 Pro does above 200K; Claude models (except Haiku 5.5, which has a 100K threshold) don't.
+
+Cost framing: compare the API bill against engineer time. Even an Opus-heavy day of API calls is usually a small fraction of one engineer-hour. The real question is the opportunity cost of *not* getting the leverage.
 
 ---
 
 ## Cache Performance
 
-Cache hit rates observed in steady-state agent workflows (after first call):
+Cache economics (as of October 2026):
 
-| Tool / pattern | Hit rate | Effective savings |
-|----------------|----------|-------------------|
-| Claude Code, stable CLAUDE.md, repeated tool use | 80-95% | ~75% input cost reduction |
-| Cursor (Sonnet), composer session | 60-80% | ~60% |
-| Custom Anthropic API client with cache_control | 70-90% | ~70% |
-| OpenAI auto-cache, stable system prompt | 70-85% | ~70% (90% savings on cached portion) |
-| Gemini implicit cache | 50-80% (varies) | 0 explicit cost — free benefit |
-| Gemini Context Caching API (1h cache) | depends | ~85% on hit |
+| Provider | Cache read price | Notes |
+|----------|------------------|-------|
+| Anthropic | 0.1x base input (0.05x on Opus 5.5 and Sonnet 5.5; 0.025x on Fable 5.1) | 5-minute writes cost 1.25x, 1-hour writes 2x. Pays off after one read (5m) or two reads (1h). |
+| OpenAI | Listed per model (e.g. GPT-6.1 Sol $0.10 vs $2.00 input) | Applied automatically to repeated prefixes |
+| Google | Listed per model (e.g. Gemini 3.8 Flash $0.075 vs $0.75) | Implicit caching plus explicit Context Caching with a storage fee per hour |
 
-Cache effectiveness drops to near-zero on:
+Hit rates depend entirely on prompt structure. Measure yours from the usage fields each API returns (`cache_read_input_tokens` on Anthropic). Cache effectiveness drops to near zero on:
 - One-shot prompts (no repeat)
-- Prompts with random tokens / timestamps in the prefix
-- Prompts that change file ordering between turns
-- Sub-1024-token prompts (Anthropic minimum)
+- Prompts with timestamps or random IDs early in the prefix
+- Prompts that reorder files or tools between turns
+- Prompts below the provider's minimum cacheable length (see each provider's caching docs)
 
 ---
 
-## Headroom Under Load
+## Behavior Under Load
 
-How tools / providers behave when you push them:
+When load exceeds capacity, providers signal it differently:
+- **Anthropic:** `529 overloaded_error` during broad overload, `429` for your rate limit (with `retry-after`).
+- **OpenAI:** `429` with rate-limit headers.
+- **Google:** `429` with a quota error body.
 
-### Claude Code
-
-- Sonnet 4.6 at default tier: comfortable up to ~30 concurrent agent sessions per key.
-- Past 50 concurrent: 529 overload errors common during peak hours.
-- Mitigation: enterprise tier or fallback to Haiku for non-critical traffic.
-
-### OpenAI GPT-5.5 / 5.4
-
-- More forgiving at high concurrency in 2026.
-- Tier 4 / Enterprise: thousands of concurrent without issue.
-- Lower tiers: 429s start around 100 concurrent on the flagship tier.
-
-### Gemini 3.x
-
-- Vertex enterprise tier: effectively unlimited for most workloads.
-- AI Studio (free / paid): tighter quotas, hit 429s faster than Anthropic / OpenAI on equivalent workloads.
-
-### Pattern under load
-
-When load exceeds capacity:
-- Anthropic: 529 first, then 429.
-- OpenAI: 429 with Retry-After header.
-- Google: 429 with quota error body.
-
-Back off exponentially. Past 60s of backoff, fall back to a different provider or model tier.
-
----
-
-## Tool-Level Latency Comparison
-
-Provider-level numbers don't tell the whole story. The tool wrapping the model adds its own overhead.
-
-### Same model, different tools, same task
-
-Task: "Add error handling to a 200-line file." Same Sonnet 4.6 underneath. End-to-end times observed:
-
-| Tool | Total time | Why |
-|------|------------|-----|
-| Cursor Composer | 25-40s | Tight in-process loop, minimal tool overhead |
-| Claude Code | 30-50s | Bash + Read + Edit tool calls add latency; subagent overhead if dispatched |
-| Cody (chat → apply edit) | 35-55s | Cross-process; repo-graph lookup adds time |
-| Custom LangChain agent | 40-80s | Framework overhead, additional safety wrappers |
-| Direct API call (one-shot) | 18-30s | Lowest latency, no agent loop |
-
-The takeaway: a 30% latency premium from a tool that gives you better grounding, governance, or workflow ergonomics is often worth it. Pure speed isn't the only axis.
-
-### IDE round-trip overhead
-
-For inline completions, the round trip matters more than model speed:
-
-| Path | Typical RTT |
-|------|-------------|
-| Cursor Tab (in-process model) | 150-300ms |
-| Copilot inline (GitHub edge) | 200-400ms |
-| Windsurf (formerly Codeium) inline | 200-400ms |
-| Continue.dev with local Ollama | 100-500ms (depends on model + hardware) |
-| Cursor BYOK with Anthropic API | 400-800ms (cross-Internet) |
-
-For "typing speed completions," anything under 400ms feels responsive. Past 800ms, completions arrive after you've moved on. This is why most tools optimize completion paths with smaller specialized models, edge inference, or local caching.
+Back off exponentially with jitter. Past about a minute of backoff, fall back to a different model tier or provider. See [error-handling.md](../best-practices/error-handling.md).
 
 ---
 
@@ -335,64 +212,34 @@ For "typing speed completions," anything under 400ms feels responsive. Past 800m
 
 A more honest metric than raw latency: time to *acceptable* output.
 
-If a fast model produces an answer you have to fix or re-prompt, the real time is the full iteration. Examples:
+If a fast model produces an answer you have to fix or re-prompt, the real time is the full iteration. Typical patterns:
 
-| Scenario | Fast-but-wrong | Slower-but-right |
-|----------|----------------|--------------------|
-| Inline completion | Copilot Pro on GPT-5.4-class, 250ms, ~25% accepted | Cursor with Sonnet, 350ms, ~40% accepted |
-| Single-file refactor | Haiku 4.5, 12s, often needs follow-up | Sonnet 4.6, 25s, usually one-shot |
-| Multi-file refactor | Sonnet 4.6, 4 min, ~70% one-shot | Opus 4.8, 7 min, ~90% one-shot |
-| Architecture decision | Sonnet 4.6, 30s, sometimes weak | Opus 4.8, 90s, more often defensible |
-| Debugging a hard bug | Sonnet 4.6, multiple iterations | Fable 5 or Opus 4.8, one or two iterations |
+| Scenario | Fast-but-weaker | Slower-but-stronger |
+|----------|-----------------|---------------------|
+| Single-file refactor | Haiku-class: quick, may need a follow-up | Sonnet-class: slower, more often one-shot |
+| Multi-file refactor | Sonnet-class: faster per call | Opus-class: fewer iterations |
+| Architecture decision | Sonnet-class: sometimes shallow | Opus- or Fable-class: more often defensible |
+| Debugging a hard bug | Mid-tier: multiple iterations | Top tier: fewer iterations |
 
-Acceptance rate × iteration count is the real performance number. A model with 90% one-shot rate beats a model with 50% one-shot rate even if each call is twice as long, because the second model burns multiple iterations.
+Acceptance rate × iteration count is the real performance number. Track both on your own tasks: a model with a 90% one-shot rate beats one with 50% even if each call takes twice as long.
 
-This is why "use the cheaper model" advice fails on hard tasks. The cheaper model's correctness rate falls off faster than its cost — you end up doing 3 cheap calls instead of 1 expensive one and pay more in both money and wall-clock time.
-
----
-
-## Failure-Mode Latency
-
-What happens when things go wrong matters as much as the happy-path numbers:
-
-| Failure | Provider response | Tool response |
-|---------|---------------------|-----------------|
-| 429 rate limit | Retry-After header | Most tools auto-retry with backoff |
-| 529 overload (Anthropic) | Backoff suggested | Claude Code: auto-retry up to ~3 times |
-| 503 service unavailable | Backoff | Usually surfaces to user after 2-3 retries |
-| Context-length exceeded | Hard error | Cursor: error in UI; Claude Code: tries to compact |
-| Timeout | Times out | Tool-specific defaults, see [error-handling.md](../best-practices/error-handling.md) |
-
-Time-to-recover from a transient failure:
-
-| Tool | First retry | Total recovery (3 attempts) |
-|------|-------------|------------------------------|
-| Claude Code | ~2s | ~10-15s |
-| Cursor | ~1-2s | ~5-10s |
-| Direct API client | configurable | configurable |
-
-Under sustained pressure (e.g., during model release rollout):
-- Claude Code degrades gracefully — multiple model fallbacks
-- Cursor degrades by surfacing errors
-- Copilot degrades silently (completions just stop appearing)
+This is why "use the cheaper model" advice fails on hard tasks. The cheaper model's correctness rate falls off faster than its cost; you end up making three cheap calls instead of one expensive one and pay more in money and wall-clock time.
 
 ---
 
 ## When Performance Is Not the Right Metric
 
-A few categories where chasing latency leads to wrong conclusions:
-
 ### Background workloads
 
-If a human isn't waiting, total throughput and cost matter, not latency. A batch job that takes 24 hours and costs $5 beats one that takes 1 hour and costs $50.
+If a human isn't waiting, total throughput and cost matter, not latency. Batch APIs (50% off at Anthropic, OpenAI, and Google) trade turnaround time for price.
 
 ### Interactive but deep
 
-For architecture decisions, multi-file refactors, or complex debugging, the user is invested in the outcome and tolerates much higher latency. Spending 90 seconds with Opus 4.8 is fine if the answer is right; spending 30 seconds with Sonnet 4.6 and getting it wrong wastes 30 minutes of the human's time fixing it.
+For architecture decisions, multi-file refactors, or complex debugging, the user is invested in the outcome and tolerates much higher latency. A slower, right answer from Opus 5.5 beats a fast, wrong answer that costs 30 minutes of human fixing.
 
 ### Eval / CI
 
-Evaluation suites should use fast cheap models (Haiku, Flash-Lite) as judges to keep CI under the speed budget. The model under test can still be Opus.
+Evaluation suites should use fast, cheap models (Haiku 5.5, GPT-6 Luna, Flash-Lite) as judges where accuracy allows, to keep CI within its speed budget. The model under test can still be Opus.
 
 ### Multi-agent
 
@@ -404,31 +251,28 @@ In a multi-agent system, the slowest agent in the critical path determines end-t
 
 If you have a slow workflow, work this list top-down:
 
-1. **Reduce prompt size.** Lower input tokens lower TTFT linearly.
-2. **Enable / improve caching.** Cache hits cut TTFT 50-70% on cached portion.
-3. **Pick the right model tier.** Cheaper / faster for routine; reserve top tier for hard cases.
-4. **Parallelize tool calls.** Independent file reads, grep, API calls in one turn instead of sequentially.
-5. **Stream the response.** Doesn't reduce total time; reduces perceived latency dramatically.
-6. **Switch to a faster provider.** Groq, Cerebras, SambaNova for open models when latency is critical.
+1. **Reduce prompt size.** Fewer input tokens means lower TTFT.
+2. **Enable / improve caching.** Stable prefixes first, volatile content last.
+3. **Pick the right model tier.** Cheaper and faster for routine work; reserve the top tier for hard cases.
+4. **Tune thinking effort.** Lower effort cuts latency and output tokens on routine tasks.
+5. **Parallelize tool calls.** Independent file reads, greps, and API calls in one turn.
+6. **Stream the response.** Doesn't reduce total time; reduces perceived latency.
 7. **Reduce agent loop length.** Collapse steps; better prompts mean fewer corrections.
-8. **Co-locate compute and provider.** Match region of your agent runtime to provider region.
+8. **Co-locate compute and provider.** Match your agent runtime's region to the provider's.
 
-In that order. Step 1 and 2 commonly produce 5-10x improvements; step 8 is usually 10-30%.
+Steps 1 and 2 usually produce the largest gains; step 8 is usually small. Confirm with your own before/after measurements.
 
 ---
 
 ## Caveats
 
-These numbers are wrong in some ways:
+1. **Numbers move fast.** New model versions ship every few months. Re-benchmark quarterly.
+2. **Vendor-reported scores** use the vendor's own scaffolds and effort settings. Use them for direction, not as guarantees.
+3. **Workload-specific.** Coding tasks are not the same as data extraction or agent reasoning.
+4. **Single-user vs fleet.** Production fleets behave differently from a single dev session.
+5. **Geographic.** Regions differ in latency and model availability; US-only inference on Anthropic carries a 1.1x price multiplier.
 
-1. **They move fast.** New model versions appear every 2-6 months. Re-benchmark quarterly.
-2. **Quality not measured here.** A fast model that produces wrong answers fails the real benchmark.
-3. **Workload-specific.** Coding tasks are not the same as data extraction, not the same as agent reasoning.
-4. **Single-user.** Production fleets behave differently from a single dev session.
-5. **Geographic.** US-East is well-served. Other regions have higher latency and sometimes different model availability.
-6. **Vendor self-published numbers** often optimistic. Public benchmarks (Aider, SWE-bench) more reliable for quality. Independent latency dashboards (Artificial Analysis, Vellum) more reliable for speed.
-
-Use these as a starting heuristic. Measure your own workload before committing to a tool / model choice for production.
+Measure your own workload before committing to a tool or model for production.
 
 ---
 

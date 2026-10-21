@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Validation script stub for skill-with-script-template.
+Validation script stub for the skill-with-script template.
 
 Replace this with real validation logic. The skill body invokes it as:
 
-    python3 scripts/validate.py --input <target_path> --discovery <discovery_json>
+    python3 ${CLAUDE_SKILL_DIR}/scripts/validate.py --input <target_path> --discovery <discovery_json>
 
 Contract:
 - Exit 0 on success. Print structured JSON summary on stdout.
@@ -12,7 +12,7 @@ Contract:
   on stderr. The skill body surfaces this to the user.
 
 Keep this script standalone — no external dependencies beyond the Python
-stdlib unless documented in the skill's `requires.external-tools`.
+stdlib unless documented in the skill's `compatibility` field.
 """
 
 from __future__ import annotations

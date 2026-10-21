@@ -2,7 +2,7 @@
 
 A catalog of the orchestration patterns that actually show up in production multi-agent systems. Each entry covers when to reach for the pattern, when to avoid it, what the code shape looks like, and the failure modes to design against.
 
-These are patterns, not frameworks. You can implement any of them in LangGraph, CrewAI, AutoGen, the Claude Code Agent SDK, or with no framework at all. The thinking is portable; the syntax varies.
+These are patterns, not frameworks. You can implement any of them in LangGraph, CrewAI, AutoGen, the Claude Agent SDK, or with no framework at all. The thinking is portable; the syntax varies.
 
 ---
 

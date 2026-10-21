@@ -22,21 +22,20 @@ Comprehensive guide to Copilot Chat — the conversational layer that sits along
 
 ## Overview
 
-Copilot Chat is the conversational sibling of ghost-text completions. It's available in VS Code, Visual Studio, JetBrains, Neovim, and Emacs, with the deepest features in VS Code.
+Copilot Chat is the conversational sibling of ghost-text completions. It's available on GitHub.com and GitHub Mobile and in VS Code, Visual Studio, JetBrains, Xcode, and Eclipse (plus community plugins for Neovim and Emacs), with the deepest features in VS Code. In current IDEs, chat and agent mode share one window: you pick **Ask**, **Plan**, or **Agent** (or a custom agent) from the picker.
 
 ### What Chat Is Good At
 
 - Explaining code you didn't write
 - Refactors with intent ("convert this to async/await with proper error handling")
 - Generating tests against an existing function
-- Q&A about your codebase via `@workspace`
+- Q&A about your codebase (the agent searches the repo for you)
 - Drafting commit messages and PR descriptions
 - Walking through stack traces and runtime errors
 
 ### What Chat Is Bad At
 
-- Long autonomous tasks — use agent mode or the [coding agent](workspace-guide.md)
-- Cross-file refactors — use Edits mode
+- Long autonomous tasks in Ask mode — switch to Agent, the [Copilot CLI](cli-guide.md), or [cloud agent](workspace-guide.md)
 - Anything requiring up-to-the-minute information about a library — Copilot's training data lags, and the in-chat web search is shallow
 
 ---
@@ -49,7 +48,7 @@ Two surfaces with very different ergonomics.
 
 - Persistent thread in the sidebar.
 - Conversation history visible across turns.
-- Has access to all `@`-participants.
+- Hosts the Ask / Plan / Agent picker and the model picker.
 - Best for: planning, learning, conceptual questions, multi-step refactors.
 
 Open with `Ctrl+Cmd+I` (Mac) / `Ctrl+Alt+I` (Windows/Linux) in VS Code.
@@ -65,7 +64,7 @@ Open with `Cmd+I` (Mac) / `Ctrl+I` (Windows/Linux). With no selection, inline ch
 
 ### Quick Chat (VS Code only)
 
-A keyboard-driven popup that combines the two — appears centered on screen, accepts a one-shot question, dismisses on Esc. `Cmd+Shift+I` / `Ctrl+Shift+I`.
+A keyboard-driven popup that combines the two — appears at the top of the window, accepts a one-shot question, dismisses on Esc. `Shift+Option+Cmd+L` / `Ctrl+Shift+Alt+L`.
 
 ### When to Use Which
 
@@ -78,65 +77,33 @@ A keyboard-driven popup that combines the two — appears centered on screen, ac
 | "Add a docstring here" | Inline |
 | "Walk me through Redux Toolkit" | Side panel |
 | "Generate tests for this function" | Inline (with `/tests`) |
-| "What does this codebase do?" | Side panel with `@workspace` |
+| "What does this codebase do?" | Side panel (Ask or Agent) |
 
 ---
 
 ## Slash Commands
 
-Slash commands are scoped, predictable shortcuts. They live at the start of the chat input.
+Slash commands are scoped, predictable shortcuts. They live at the start of the chat input; type `/` to see what your IDE and agent support right now — the list differs by editor and, in VS Code, by agent harness.
 
-### Core Commands
+### Common Commands (VS Code, October 2026)
 
 | Command | What it does | Where it works |
 |---------|--------------|----------------|
-| `/explain` | Explain the selected code or active editor | Both inline and panel |
-| `/fix` | Propose a fix for the diagnostics in the selection | Both |
-| `/tests` | Generate unit tests for the selection | Both |
-| `/doc` | Add a docstring / JSDoc / DocComment | Inline preferred |
-| `/optimize` | Suggest performance improvements | Both |
-| `/simplify` | Make selected code clearer or shorter | Inline preferred |
-| `/clear` | Clear the current chat thread | Panel |
-| `/help` | List available commands | Panel |
-| `/new` | Start a fresh thread | Panel |
+| `/explain` | Explain the selected code or active editor | Inline chat |
+| `/fix` | Propose a fix for the problems in the selection | Inline chat |
+| `/tests` | Generate unit tests for the selection | Inline chat |
+| `/doc` | Add documentation comments | Inline chat |
+| `/plan` | Research the task and draft an implementation plan | Chat view |
+| `/new`, `/clear` | Start a fresh session | Chat view |
+| `/compact` | Summarize the conversation to free context | Chat view |
+| `/fork` | Branch the conversation | Chat view |
+| `/models`, `/tools` | Pick a model; configure available tools | Chat view |
+| `/init` | Generate workspace instructions (Local harness) | Chat view |
+| `/delegate` | Hand the session to Copilot cloud agent | Chat view |
 
-### VS Code-Only Commands
-
-| Command | What it does |
-|---------|--------------|
-| `/setupTests` | Scaffold a test framework in the workspace (Jest, Vitest, pytest, etc.) |
-| `/fixTestFailure` | Diagnose the most recent test failure in the terminal |
-| `/runCommand` | Generate and optionally execute a VS Code command |
-| `/search` | Search the workspace and reason over results |
-
-### Composing Slash Commands with `@`-Participants
-
-Slash commands can be combined with participants:
-
-```
-@workspace /explain how does authentication work?
-```
-
-```
-@terminal /fix the last command failed with a permission error
-```
-
-```
-@vscode /runCommand turn on word wrap
-```
-
-This is the most powerful form of chat — the participant controls *what context Copilot has access to* and the slash command controls *how it should respond*.
+Prompt files (`.prompt.md`) and skills add your own `/commands` — see [VS Code customization](../vscode/customization.md).
 
 ### Examples
-
-**Tighten loose code:**
-
-```
-/simplify
-```
-*(with the selection being a 30-line if/else chain)*
-
-→ Copilot suggests a `switch` or lookup table.
 
 **Generate edge-case tests:**
 
@@ -154,160 +121,51 @@ This is the most powerful form of chat — the participant controls *what contex
 
 ## Workspace-Aware Chat
 
-`@workspace` (VS Code) and `@project` (JetBrains) give Copilot access to your repository's contents — including files you don't currently have open.
-
-### How It Works
-
-VS Code builds either a *local* or *remote* index of your repo, depending on size:
-
-- Repos under ~750 files → in-memory local index.
-- Larger repos → indexed by GitHub's hosted code-search service (requires repo to be on GitHub.com or GHEC).
-
-Check status: command palette → `GitHub Copilot: Workspace Index Status`.
-
-### Good Questions for `@workspace`
+You used to need `@workspace` (VS Code) or `@project` (JetBrains) to ask about files you didn't have open. In VS Code's default **Copilot harness**, chat participants are deprecated and unsupported — the agent searches your codebase itself (semantic code search uses the Copilot service). Just ask:
 
 ```
-@workspace where is the user-authentication logic implemented?
+Where is the user-authentication logic implemented?
 
-@workspace what's the difference between OrderService and OrderManager?
+What's the difference between OrderService and OrderManager?
 
-@workspace what does our HTTP retry logic look like across the codebase?
+Find all places that read from the FEATURE_FLAG_AUTH environment variable.
 
-@workspace find all places that read from the FEATURE_FLAG_AUTH environment variable
-
-@workspace what's the convention for naming database migrations here?
+What's the convention for naming database migrations here?
 ```
 
-### Bad Questions for `@workspace`
+Narrow the search by attaching context with `#`-mentions (for example `#file`) or by dragging files into the chat input:
 
 ```
-@workspace refactor the entire codebase to use TypeScript strict mode
-```
-→ `@workspace` is *retrieval*, not bulk editing. Use Edits mode or the coding agent.
-
-```
-@workspace what does this function do?
-```
-→ With the function selected, drop `@workspace`. The retrieval overhead just slows you down.
-
-### Constraining the Search
-
-You can scope `@workspace` to subdirectories using `#file:`:
-
-```
-@workspace /explain how is logging configured? #file:src/infra/logging
+#file:src/api/auth.ts #file:src/api/session.ts what protects against session fixation?
 ```
 
-Or narrow to specific files:
-
-```
-@workspace #file:src/api/auth.ts #file:src/api/session.ts what protects against session fixation?
-```
+Bulk changes ("refactor the whole codebase to strict mode") belong in **Agent** with a plan, or in [cloud agent](workspace-guide.md) — not in a Q&A turn.
 
 ---
 
-## Chat Participants (`@`-mentions)
+## Chat Participants (`@`-mentions) — Legacy
 
-Participants are domain-specific assistants that bring their own context and tools to the conversation.
+Participants such as `@workspace`, `@vscode`, `@terminal`, and `@github` were domain-specific assistants that brought their own context. Their status in October 2026:
 
-### Built-In Participants
+- **VS Code, Copilot harness (default):** deprecated and not supported. Ask the agent directly; for GitHub data use the built-in GitHub MCP tools, and for terminal problems use inline chat in the terminal (`Cmd+I` / `Ctrl+I`).
+- **VS Code, Local harness:** participants still work if you switch the session to the Local harness.
+- **Other IDEs:** support varies — type `@` in the chat input to see what's available.
+- **Third-party participants** from Copilot Extensions are gone entirely (see below).
 
-#### `@workspace`
-
-Discussed above. Indexes and answers questions about your code.
-
-#### `@vscode`
-
-Knows VS Code's API, settings, commands, and extension model.
-
-```
-@vscode how do I bind Cmd+K Cmd+B to toggle the sidebar?
-
-@vscode write a tasks.json that runs pytest with coverage
-
-@vscode what's the setting to disable telemetry?
-```
-
-#### `@terminal`
-
-Has access to your active terminal — recent commands, output, current working directory.
-
-```
-@terminal /explain what did the last command output mean?
-
-@terminal /fix the docker build failed — diagnose and propose a fix
-
-@terminal how do I tail logs from the running container?
-```
-
-`@terminal` is particularly good for "I just ran this and it broke" loops — paste nothing, just ask.
-
-#### `@github`
-
-Reaches into github.com — issues, PRs, repository metadata, releases, workflows.
-
-```
-@github what are the open issues with the `bug` label in this repo?
-
-@github summarize PR #1247
-
-@github what changed between v2.3 and v2.4 of `axios`?
-
-@github show me the failing checks on my latest push
-```
-
-#### `@file`
-
-Pull a specific file's contents into the conversation as context.
-
-```
-@file:src/api/auth.ts how would I add MFA support here?
-```
-
-In VS Code, `@file` autocompletes paths.
-
-#### `@editor`
-
-The currently active editor / selection. This is the *default* context — you only need `@editor` explicitly when you've also mentioned other participants and want to be explicit.
-
-### Combining Participants
-
-```
-@workspace @github does this PR introduce any inconsistencies with how we typically handle errors?
-```
-
-Copilot picks up your code conventions via `@workspace`, then compares them against the PR via `@github`.
-
-### Which Participant for Which Question
-
-| Question type | Best participant |
-|---------------|------------------|
-| "What does this code do?" | (default — selection) |
-| "Where in this repo is X?" | `@workspace` |
-| "What command in my editor?" | `@vscode` |
-| "Why did my last shell command fail?" | `@terminal` |
-| "Summarize this PR / issue" | `@github` |
-| "Tell me about this specific file" | `@file:path` |
+If you have team docs or habits built around `@workspace` prompts, they mostly translate one-to-one: drop the `@workspace` prefix and ask the same question in Ask or Agent.
 
 ---
 
 ## Chat Threads and History
 
-### Threads in VS Code
+### Sessions in VS Code
 
-Each chat panel session is a thread. Chat history is kept per workspace.
-
-- **New thread:** `+` button at the top of the chat panel, or `/new`.
-- **Switch threads:** dropdown of recent threads at the top of the panel.
-- **Pin a thread:** right-click → Pin (it floats to the top).
-- **Export:** right-click thread → Export to file (saves Markdown).
+Each chat is a session. Start a new one with `Cmd+N` / `Ctrl+N` in the Chat view or `/new`; browse, resume, and manage past and running sessions (including background, cloud, and third-party agent sessions) from the sessions list or the Agents window. `/fork` branches a conversation; `/compact` summarizes it.
 
 ### Threads in JetBrains
 
-- Threads live in the chat tool window.
-- New thread: `+` icon in the chat toolbar.
-- History persists per-project.
+- Threads live in the chat tool window; start a new one from the chat toolbar.
+- Turns are grouped with navigation, and you can copy or edit your earlier messages.
 
 ### When to Start a New Thread
 
@@ -317,7 +175,7 @@ Each chat panel session is a thread. Chat history is kept per workspace.
 
 ### Context Length
 
-Chat threads aren't unlimited. Most models in chat have a 64k–200k context window, but Copilot ships only a fraction of that as conversation history. Long threads quietly truncate older turns. If you find Copilot "forgetting", start a new thread or summarize the relevant state into a single message.
+Chat threads aren't unlimited. Long sessions get compacted (summarized) as they approach the model's context limit, so details from early turns can drop out. If Copilot starts "forgetting", run `/compact` with a focus, start a new session, or summarize the relevant state into a single message. VS Code and the Copilot CLI also offer a 1M-token context option on supported models, at a higher AI Credit cost.
 
 ---
 
@@ -338,9 +196,11 @@ Custom instructions are the durable way to shape chat answers per repository —
   Use the repository's `httpx` client at app.http — never `requests`.
   ```
 
-- **`AGENTS.md`** — the cross-tool agent instructions format, also read by Copilot CLI, the coding agent, and non-Copilot tools.
+- **`AGENTS.md`** — the cross-tool agent instructions format, also read by Copilot CLI, cloud agent, code review, and non-Copilot tools. (`CLAUDE.md` and `GEMINI.md` are also read by cloud agent and Copilot CLI.)
 
-There are also **personal instructions** (your Copilot Chat on GitHub.com) and **organization instructions** (Business/Enterprise, set by org owners).
+There are also **personal instructions** (Copilot Chat on GitHub.com, JetBrains, and Copilot CLI) and **organization instructions** (set by org owners; applied on GitHub.com).
+
+Support varies by surface — for example, VS Code chat reads repository-wide, path-specific, and `AGENTS.md` instructions, while Visual Studio chat reads only repository-wide and path-specific files. See GitHub's [custom instructions support matrix](https://docs.github.com/en/copilot/reference/custom-instructions-support).
 
 ### What Belongs in Instructions vs Prompts
 
@@ -359,13 +219,14 @@ If you find yourself typing the same constraint into chat twice, move it into `.
 
 GitHub-App-based **Copilot Extensions** — the marketplace participants like `@stripe`, `@docker`, and `@perplexity` — were **sunset on November 10, 2025** (new ones were blocked from September 2025). They no longer work anywhere in Copilot Chat.
 
-The replacement is the **Model Context Protocol (MCP)**, an open standard: build or install an MCP server once and it works across Copilot, Copilot CLI, the coding agent, Claude Code, and any other MCP-compatible host.
+The replacement is the **Model Context Protocol (MCP)**, an open standard: build or install an MCP server once and it works across Copilot, Copilot CLI, cloud agent, Claude Code, and any other MCP-compatible host.
 
 ### Using MCP in Copilot Today
 
-- **VS Code**: add servers to `.vscode/mcp.json` (workspace) or your user-level `mcp.json` — see the [IDE guide](ide-guide.md#agent-mode). MCP tools are invoked with `#toolname` in chat and autonomously in agent mode.
-- **Copilot CLI**: `/mcp add` — GitHub's MCP server is pre-configured. See the [CLI guide](cli-guide.md#mcp-servers).
-- **Coding agent**: GitHub and Playwright MCP servers are enabled by default; add more in repository settings.
+- **VS Code**: the default Copilot harness reads `~/.copilot/mcp-config.json` and a workspace-root `.mcp.json` (`mcpServers` key); the Local harness reads `.vscode/mcp.json` / your profile `mcp.json` (`servers` key) — see the [IDE guide](ide-guide.md#mcp-servers). Agents call MCP tools autonomously.
+- **Copilot CLI**: `/mcp` or `copilot mcp` — GitHub's MCP server is built in. See the [CLI guide](cli-guide.md#mcp-servers).
+- **Cloud agent**: GitHub and Playwright MCP servers are enabled by default; add more in repository settings.
+- **Copilot Spaces**: the context you curate in a space on GitHub.com can be reached from your IDE through the GitHub MCP server.
 
 ### If You Built an Extension
 
@@ -375,37 +236,43 @@ Port the same functionality to an MCP server: tools map naturally from the old f
 
 ## Models and AI Credits
 
-Copilot Chat lets you pick the model on a per-message basis. The dropdown at the bottom of the chat input shows the models available on your plan.
+Copilot Chat lets you pick the model per conversation from the model picker in the chat input — or choose **Auto** and let Copilot route requests (on paid plans Auto gets a 10% model-cost discount). Copilot Free and Copilot Student are limited to Auto. Which models you see depends on your plan, your client, and any org model policy.
 
-### Typical Lineup (mid-2026)
+### Lineup (as of October 2026)
 
-| Model | Notes |
-|-------|-------|
-| GPT-5 mini | Light, fast default-tier model |
-| GPT-5.x series | OpenAI's mainline models |
-| Claude Haiku 4.5 | Fast, cheap Anthropic model |
-| Claude Sonnet 4.5 / 4.6 | Strong general coding, long context |
-| Claude Opus 4.5+ | Highest quality, higher credit burn (Pro+ and up) |
-| Gemini 2.5 Pro / Gemini 3.x | Strong multimodal / very long context |
+| Provider | Models listed in GitHub's supported-models reference |
+|----------|------------------------------------------------------|
+| Anthropic | Claude Fable 5.1 / Fable 5, Claude Opus 5.5, Claude Sonnet 5.5 / Sonnet 5 / Sonnet 4.6, Claude Haiku 5.5 / Haiku 4.5 |
+| OpenAI | GPT-6.1 Sol, GPT-6 Sol / Luna / Astra, GPT-5.6 Sol / Luna, GPT-5.4 nano, GPT-5.3-Codex |
+| Google | Gemini 4 Argon, Gemini 3.8 Flash |
+| xAI | Grok 4.7, Grok 4.6 |
+| Others | MAI-Code-1.1-Flash (Microsoft), Kimi K3 (Moonshot AI) |
 
-The exact list moves monthly — check the [supported models reference](https://docs.github.com/en/copilot/reference/ai-models/supported-models) for the current set and per-model billing multipliers.
+Notes:
+
+- **Retirements move fast.** GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-5 mini, Gemini 3.7 Flash, and Grok 4.5 were deprecated on October 19, 2026; Claude Opus 5, Claude Opus 4.8, and GPT-5.6 Terra are scheduled for deprecation on November 16, 2026 (Opus 4.8 stays available to individual subscribers on annual plans).
+- **Claude Fable models** have data-retention requirements: an enterprise admin must enable each one.
+- The **1M-token context window** option is available only in VS Code and Copilot CLI; configurable reasoning levels are available in VS Code, Copilot CLI, and cloud agent.
+
+Always check the [supported models reference](https://docs.github.com/en/copilot/reference/ai-models/supported-models) and the [changelog](https://github.blog/changelog/label/copilot/) for the current set.
 
 ### AI Credits
 
-As of **June 1, 2026**, Copilot bills model usage in **GitHub AI Credits** (1 credit = $0.01), metered by model and tokens consumed — replacing the old "premium requests" system.
+Since **June 1, 2026**, Copilot bills model usage in **GitHub AI Credits** (1 credit = $0.01), metered by model and tokens consumed — replacing the old "premium requests" system.
 
-- Free tier: capped completions and chat requests per month.
-- Pro ($10/mo), Pro+ ($39/mo), and higher plans include a monthly credit allowance; heavier models and longer contexts burn credits faster.
-- Business / Enterprise: pooled credits with admin-configurable budgets.
+- Copilot Free: a limited allowance of chat and agent usage (Auto only) plus 2,000 completions per month.
+- Pro ($10/mo), Pro+ ($39/mo), and Max ($100/mo) include monthly credit allowances; heavier models, bigger context windows, and higher reasoning burn credits faster.
+- Business / Enterprise: per-user credit allocations with admin-configurable budgets and model policies.
+- Code completions and next edit suggestions are not billed in credits on paid plans.
 
-Track usage in your GitHub billing settings.
+Track usage in your GitHub billing settings. See the [README pricing table](README.md#pricing).
 
 ### Picking a Model
 
-- **Default work** (one-file edits, simple Q&A): a light model (GPT-5 mini, Claude Haiku) is fine and cheap.
-- **Long-context analysis** (large file, full repo summary): Claude Sonnet or Gemini Pro.
-- **Hard algorithmic / refactor questions**: a frontier model (Claude Opus, top GPT tier) if the credit cost is justified.
-- **Image-in-chat** (screenshots, diagrams): a multimodal model such as Gemini Pro.
+- **Default work** (one-file edits, simple Q&A): **Auto**, or a light model (Claude Haiku, a GPT "Luna"/nano tier, Gemini Flash) — fast and cheap.
+- **Long-context analysis** (large file, full repo summary): a Claude Sonnet or Gemini model, with the 1M context option if you're in VS Code or the CLI.
+- **Hard algorithmic / refactor questions**: a frontier model (Claude Opus, the top GPT tier) if the credit cost is justified.
+- **Image-in-chat** (screenshots, diagrams): pick a model the picker marks as supporting vision.
 
 ---
 
@@ -424,22 +291,22 @@ Each step is a separate message; Copilot is best when each turn has a single cle
 
 ### Pattern: Walk the Stack Trace
 
-```
-@terminal /explain
-```
-
-with no selection, after a failing command. Copilot reads the terminal scrollback and walks you through the error.
-
-Follow up with:
+After a failing command, open inline chat **in the terminal** (`Cmd+I` / `Ctrl+I`) and ask:
 
 ```
-@terminal @workspace /fix find the source of the NullPointerException in our code
+Explain why the last command failed
+```
+
+Then follow up in the Chat view with Agent selected:
+
+```
+Find the source of the NullPointerException from the last test run in our code and fix it; rerun the failing test to confirm.
 ```
 
 ### Pattern: "Adopt the Pattern from File X"
 
 ```
-@file:src/api/users.ts I want to add a similar endpoint at src/api/orders.ts that does <X>. Follow the patterns from users.ts including error handling and validation.
+#file:src/api/users.ts I want to add a similar endpoint at src/api/orders.ts that does <X>. Follow the patterns from users.ts including error handling and validation.
 ```
 
 Pointing at an exemplar file dramatically improves consistency vs free-form prompting.
@@ -465,12 +332,12 @@ The more constraints you list, the less drift you get from your conventions.
 VS Code's source control panel has a Copilot icon that generates commit messages from staged changes. Or in chat:
 
 ```
-@workspace /explain summarize the staged changes as a conventional-commits message (max 72 chars subject, body bullets if needed)
+Summarize the staged changes as a conventional-commits message (max 72 chars subject, body bullets if needed)
 ```
 
 ### Pattern: Architectural Sketches
 
-Side-panel, no participants:
+Side-panel, Ask or Plan:
 
 ```
 I'm building a feature where users can schedule reports to run nightly and email the result. Help me sketch a design with:
@@ -480,7 +347,7 @@ I'm building a feature where users can schedule reports to run nightly and email
 - Tradeoffs vs alternatives
 ```
 
-This kind of question is a poor fit for inline chat or `@workspace` — it's a thinking session, not an edit.
+This kind of question is a poor fit for inline chat or Agent — it's a thinking session, not an edit.
 
 ---
 
@@ -495,31 +362,31 @@ This kind of question is a poor fit for inline chat or `@workspace` — it's a t
 ### Replies Are Generic / "Library-of-the-Week"
 
 - Copilot defaults to popular libraries (Express, FastAPI, requests) even when your repo uses something else.
-- Add `@workspace` or `@file:<key file>` so Copilot sees your existing imports and conventions.
+- Attach a key file with `#file:<path>` (or ask the agent to look at your existing imports first) so Copilot sees your conventions.
+- Put the convention in `.github/copilot-instructions.md` so you never have to repeat it.
 - Or state the constraint: *"Use `axios`, not `fetch` — that's our convention."*
 
 ### Replies Are Outdated
 
 - Copilot's models have training cutoffs. Library APIs change.
 - For up-to-date library docs, paste the relevant doc snippet into the prompt, or wire up an MCP server that provides documentation/web search (the old `@perplexity` Extension is gone — Extensions were sunset in favor of MCP).
-- For your own private libraries, `@workspace` will always be more accurate than the model's prior.
+- For your own private libraries, letting the agent read the actual source will always be more accurate than the model's prior.
 
 ### Streaming Stops Mid-Response
 
-- Often an exhausted AI Credit allowance. Look for the small badge in the chat input and check your billing settings.
+- Often an exhausted AI Credit allowance. Check the Copilot dashboard in the Status Bar (it shows the percentage of your monthly allowance used) and your billing settings.
 - Or network issue — check `Output` → `GitHub Copilot Chat` for HTTP errors.
 
 ### Inline Chat Diff Is Wrong
 
 - Inline chat performs a fuzzy match between the model's output and your selection. If the model rewrites style or whitespace too aggressively, the diff is hard to read.
 - Workaround: regenerate with stricter instructions ("Keep all existing formatting; only change logic on lines 12–18").
-- For larger rewrites, use Edits mode instead — the diff machinery there is more robust.
+- For larger rewrites, use Agent in the Chat view instead (Edit mode was removed in VS Code 1.126), and review its per-file diffs before keeping them.
 
-### `@workspace` Says "No Workspace Index"
+### `@workspace` "Doesn't Work" Anymore
 
-- VS Code: command palette → `GitHub Copilot: Build Local Workspace Index`.
-- Or `Workspace Index Status` to confirm.
-- Public/private repo on GitHub.com? The remote index needs the Copilot app installed on the repo or org.
+- In VS Code's default Copilot harness, chat participants are deprecated and unsupported. Drop the `@workspace` prefix and ask the question directly, or switch the session to the Local harness if you depend on participants.
+- If the agent still can't find code, confirm you're signed in to the Copilot service — semantic code search isn't available with bring-your-own-key models alone.
 
 ### Chat Panel Is Slow to Open
 
@@ -531,10 +398,10 @@ This kind of question is a poor fit for inline chat or `@workspace` — it's a t
 ## Related Guides
 
 - [Copilot IDE Guide](ide-guide.md) — how chat integrates per editor
-- [Copilot Coding Agent Guide](workspace-guide.md) — when to graduate from chat to the coding agent
+- [Copilot Cloud Agent Guide](workspace-guide.md) — when to graduate from chat to cloud agent
 - [Copilot Best Practices](best-practices.md) — broader prompting and review patterns
 - [Main Copilot README](README.md)
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

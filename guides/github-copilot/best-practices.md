@@ -118,7 +118,7 @@ If a sibling file exemplifies the pattern you want, name it:
 def create_subscription(user_id: str, plan_id: str) -> Subscription:
 ```
 
-Copilot can't read the file, but it does pattern-match on the *name* and produce structurally consistent code. Combine with chat's `@file:` mention for the surest result.
+Copilot can't read the file, but it does pattern-match on the *name* and produce structurally consistent code. Combine with a `#file:` reference in chat for the surest result.
 
 ---
 
@@ -214,7 +214,7 @@ Copilot tends to over-explain in comments, over-wrap in try/except, and over-eng
 Defaults: `axios` for HTTP, `lodash` for utilities, `express` for HTTP servers, `pandas` for data wrangling, `requests` for Python HTTP, `mongoose` for MongoDB. Copilot reaches for these even when your repo uses something else.
 
 **Counters:**
-- Use `@workspace` / `@file:` in chat so Copilot sees your actual imports.
+- In chat, attach a key file with `#file:` or ask the agent to read your existing imports first; better yet, record the convention in `.github/copilot-instructions.md`.
 - In a comment, name the library: *"Using the project's `httpx` client at `app.http`."*
 - Add an `imports`-first stub before triggering completion — Copilot follows imports tightly.
 
@@ -259,19 +259,19 @@ Copilot will faithfully reproduce a buggy pattern it sees elsewhere in your code
 
 ### Telemetry and Data Use
 
-By default, Copilot (Individual) sends prompts and completions to GitHub for product improvement. Business and Enterprise plans **do not** train on your data by default.
+Since **April 24, 2026**, GitHub may use interaction data from **Copilot Free, Pro, and Pro+** (prompts, suggestions, accepted/modified outputs, surrounding code context, and feedback) to train AI models **unless you opt out**. Copilot Business and Copilot Enterprise users are not affected, and anyone who had already opted out of data collection for product improvement keeps that choice.
 
-To opt out on Individual plans:
-- <https://github.com/settings/copilot> → **Allow GitHub to use my code snippets** → off.
+To opt out on individual plans:
+- <https://github.com/settings/copilot> → **Privacy** section → turn off the setting that allows GitHub to use your data for AI model training.
 
-Once off, your prompts and completions are not retained beyond the request lifecycle.
+If you use a personal plan on work code, check this setting now — or get a Business/Enterprise seat from your employer.
 
 ### Duplicate-Detection Filter
 
 Copilot's training corpus includes public code, some of which is restrictively licensed. The duplicate-detection filter blocks suggestions that match public code verbatim above a threshold (~150 characters).
 
 Enable it:
-- <https://github.com/settings/copilot> → **Suggestions matching public code** → **Blocked**.
+- <https://github.com/settings/copilot> → **Suggestions matching public code** → **Block**. (Choosing **Allow** instead shows code references — the matching repositories and their licenses — alongside matching suggestions.)
 
 For organizations:
 - Org settings → Copilot → Policies → set globally.
@@ -286,7 +286,7 @@ For organizations:
 
 The real mechanism is **content exclusion**, configured in settings on github.com:
 
-- **Repository level**: repo `Settings` → `Code & automation` → `Copilot` → `Content exclusion` (repository admins).
+- **Repository level**: repo `Settings` → `Code, planning, and automation` → `Copilot` → `Content exclusion` (repository admins).
 - **Organization level**: org `Settings` → `Copilot` → `Content exclusion` (org owners).
 - **Enterprise level**: `AI controls` → `Copilot` → `Content exclusion`.
 
@@ -310,7 +310,8 @@ Changes can take up to 30 minutes to propagate to IDEs that already have setting
 
 **Critical limitations to plan around:**
 
-- **Not all surfaces honor it.** Per GitHub's docs, Copilot CLI, the Copilot coding agent, and agent mode in IDE chat **do not support content exclusion**. Exclusions apply to code completions and regular chat contexts — not to the agentic surfaces.
+- **Not all surfaces honor it.** Per GitHub's availability table (October 2026), exclusions apply to code completions, chat, GitHub.com, GitHub Mobile, the Copilot app, Copilot CLI, Copilot code review on GitHub.com, and agent mode in Visual Studio and JetBrains — but **not** to Edit or Agent mode in VS Code, chat in Xcode or Eclipse, or Azure Data Studio. Copilot cloud agent isn't listed as supported. Check the [content exclusion docs](https://docs.github.com/en/copilot/concepts/context/content-exclusion) for your surface before relying on it.
+- Exclusions don't apply to symlinks or repositories on remote filesystems.
 - **It is not a secrets-management control.** Excluding a path keeps Copilot from using it as context; it does nothing about secrets already committed to the repo. Keep secrets out of the repository entirely (environment variables, secret managers) and rotate anything that has been committed.
 - Semantic information from excluded files can still leak indirectly (e.g., other files that reference their symbols).
 
@@ -348,19 +349,21 @@ Copilot is statistically average at security. That means:
 For security-sensitive code paths (auth, payments, file uploads, deserialization, subprocess), treat Copilot's output as a starting draft you must rewrite or formally review.
 
 Pair with:
-- `@workspace` chat: *"Review this auth handler for OWASP Top 10 issues."*
+- Chat or `/review` in the Copilot CLI: *"Review this auth handler for OWASP Top 10 issues."*
 - Static analysis (Semgrep, CodeQL, Bandit).
 - A human security review for anything user-facing.
 
 ### PR-Level Review
 
-Copilot has its own PR review tool in GitHub.com — request a Copilot review from the reviewers panel. It catches:
-- Style issues
-- Obvious bugs
+Copilot code review runs on GitHub.com (and from VS Code, Visual Studio, JetBrains, Xcode, and the GitHub CLI) — request Copilot from the reviewers panel, or configure automatic reviews per user, repository, or organization. It gathers full-repository context agentically and catches:
+- Obvious bugs and logic errors
+- Common security vulnerabilities
+- Style issues and convention drift (it reads your custom instructions and `AGENTS.md`)
 - Missing test coverage
-- Some security smells (limited)
 
-Treat Copilot review as a *first pass*, not a substitute for human review. It misses subtle correctness issues, architectural problems, and anything requiring judgment.
+Pick the effort level to match the change: **Lite** for fast, targeted feedback; **Balanced** (the default) for complex logic, security-sensitive code, and cross-service changes. Each review consumes AI Credits — GitHub estimates roughly $0.05–$1 for a Lite review and $0.25–$5 for a Balanced one — so org owners may want to choose whether reviews bill to members or to the organization.
+
+Treat Copilot review as a *first pass*, not a substitute for human review. It misses subtle correctness issues, architectural problems, and anything requiring judgment; it skips dependency manifests, logs, and SVGs; and by default it reviews a PR only once unless you enable review of new pushes.
 
 ---
 
@@ -379,8 +382,10 @@ When multiple engineers use Copilot across an org, individual reviews aren't eno
 
 - **Content exclusions** for paths Copilot shouldn't read.
 - **Duplicate-detection blocking** enforced org-wide.
-- **Telemetry opt-out** for Business / Enterprise plans (default but verify).
-- **Audit logs** for Copilot usage (available on higher tiers — Pro+ and Enterprise as of 2026).
+- **Training-data exposure**: Business / Enterprise data isn't used for model training; if staff use personal plans on company code, require the opt-out.
+- **Audit logs and usage metrics** for Copilot activity (organization/enterprise features on Business and Enterprise).
+- **Model policies** — restrict which models members can use (now also manageable via a model policy API for enterprises, orgs, and teams).
+- **Code review controls** — require reviews to be triggered only by org-provided Copilot licenses, and choose member vs. organization billing for reviews.
 
 ### Policy Documentation
 
@@ -458,9 +463,9 @@ Five habits that compound:
 
 - [Copilot IDE Guide](ide-guide.md) — surface-by-surface controls
 - [Copilot Chat Guide](chat-guide.md) — getting more out of chat
-- [Copilot Coding Agent Guide](workspace-guide.md) — reviewing the coding agent's PRs
+- [Copilot Cloud Agent Guide](workspace-guide.md) — reviewing cloud agent's PRs
 - [Main Copilot README](README.md)
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

@@ -1,6 +1,8 @@
 # Event Hooks
 
-Hooks let you run shell commands at specific points in Claude Code's lifecycle: before a tool call, after a tool call, when the session starts or stops, when the user submits a prompt. Used well, they automate format-on-save, block dangerous writes, run pre-commit validation, and inject context. Used badly, they break sessions in ways that are hard to debug.
+Hooks let you run shell commands (or HTTP calls, MCP tools, and model checks) at specific points in Claude Code's lifecycle: before a tool call, after a tool call, when the session starts or stops, when the user submits a prompt. Used well, they automate format-on-save, block dangerous writes, run pre-commit validation, and inject context. Used badly, they break sessions in ways that are hard to debug.
+
+Last verified: 2026-10 (against the official [hooks reference](https://code.claude.com/docs/en/hooks), Claude Code v2.1.306).
 
 ---
 
@@ -22,18 +24,34 @@ Hooks let you run shell commands at specific points in Claude Code's lifecycle: 
 
 ## Hook Lifecycle Events
 
-The six core event types, fired in the order shown when relevant.
+The six core event types, fired in the order shown when relevant. (The full reference lists about 30 events.)
 
 | Event | When it fires | Can block? | Common use |
 |-------|---------------|------------|------------|
 | `SessionStart` | When `claude` launches a session | No | Inject context, set env, log |
 | `UserPromptSubmit` | After the user submits a prompt, before the model sees it | Yes | Inject context, sanitize input, log |
 | `PreToolUse` | Before a tool executes | Yes | Validate args, deny, modify |
-| `PostToolUse` | After a tool returns | No (the tool already ran; JSON output can still feed feedback to Claude) | Format, lint, log, side-effects |
+| `PostToolUse` | After a tool call succeeds | No (the tool already ran; exit 2 or JSON output still feeds feedback to Claude) | Format, lint, log, side-effects |
 | `Stop` | When the assistant turn ends | Yes (can force another iteration) | Verify build, gate completion |
 | `SessionEnd` | When the session terminates | No | Cleanup, final logging |
 
-More events exist beyond these — `SubagentStart`/`SubagentStop`, `PermissionRequest`, `Notification`, `PreCompact`/`PostCompact`, and others; see the official hooks reference for the full list.
+Other events worth knowing:
+
+| Event | When it fires | Can block? |
+|-------|---------------|------------|
+| `PostToolUseFailure` / `PostToolBatch` | After a tool call fails / after a batch of parallel calls resolves | No / Yes |
+| `PermissionRequest` / `PermissionDenied` | When a tool call needs a permission decision / when auto mode denies one | Via JSON decision only / No (can signal retry) |
+| `SubagentStart` / `SubagentStop` | When a sub-agent is spawned / finishes | No / Yes |
+| `UserPromptExpansion` | When a typed slash command expands into a prompt | Yes |
+| `StopFailure` | When a turn ends on an API error | No |
+| `PreCompact` / `PostCompact` | Around context compaction | Yes / No |
+| `PreModelSwitch` / `PostModelSwitch` | Around a model switch (v2.1.257+) | Yes / No |
+| `Notification` | When Claude Code sends a notification | No |
+| `InstructionsLoaded`, `ConfigChange`, `CwdChanged`, `DirectoryAdded`, `FileChanged` | When instructions load, config changes, the directory changes, a dir is added, or a watched file changes | `ConfigChange` only |
+| `WorktreeCreate` / `WorktreeRemove` | When a worktree is created / removed (replaces default git behavior) | Yes |
+| `TaskCreated` / `TaskCompleted`, `TeammateIdle` | Task-list and agent-team events | Yes |
+| `Elicitation` / `ElicitationResult` | When an MCP server asks for user input / after you respond | Yes |
+| `Setup` | With `--init-only`, or `--init` / `--maintenance` in `-p` mode | No |
 
 "Can block" means: exit code 2 (see below) aborts the action and surfaces the hook's stderr to the model.
 
@@ -95,17 +113,33 @@ Canonical shape — note the nesting: each event holds an array of matcher group
 }
 ```
 
-A flat `{"matcher": ..., "command": ...}` entry is **not** valid — the inner `hooks` array with `"type": "command"` is required. All hooks for an event run in order. If any blocking-capable hook exits 2, subsequent hooks in the array still run (they see the same input) — but the action is aborted.
+A flat `{"matcher": ..., "command": ...}` entry is **not** valid — the inner `hooks` array with a `"type"` is required. When an event fires, **all matching hooks run in parallel** (at most 12 prompt/agent hooks at once), and an identical handler defined in several settings files runs only once. If any blocking-capable hook exits 2, the action is aborted. Hooks can also be declared in skill and sub-agent frontmatter, and shipped by plugins.
 
 ---
 
 ## Hook Command Shape
 
-Each hook definition is an object: `"type": "command"` plus the `command` string to execute. Optional fields include `timeout` (seconds) and `shell` to pick the interpreter.
+Each hook definition is an object with a `type`. Five types exist:
+
+| `type` | What runs |
+|--------|-----------|
+| `command` | A shell command (or, with `args`, an executable spawned directly with no shell) |
+| `http` | A POST of the event JSON to a URL; the response body uses the same JSON output format |
+| `mcp_tool` | A tool on a configured MCP server |
+| `prompt` | A single-turn model evaluation that returns a JSON decision |
+| `agent` | A sub-agent that can use tools to verify conditions (experimental) |
+
+Common optional fields: `timeout` (seconds; default 600 for command/http/mcp_tool, 30 for prompt, 60 for agent), `if` (a permission-rule pattern such as `"Bash(git *)"` that must match before the hook runs — tool events only), and `statusMessage` (spinner text). Command hooks also accept `async` (run in the background without blocking), `asyncRewake` (run in the background and wake Claude on exit 2), `shell` (`bash` or `powershell`), and `onFailure: "block"` (v2.1.295+: if the hook fails to start, times out, or crashes, block the action instead of letting it proceed).
 
 ```json
 { "type": "command", "command": "bash -c '[[ \"$X\" == foo ]] && echo bar'", "timeout": 30 }
 ```
+
+```json
+{ "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/scan-bash.sh", "if": "Bash(git *)", "onFailure": "block" }
+```
+
+The `if` filter is best-effort; use permission rules, not hooks, to enforce a hard allow or deny.
 
 Working directory is the directory `claude` was launched from. There is no per-tool environment variable surface — **the event payload arrives as JSON on stdin** (see [Input Format](#input-format)), and `jq` is the standard way to pull fields out. The documented variables you can rely on:
 
@@ -113,7 +147,10 @@ Working directory is the directory `claude` was launched from. There is no per-t
 |----------|---------|
 | `CLAUDE_PROJECT_DIR` | Absolute path to the project root — use it to reference hook scripts (`$CLAUDE_PROJECT_DIR/.claude/hooks/...`) |
 | `CLAUDE_PLUGIN_ROOT` | Plugin installation directory (plugin-provided hooks) |
-| `CLAUDE_ENV_FILE` | File to write persistent env vars to (`SessionStart`-family events only) |
+| `CLAUDE_PLUGIN_DATA` | The plugin's persistent data directory, which survives plugin updates |
+| `CLAUDE_ENV_FILE` | File to write `export` lines to so later Bash commands see them (`SessionStart`, `Setup`, `CwdChanged`, and `FileChanged` hooks only) |
+
+`CLAUDE_PROJECT_DIR` stays at the project root where the session started even if Claude enters a worktree; read the `cwd` field from the stdin JSON when you need the directory Claude is actually working in.
 
 Note in particular: there is no `$CLAUDE_FILE_PATH`, `$FILE_PATH`, or `$CLAUDE_COMMAND`. Read `tool_input.file_path` or `tool_input.command` from stdin instead.
 
@@ -163,19 +200,19 @@ Hook exit code semantics differ by event type, but the common rules:
 
 | Exit | Meaning |
 |------|---------|
-| 0 | Success. The action proceeds. stdout is parsed for optional JSON output (and injected as context for `UserPromptSubmit` and `SessionStart`). |
+| 0 | Success. The action proceeds. stdout is parsed for optional JSON output (plain-text stdout is injected as context for `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart`, and `PostModelSwitch`). |
 | 2 | Block. The action is aborted; stderr is surfaced as the reason. Only effective for blocking-capable events (PreToolUse, UserPromptSubmit, Stop, and others). |
-| Other nonzero | Non-blocking error. Action proceeds; stderr is shown in the transcript and debug log. |
+| Other nonzero | Non-blocking error. Action proceeds (unless the hook sets `onFailure: "block"`); you see a hook-error notice in the transcript. |
 
-For `PreToolUse`, exit 2 prevents the tool from executing and feeds the hook's stderr back to the model as the reason. The model then decides how to react — often by trying a different approach. For `UserPromptSubmit`, exit 2 blocks the prompt and erases it.
+For `PreToolUse`, exit 2 prevents the tool from executing and feeds the hook's stderr back to the model as the reason. The model then decides how to react — often by trying a different approach. For `UserPromptSubmit`, exit 2 blocks the prompt so it never reaches Claude — but the text still lands in the block message and the on-disk transcript (`"suppressOriginalPrompt": true` in `hookSpecificOutput` drops it from the message only), so a blocking hook is not a way to keep a secret off disk.
 
 For `Stop`, exit 2 forces another assistant turn, with the hook's stderr as additional context. Useful for "build is broken, keep working."
 
-`PostToolUse` and `SessionStart`/`SessionEnd` cannot block (the tool already ran / there is nothing to abort). A `PostToolUse` hook can still return JSON output with feedback for Claude, but exit codes do not change flow.
+`PostToolUse` and `SessionStart`/`SessionEnd` cannot block (the tool already ran / there is nothing to abort). A `PostToolUse` hook that exits 2 still shows its stderr to Claude — that is the way to surface a warning about a call that already ran.
 
 Hooks can also emit structured JSON on stdout (exit 0) for finer control — e.g. `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "..."}}` — see the official hooks reference for the full schema.
 
-For `UserPromptSubmit` and `SessionStart`, stdout (not stderr) on exit 0 is injected as additional context for the model. This is how you do dynamic context injection — see the ticket-context example below.
+For `UserPromptSubmit` and `SessionStart`, stdout (not stderr) on exit 0 is injected as additional context for the model. This is how you do dynamic context injection — see the ticket-context example below. Claude never sees stderr from a hook that exits 0.
 
 ---
 
@@ -186,12 +223,14 @@ The `matcher` field on a hook entry restricts when it fires. Forms:
 | Form | Matches |
 |------|---------|
 | `"Write"` | Only the `Write` tool |
-| `"Write\|Edit"` | `Write` or `Edit` |
+| `"Write\|Edit"` or `"Write, Edit"` | `Write` or `Edit` |
 | `"*"`, `""`, or omitted | All tool calls (for tool-related events) |
 | `"Bash"` | Any `Bash` invocation |
 | `"mcp__github__.*"` | All GitHub MCP tools (regex on tool name) |
 
-For tool events, `matcher` is matched against the tool name — exact strings and pipe-separated lists match literally; anything with other characters is treated as a regular expression. Omit the matcher for events that aren't tool-scoped (`UserPromptSubmit`, `Stop`).
+For tool events, `matcher` is matched against the tool name. A matcher made only of letters, digits, `_`, `-`, spaces, `,`, and `|` is an exact string or list (so `code-reviewer` exact-matches since v2.1.198 — to match all tools from a hyphenated MCP server, write `mcp__brave-search__.*`). Anything with other characters is an **unanchored** JavaScript regex: `Edit.*` also matches `NotebookEdit`, so write `^Edit$` when you mean exactly one. Other events match other fields — `SessionStart` on `startup`/`resume`/`clear`/`compact`, `SubagentStart` on agent type, `PreCompact` on `manual`/`auto`. A matcher on an event without matcher support (`UserPromptSubmit`, `Stop`, …) is silently ignored.
+
+For finer filtering on tool arguments, add an `if` field to the handler (e.g. `"if": "Edit(*.ts)"`) instead of parsing paths in the script.
 
 Path filtering is your job inside the hook:
 
@@ -421,20 +460,22 @@ Hooks remain the right answer for project-specific gates (your build, your linte
 
 ## Performance Considerations
 
-Hooks run synchronously and block the tool / event they hook. A 2-second formatter on every Edit adds 2 seconds * N edits to every session.
+Unless marked `async`, hooks block the tool / event they hook (matching hooks run in parallel with each other). A 2-second formatter on every Edit adds 2 seconds * N edits to every session.
 
 Rules of thumb:
 
 - **Sub-100ms hooks are free.** A regex check, a path filter, a `jq` parse.
 - **100ms-1s hooks are noticeable.** Format on save, lint on save. Acceptable if narrow.
 - **Multi-second hooks should be Stop hooks, not PostToolUse.** Run the typechecker once at end of turn, not after every edit.
-- **Background long work.** If the hook needs to do something expensive, fork it: `nohup command >/dev/null 2>&1 &; exit 0`. You lose the ability to block on it.
+- **Background long work.** If the hook needs to do something expensive, set `"async": true` on the handler (or `"asyncRewake": true` to wake Claude if it later fails with exit 2). You lose the ability to block on it.
+- **Narrow with `if`.** `"if": "Bash(git commit *)"` keeps a pre-commit gate from spawning on every Bash call.
 - **Cache aggressively.** If you call an external API, cache by file content hash.
 
-Profile your hooks by running a session with debug output, which logs each hook execution:
+Profile your hooks by running a session with debug logging. `--debug` writes to `~/.claude/debug/<session-id>.txt` (it doesn't print to the terminal); `--debug-file <path>` picks the location. Each command hook leaves a `Hooks: <event>:<match> [<command>] finished with status N (31ms)` line:
 
 ```bash
-claude --debug
+claude --debug-file /tmp/claude-debug.txt
+grep 'Hooks:' /tmp/claude-debug.txt
 ```
 
 ---
@@ -448,7 +489,10 @@ Hooks run as you, with your shell. They have full filesystem and network access.
 - **Quote variables.** `"$file_path"` not `$file_path` after extracting from stdin. Paths with spaces, semicolons, or backticks will otherwise be interpreted as shell.
 - **Review untrusted project hooks.** On first session in an unfamiliar repo, review `.claude/settings.json` before accepting the workspace trust prompt and letting hooks fire.
 
-Claude Code will prompt before executing project-local hooks the first time you open a repo, but the prompt is approve-once, remember-forever. Read what you approve.
+How workspace trust gates hooks:
+
+- **Interactive sessions** hold back hooks from *every* settings file until you accept the workspace trust dialog for the folder. Acceptance is remembered for that folder, so read what you approve.
+- **`claude -p` and SDK sessions never show the dialog and treat the folder as trusted** — hooks committed in a repository's `.claude/settings.json` run in a folder you have never opened. Before scripting `claude -p` over a repo you didn't write, review its `.claude/` files, start with `--bare`, or disable hooks for the run with `--settings '{"disableAllHooks": true}'`.
 
 ---
 
@@ -456,7 +500,7 @@ Claude Code will prompt before executing project-local hooks the first time you 
 
 ### "My hook doesn't fire"
 
-Run `/hooks` in-session to confirm the hook is registered, and launch with `claude --debug` to watch hook executions live.
+Run `/hooks` in-session to confirm the hook is registered, and launch with `claude --debug` (log at `~/.claude/debug/<session-id>.txt`) to see each execution. If no hooks run at all in an interactive session, check that you accepted the workspace trust dialog.
 
 If the hook never appears, the `matcher` doesn't match. Test the regex:
 
@@ -482,7 +526,7 @@ Must exit 2 to block. Also confirm the event supports blocking (`PostToolUse` an
 
 ### "My hook prints output but the model doesn't see it"
 
-For `UserPromptSubmit` and `SessionStart`, stdout on exit 0 is injected. For blocking events, stderr on exit 2 is what the model sees. Send to the right stream.
+For `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart`, and `PostModelSwitch`, plain-text stdout on exit 0 is injected. For other events, use JSON output (e.g. `additionalContext`) or exit 2 with stderr. Send to the right stream.
 
 ### "Hook works manually but fails when fired"
 
@@ -519,7 +563,7 @@ exit 2
 
 ### "Hooks slow down every action noticeably"
 
-Profile with `claude --debug`. If a hook takes >500ms, either narrow its `matcher`, move it to a less-frequent event, or background it.
+Profile with `claude --debug` and grep the `Hooks:` duration lines. `/doctor` also flags slow hooks. If a hook takes >500ms, narrow its `matcher` or `if`, move it to a less-frequent event, or make it `async`.
 
 ---
 
@@ -527,5 +571,5 @@ Profile with `claude --debug`. If a hook takes >500ms, either narrow its `matche
 
 - [Skills](skills.md) — for behavior that should fire conditionally on intent, not on every event.
 - [MCP Servers](mcp-servers.md) — for governance heavier than what hooks can express.
-- [Agents](agents.md) — sub-agents inherit parent hooks.
+- [Agents](agents.md) — `SubagentStart`/`SubagentStop` hooks and per-agent `hooks` frontmatter.
 - [Troubleshooting](troubleshooting.md) — when hooks break commits or block legitimate work.

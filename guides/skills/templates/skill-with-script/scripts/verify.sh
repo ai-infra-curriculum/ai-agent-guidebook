@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Verification script stub for skill-with-script-template.
+# Verification script stub for the skill-with-script template.
 #
 # Replace with real post-condition checks. The skill body invokes this as:
 #
-#     bash scripts/verify.sh <target_path>
+#     bash ${CLAUDE_SKILL_DIR}/scripts/verify.sh <target_path>
 #
 # Contract:
 # - Exit 0 on success.

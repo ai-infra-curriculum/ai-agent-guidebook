@@ -17,6 +17,7 @@ Day-to-day reference for the `gemini` command — the interactive REPL, slash co
 - [Sessions and Checkpoints](#sessions-and-checkpoints)
 - [Working with Large Context](#working-with-large-context)
 - [MCP Servers and Extensions](#mcp-servers-and-extensions)
+- [Skills, Subagents, and Hooks](#skills-subagents-and-hooks)
 - [Recipes](#recipes)
 
 ---
@@ -28,10 +29,12 @@ gemini                                    # Start the interactive REPL
 gemini -p "your prompt"                   # One-shot headless prompt
 cat file.txt | gemini -p "summarize"      # Prompt + stdin
 gemini -i "first prompt"                  # Run a prompt, then stay interactive
-gemini -m gemini-2.5-flash -p "quick q"   # Pick a model
-gemini --resume                           # Resume a previous session
+gemini -m flash -p "quick q"              # Pick a model (alias or full ID)
+gemini -r latest                          # Resume the most recent session
+gemini --approval-mode=plan               # Start in read-only Plan Mode
 gemini mcp add <name> <command> [args]    # Manage MCP servers
 gemini extensions list                    # Manage extensions
+gemini skills list                        # Manage Agent Skills
 gemini --help                             # Full flag reference
 ```
 
@@ -69,10 +72,16 @@ How much the agent may do without asking is controlled by `--approval-mode`:
 |------|----------|
 | `default` | Prompt for approval on edits and shell commands |
 | `auto_edit` | Auto-approve file edits; still prompt for shell commands |
-| `plan` | Plan only — no edits or execution |
-| `yolo` | Auto-approve everything (`-y` / `--yolo` shorthand) — use with care |
+| `plan` | Plan Mode — read-only research and planning, no file changes |
+| `yolo` | Auto-approve everything — use with care |
 
-Pair `--yolo` with `--sandbox` (`-s`) to contain tool execution in a Docker/Podman container (or Seatbelt profile on macOS).
+In the REPL, `Shift+Tab` cycles Default → Auto-Edit → Plan. The `-y` / `--yolo` shorthand still works but the docs mark it deprecated in favor of `--approval-mode=yolo`. Pair YOLO mode with `--sandbox` (`-s`) to contain tool execution (macOS Seatbelt, Docker/Podman, gVisor, LXC, or the native Windows sandbox).
+
+For finer control than a mode, write **policy engine** rules — `.toml` files in `~/.gemini/policies/` that allow, deny, or require confirmation for specific tool calls (`/policies list` shows what's active). This replaces the deprecated `--allowed-tools` flag.
+
+### Plan Mode
+
+Plan Mode (enabled by default) is a read-only environment for researching and designing a change before any code is modified. Enter it with `/plan [goal]`, `Shift+Tab`, `--approval-mode=plan`, or by asking the agent to "start a plan for…". After you approve the plan, the agent switches back to an editing mode to implement it; `/plan copy` copies the approved plan to your clipboard.
 
 ---
 
@@ -84,11 +93,17 @@ The most useful built-ins (run `/help` for the full list):
 |---------|--------|
 | `/help` (or `/?`) | List available commands |
 | `/auth` | Switch authentication method |
-| `/model` | View or change the active model (`/model set <name>`) |
-| `/chat save <tag>` | Save the conversation as a named checkpoint |
-| `/chat resume <tag>` | Resume a saved checkpoint |
-| `/chat list` | List saved checkpoints |
-| `/chat share [file]` | Export the conversation to Markdown or JSON |
+| `/model` | View or change the active model (`/model set <name> [--persist]`) |
+| `/resume` (alias `/chat`) | Browse and resume auto-saved sessions |
+| `/resume save <tag>` / `/resume resume <tag>` | Save or load a manually tagged checkpoint |
+| `/resume share [file]` | Export the conversation to Markdown or JSON |
+| `/rewind` | Step back through the conversation; optionally revert file changes (Esc twice) |
+| `/plan [goal]` | Enter read-only Plan Mode |
+| `/agents` | List, enable, disable, or configure subagents |
+| `/skills` | List, enable, disable, or reload Agent Skills |
+| `/hooks` | Manage hooks |
+| `/permissions trust` | Manage folder trust |
+| `/policies list` | Show active policy-engine rules |
 | `/memory show` | Print the loaded `GEMINI.md` context |
 | `/memory refresh` | Reload all `GEMINI.md` files |
 | `/memory list` | List the `GEMINI.md` files in use |
@@ -99,14 +114,14 @@ The most useful built-ins (run `/help` for the full list):
 | `/extensions` | Manage extensions (list, install, enable, disable, …) |
 | `/directory add <path>` | Add another directory to the workspace (`/dir show` to list) |
 | `/compress` | Replace the chat context with a summary (reclaim window) |
-| `/clear` | Clear the screen and visible history (Ctrl+L) |
+| `/clear` | Start a new session and clear the screen (Ctrl+L only redraws the display) |
 | `/copy` | Copy the last response to the clipboard |
-| `/restore` | Restore project files to their state before a tool ran (requires `--checkpointing`) |
+| `/restore` | Restore project files to their state before a tool ran (requires checkpointing enabled in settings) |
 | `/settings` | Open the settings editor |
 | `/theme` | Change the color theme |
 | `/vim` | Toggle vim keybindings |
 | `/bug` | File an issue against the gemini-cli repo |
-| `/quit` (or `/exit`) | Leave the REPL |
+| `/quit` (or `/exit`) | Leave the REPL (`--delete` also removes this session's history) |
 
 Custom slash commands can be defined in `.toml` files (see the `/commands` command and the official docs).
 
@@ -142,7 +157,7 @@ Behavior:
 > @spec.md @ui-mockup.png does the mockup match the spec? List any deviations.
 ```
 
-For whole-project context from the command line, use `-a` / `--all-files` (include everything) or `--include-directories ../lib,../docs` (widen the workspace).
+To widen the workspace beyond the current directory, use `--include-directories ../lib,../docs` on the command line or `/directory add <path>` in the REPL. (The old `-a` / `--all-files` flag no longer exists — reference directories with `@` instead.)
 
 ---
 
@@ -194,92 +209,108 @@ The flags you'll actually use (run `gemini --help` for the complete, current lis
 ```
 -p, --prompt <text>            Headless one-shot prompt
 -i, --prompt-interactive <t>   Run a prompt, then continue interactively
--m, --model <name>             Model to use (e.g. gemini-2.5-flash)
+-m, --model <name>             Model alias (auto | pro | flash | flash-lite) or model ID
 -s, --sandbox                  Run tool execution in a sandbox
--y, --yolo                     Auto-approve all tool calls
     --approval-mode <mode>     default | auto_edit | plan | yolo
--a, --all-files                Include all workspace files in context
+-y, --yolo                     Deprecated shorthand for --approval-mode=yolo
+    --policy <file>            Load additional policy-engine rules
     --include-directories <d>  Add comma-separated directories to the workspace
 -o, --output-format <fmt>      text | json | stream-json (headless)
--c, --checkpointing            Snapshot files before tool edits (enables /restore)
-    --resume                   Resume a previous session
+-r, --resume [latest|<n>]      Resume a previous session
+    --list-sessions            List saved sessions for this project and exit
+-w, --worktree [name]          Start in a new git worktree (experimental; needs experimental.worktrees)
+    --skip-trust               Trust the current folder for this session
 -e, --extensions <names>       Limit which extensions load
 -d, --debug                    Verbose debug logging
 -v, --version                  Print version
 -h, --help                     Help
 ```
 
-> If you see flags like `-f`, `--json`, `--session`, or `--temperature` in third-party tutorials — those belong to other tools or to fictional write-ups. They are not Gemini CLI flags.
+> If you see flags like `-f`, `--json`, `--session`, or `--temperature` in third-party tutorials — those belong to other tools or to fictional write-ups. They are not Gemini CLI flags. `-a` / `--all-files` and `-c` / `--checkpointing` were real but have been removed.
 
 ---
 
 ## Model Selection
 
-By default Gemini CLI uses **Auto routing**: simple prompts go to Gemini 2.5 Flash, complex prompts to Gemini 3 Pro (if enabled for your account) or Gemini 2.5 Pro.
+By default Gemini CLI uses **Auto** routing (`auto`): each prompt is classified, simple prompts go to a Flash model, and complex prompts go to a Pro model. If a model fails (quota or server errors), model routing offers to fall back to another model — by default it asks first.
 
-Pin a model per invocation:
+Pin a model per invocation with an alias or a concrete ID:
 
 ```bash
-gemini -m gemini-2.5-flash -p "quick summary"
-gemini -m gemini-3-flash-preview
+gemini -m flash -p "quick summary"        # aliases: auto | pro | flash | flash-lite
+gemini -m gemini-3.1-pro-preview          # concrete model ID, if your account has access
 ```
 
 Or inside the REPL:
 
 ```text
 > /model
-# opens the model dialog
+# opens the dialog: Auto (Gemini 3), Auto (Gemini 2.5), or Manual
 
-> /model set gemini-2.5-flash
+> /model set flash --persist
 ```
 
-Set a persistent default via the `GEMINI_MODEL` environment variable, `/model set <name> --persist`, or the `model` section of `settings.json`.
+Precedence is: `--model` flag → `GEMINI_MODEL` environment variable → `model.name` in `settings.json` → default (`auto`). Note that `/model` does not override the model subagents use, so usage reports may show other models.
 
 ### Picking a model
 
-- **Auto routing** is a sensible default — it spends Pro-class capacity only when prompts warrant it.
-- **Gemini 2.5 Flash / Gemini 3 Flash** for speed and cost: summaries, transformations, batch scripting.
-- **Gemini 3 Pro / 3.1 Pro preview / 2.5 Pro** for deep reasoning, architecture work, and long-context analysis.
+- **Auto** is the sensible default — it spends Pro-class capacity only when prompts warrant it.
+- **`flash` / `flash-lite`** for speed and cost: summaries, transformations, batch scripting.
+- **`pro`** for deep reasoning, architecture work, and long-context analysis.
 
-Model availability varies by auth method and tier; the `/model` dialog shows what your account can use. Check `/stats model` for per-model token usage in the current session.
+Which concrete models sit behind each alias depends on your auth method, tier, and preview-feature settings, and changes as Google ships new models — the `/model` dialog shows what your account can use. Google's newest model, Gemini 4 Argon, is positioned for Antigravity; the Gemini CLI README says the CLI is not optimized for it. See the [models table](README.md#models) for current IDs, and check `/stats model` for per-model token usage and quota.
 
 ---
 
 ## Sessions and Checkpoints
 
-### Conversation checkpoints
+### Automatic sessions
 
-Save and resume conversations across REPL sessions:
-
-```text
-> /chat save refactor-auth
-Saved checkpoint: refactor-auth
-
-# Later, in a new session:
-> /chat resume refactor-auth
-> /chat list
-> /chat delete refactor-auth
-> /chat share refactor-notes.md
-```
-
-### Resuming from the command line
+Every conversation is saved automatically (prompts, responses, tool calls, token stats) under `~/.gemini/tmp/<project_hash>/chats/`. Sessions are project-scoped.
 
 ```bash
-gemini --resume
+gemini -r latest                         # resume the most recent session
+gemini -r latest "check for type errors" # resume and send a new prompt
+gemini --list-sessions                   # list sessions for this project
+gemini -r 5                              # resume by index
 ```
 
-resumes a previous session for the current project.
+Inside the REPL, `/resume` (alias `/chat`) opens a session browser with search and sorting.
+
+### Tagged checkpoints
+
+Manually tag a conversation state to return to later:
+
+```text
+> /resume save refactor-auth
+> /resume list
+> /resume resume refactor-auth
+> /resume delete refactor-auth
+> /resume share refactor-notes.md
+```
+
+(`/chat save`, `/chat resume`, etc. are equivalent.)
 
 ### File checkpointing
 
-Separate from conversation checkpoints: run with `-c` / `--checkpointing` and the CLI snapshots project files before each file-modifying tool call. If an edit goes wrong:
+Separate from conversation checkpoints: when enabled, the CLI snapshots project files (in a shadow Git repo under `~/.gemini/history/`) before each file-modifying tool call. Enable it in `settings.json` — the `--checkpointing` flag was removed in v0.11.0:
+
+```json
+{
+  "general": {
+    "checkpointing": { "enabled": true }
+  }
+}
+```
+
+If an edit goes wrong:
 
 ```text
 > /restore
 # lists available restore points; pick one to roll files back
 ```
 
-You can also step back through the conversation itself with `/rewind` (press Esc twice).
+You can also step back through the conversation itself with `/rewind` (press Esc twice) and choose to revert history, code changes, or both.
 
 ### Context hygiene
 
@@ -293,17 +324,17 @@ Long sessions accumulate context. When the window fills up:
 
 ## Working with Large Context
 
-The Pro models accept up to **1M tokens of input** — enough for a small-to-medium repo in one shot — while output is capped much lower (65,536 tokens on 2.5/3 Pro).
+The Pro-class models accept up to **1M tokens of input** — enough for a small-to-medium repo in one shot — while output limits are much lower and vary by model.
 
 When the big window matters:
 
-- **Whole-codebase analysis** — `gemini -a -p "find all places that read from the database without caching"`
+- **Whole-codebase analysis** — `gemini -p "@src/ find all places that read from the database without caching"`
 - **Cross-document reasoning** — load several specs/RFCs with `@` references and reconcile them
 - **Long-form input** — long transcripts, large PDFs
 
 Practical tips:
 
-- Don't pay for 1M tokens when 10K will do — scope `@` references to the relevant directories instead of `-a`.
+- Don't pay for 1M tokens when 10K will do — scope `@` references to the relevant directories instead of the whole repo.
 - Output is the bottleneck for "rewrite everything" jobs; chunk large generation tasks yourself.
 - Even huge-window models retrieve facts buried mid-context less reliably. Put the question and key instructions at the start or end of the prompt, and use clear section markers.
 - Watch `/stats` and use `/compress` before the window fills.
@@ -318,14 +349,17 @@ Add a server from the command line:
 
 ```bash
 # stdio server
-gemini mcp add github -- npx -y @modelcontextprotocol/server-github
+gemini mcp add memory -- npx -y @modelcontextprotocol/server-memory
 
 # remote HTTP server with auth header
 gemini mcp add --transport http --header "Authorization: Bearer $TOKEN" \
   my-api https://api.example.com/mcp/
 
+# user-scoped (~/.gemini/settings.json) instead of project-scoped
+gemini mcp add --scope user db node db-server.js
+
 gemini mcp list
-gemini mcp remove github
+gemini mcp remove memory
 ```
 
 Or declare servers in `settings.json` (project `.gemini/settings.json` for team-shared servers):
@@ -334,15 +368,16 @@ Or declare servers in `settings.json` (project `.gemini/settings.json` for team-
 {
   "mcpServers": {
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_TOKEN": "$GITHUB_TOKEN" }
+      "httpUrl": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer <your-github-pat>" }
     }
   }
 }
 ```
 
-Inside the REPL, `/mcp` lists configured servers and their tools; `/mcp auth <server>` handles OAuth-protected servers.
+The docs document `$VAR` expansion for `env` only, not `headers`, so don't commit a real token in a project-level file — prefer the user-scoped `~/.gemini/settings.json` or `gemini mcp add --header` for credentials.
+
+Inside the REPL, `/mcp` lists configured servers and their tools; `/mcp auth <server>` handles OAuth-protected servers, `/mcp reload` restarts them, and `/mcp enable` / `/mcp disable` toggle a server. In untrusted folders, the CLI restricts which project-level MCP servers load (see Trusted Folders in the official docs).
 
 ### Extensions
 
@@ -350,10 +385,85 @@ Extensions bundle MCP servers, context files, and custom commands into installab
 
 ```bash
 gemini extensions list
-gemini extensions install <source>
+gemini extensions install https://github.com/user/my-extension
+gemini extensions update --all
+gemini extensions new ./my-extension      # scaffold your own
 ```
 
-or manage them interactively with `/extensions`.
+or manage them interactively with `/extensions`. Extensions can also ship skills and subagents.
+
+---
+
+## Skills, Subagents, and Hooks
+
+### Agent Skills
+
+A skill is a directory with a `SKILL.md` (per the [Agent Skills](https://agentskills.io) standard). At session start the CLI injects only each skill's name and description; when a task matches, the agent calls `activate_skill`, you approve, and the full instructions and bundled files load. Discovery tiers, lowest to highest precedence:
+
+1. Built-in skills
+2. Extension skills
+3. User skills — `~/.gemini/skills/` (or `~/.agents/skills/`)
+4. Workspace skills — `.gemini/skills/` (or `.agents/skills/`), shared via version control
+
+```bash
+gemini skills list
+gemini skills install https://github.com/user/repo
+gemini skills link /path/to/my-skills
+```
+
+In the REPL: `/skills list`, `/skills enable <name>`, `/skills reload`.
+
+### Subagents
+
+Subagents are specialists with their own system prompt, tool set, and context window; the main agent calls them like tools. Built-ins include `codebase_investigator`, `cli_help`, and `generalist`. Force a specific one by starting your prompt with `@name`:
+
+```text
+> @codebase_investigator map the relationship between the router and the auth middleware
+```
+
+Define your own as Markdown with YAML frontmatter in `.gemini/agents/` (project) or `~/.gemini/agents/` (user):
+
+```markdown
+---
+name: security-auditor
+description: Finds security vulnerabilities in code. Reports, does not fix.
+tools:
+  - read_file
+  - grep_search
+max_turns: 10
+---
+
+You are a security auditor. Report injection, XSS, hardcoded credentials,
+and unsafe file operations, with a suggested fix for each.
+```
+
+Optional fields include `model`, `temperature`, `timeout_mins`, and agent-scoped `mcpServers`; if `tools` is omitted the subagent inherits the parent's tools. Manage with `/agents list`, `/agents reload`, and `/agents config <name>`. Remote subagents over the Agent2Agent (A2A) protocol are also supported.
+
+### Hooks
+
+Hooks are scripts the CLI runs synchronously at lifecycle events — `SessionStart`, `SessionEnd`, `BeforeAgent`, `AfterAgent`, `BeforeModel`, `AfterModel`, `BeforeToolSelection`, `BeforeTool`, `AfterTool`, `PreCompress`, and `Notification`. Configure them under `hooks` in `settings.json`:
+
+```json
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "security-check",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/.gemini/hooks/security.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hooks read JSON on stdin and must print **only** JSON on stdout (log to stderr). A `BeforeTool` hook can block or rewrite a tool call — the natural place for project-specific guardrails.
 
 ---
 
@@ -369,7 +479,7 @@ git diff main...HEAD | gemini -p \
 ### Generate a commit message
 
 ```bash
-git diff --staged | gemini -m gemini-2.5-flash -p \
+git diff --staged | gemini -m flash -p \
   "write a conventional commit message (subject <=72 chars; body bullets if needed)"
 ```
 
@@ -404,7 +514,7 @@ gemini -p "@docs/ produce a one-paragraph summary per document, then list contra
 
 ```bash
 for f in src/*.py; do
-  gemini -m gemini-2.5-flash -p "@$f one-line summary of this module" >> summaries.txt
+  gemini -m flash -p "@$f one-line summary of this module" >> summaries.txt
 done
 ```
 
@@ -420,4 +530,4 @@ done
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

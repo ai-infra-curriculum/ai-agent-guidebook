@@ -36,6 +36,8 @@ Compared to the SDK, you give up:
 
 The CLI is the right tool for orchestration, batch jobs, dev tooling, and CI checks; the SDK is the right tool for applications.
 
+> **Antigravity CLI alternative.** If your team has moved to Google's Antigravity CLI, it has its own headless mode (`agy -p "..." --output-format json|stream-json`) with a different JSON envelope and permission model — see [Antigravity CLI](../antigravity/cli.md#headless-mode). The patterns below target Gemini CLI.
+
 ---
 
 ## Headless Mode and JSON Output
@@ -161,7 +163,7 @@ gemini -p "list 5 npm testing packages. respond with ONLY a JSON array of {name,
 ### Tail an agentic run
 
 ```bash
-gemini -y -p "fix the failing tests" --output-format stream-json \
+gemini --approval-mode=yolo -p "fix the failing tests" --output-format stream-json \
   | jq -rc 'select(.type=="tool_use") | "TOOL: \(.)"'
 ```
 
@@ -181,7 +183,9 @@ gemini -y -p "fix the failing tests" --output-format stream-json \
     prompt: "Review this pull request for bugs and missing tests."
 ```
 
-It supports API-key auth (AI Studio) and Workload Identity Federation for Vertex AI. The easiest setup path: run `/setup-github` inside the Gemini CLI REPL — it scaffolds the workflows for you.
+It supports API-key auth (AI Studio) and Workload Identity Federation for Vertex AI. The easiest setup path: run `/setup-github` inside the Gemini CLI REPL — it scaffolds the workflows for you. (Pin the action to a release tag; v0.1.22 was the latest as of October 2026.)
+
+> Not to be confused with **Gemini Code Assist for GitHub**, the hosted review app: Google stopped new installs in GitHub organizations on June 18, 2026 for its consumer tier (enterprise use through Google Cloud is unchanged). The `run-gemini-cli` Action runs on your own API key or Vertex AI credentials.
 
 ### Manual workflow
 
@@ -211,7 +215,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           git diff origin/${{ github.base_ref }}...HEAD \
-            | gemini -m gemini-2.5-flash -p "review this diff for bugs and risky patterns" \
+            | gemini -m flash -p "review this diff for bugs and risky patterns" \
             > /tmp/review.md
 
       - name: Post as PR comment
@@ -223,9 +227,10 @@ jobs:
 
 ### Tips for CI
 
-- Authenticate with `GEMINI_API_KEY` (or Vertex AI service credentials) — OAuth login is interactive and not CI-friendly.
+- Authenticate with `GEMINI_API_KEY` (or Vertex AI service credentials) — OAuth login is interactive and not CI-friendly, and personal-account OAuth tiers are no longer served.
 - The CLI auto-detects non-TTY environments and behaves headlessly; `--output-format json` keeps logs parseable.
-- Set `GEMINI_CLI_TRUST_WORKSPACE=true` if folder-trust prompts block headless runs.
+- Set `GEMINI_CLI_TRUST_WORKSPACE=true` (or pass `--skip-trust`) if folder-trust prompts block headless runs. Untrusted folders get restricted behavior — for example, workspace settings become read-only and project MCP servers are filtered.
+- Prefer scoped [policy-engine](usage.md#approval-modes) rules over `--approval-mode=yolo` for unattended runs, and combine either with `--sandbox`.
 - Cache the npm install, or bake the CLI into a runner image.
 - Store keys in your secret store, never in the repo.
 - Prefer Vertex AI / Workload Identity over personal API keys for org-owned automation.
@@ -268,7 +273,7 @@ fi
 
 ### Retries with backoff
 
-Useful around rate limits (the free tier is 60 requests/min):
+Useful around rate limits (429s) on any tier:
 
 ```bash
 gemini_with_retry() {
@@ -295,11 +300,11 @@ gemini_with_retry -p "summarize @README.md"
 
 ```bash
 # Cheap summary with Flash
-summary=$(gemini -m gemini-2.5-flash -p \
+summary=$(gemini -m flash -p \
   "@src/ produce a structured summary: per-file purpose, key types, key functions")
 
 # Expensive deep dive only on the summary
-echo "$summary" | gemini -m gemini-3-flash-preview -p \
+echo "$summary" | gemini -m pro -p \
   "identify the three biggest architectural risks based on this summary"
 ```
 
@@ -312,10 +317,10 @@ In interactive sessions, `/stats` (and `/stats model`) shows token consumption. 
 ```bash
 # Process files in parallel but cap concurrency
 find . -name '*.py' | xargs -P 4 -I {} \
-  sh -c 'gemini -m gemini-2.5-flash -p "@{} one-line summary" >> summaries.txt'
+  sh -c 'gemini -m flash -p "@{} one-line summary" >> summaries.txt'
 ```
 
-`-P 4` keeps you under most rate-limit ceilings (the free tier allows 60 requests/min). Increase only after watching for 429s.
+`-P 4` is a conservative starting point; your ceiling depends on your API tier or Vertex AI quota. Increase only after watching for 429s.
 
 ---
 
@@ -392,7 +397,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const spec = readFileSync("spec.md", "utf-8");
 
 const result = await ai.models.generateContent({
-  model: "gemini-2.5-pro",
+  model: "gemini-3.8-flash",
   contents: [{
     role: "user",
     parts: [{ text: `Spec:\n${spec}\n\nExtract endpoints as JSON.` }],
@@ -437,7 +442,7 @@ set -euo pipefail
 tail -F /var/log/nginx/error.log \
   | grep --line-buffered -E '(error|crit|alert)' \
   | while read -r line; do
-      classification=$(echo "$line" | gemini -m gemini-2.5-flash -p \
+      classification=$(echo "$line" | gemini -m flash -p \
         "classify this log line. respond with ONLY JSON: {severity, category, recommended_action}" \
         --output-format json | jq -r '.response')
       echo "$(date -Iseconds)|$line|$classification" >> /var/log/triage.log
@@ -464,7 +469,7 @@ fi
 
 ```bash
 git log v1.0.0..HEAD --pretty=format:'%h %s' \
-  | gemini -m gemini-2.5-flash -p \
+  | gemini -m flash -p \
       "produce a CHANGELOG.md section for v1.1.0, grouped by Features / Fixes / Internal. Use the commit messages below."
 ```
 
@@ -492,4 +497,4 @@ gh pr list --json number,title,body --limit 50 \
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

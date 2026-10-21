@@ -18,9 +18,7 @@ jobs:
       - uses: DavidAnson/markdownlint-cli2-action@v16
         with:
           globs: |
-            modules/**/*.md
-            projects/**/*.md
-            lessons/**/*.md
+            **/*.md
             !**/node_modules/**
 
   python-syntax:

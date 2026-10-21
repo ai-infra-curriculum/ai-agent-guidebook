@@ -2,7 +2,7 @@
 
 The full shape of an MCP config file, how scoping works, how to allow/deny individual tools, how to run multiple instances of the same server safely, and the configuration pitfalls that bite people in production.
 
-> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
+> **Last updated**: 2026-10-21 · Tracks MCP spec **2026-07-28**.
 
 ---
 
@@ -69,7 +69,7 @@ A minimal HTTP entry:
 
 ### `type`
 
-`"stdio"` (default), `"http"`, or `"sse"` (legacy split SSE transport). In Claude Code and Claude Desktop config files the key is **`type`** — e.g. `"type": "http"`. Prefer `"http"` (Streamable HTTP, introduced in spec revision 2025-03-26) over `"sse"` when the server supports it. A few other hosts historically used a `transport` key; check your host's docs.
+`"stdio"` (default), `"http"`, or `"sse"` (legacy split HTTP+SSE transport). In Claude Code and Claude Desktop config files the key is **`type`** — e.g. `"type": "http"`. Prefer `"http"` (Streamable HTTP, introduced in spec revision 2025-03-26). The HTTP+SSE transport is formally **deprecated** as of 2026-07-28, and vendors are retiring their `/sse` endpoints (Atlassian ended `v1/sse` support after 2026-06-30; Cloudflare returns `410 Gone` for legacy SSE requests) — migrate any remaining `"sse"` entries. A few other hosts historically used a `transport` key; check your host's docs.
 
 ### `command` + `args` (stdio only)
 
@@ -264,25 +264,27 @@ Common when one server can front multiple targets — filesystem (different root
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/personal"]
     },
     "pg-staging": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_STAGING_URL}"]
+      "command": "uvx",
+      "args": ["postgres-mcp", "--access-mode=unrestricted"],
+      "env": { "DATABASE_URI": "${PG_STAGING_URL}" }
     },
     "pg-prod-readonly": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_PROD_READONLY_URL}"]
+      "command": "uvx",
+      "args": ["postgres-mcp", "--access-mode=restricted"],
+      "env": { "DATABASE_URI": "${PG_PROD_READONLY_URL}" }
     }
   }
 }
 ```
 
-Tool names will be `mcp__fs-work__read_file`, `mcp__fs-personal__read_file`, etc. Allow/deny lists scope cleanly:
+(The Postgres entries use [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp) — the reference `@modelcontextprotocol/server-postgres` is archived. Its `restricted` access mode limits SQL to read-only transactions.) Tool names will be `mcp__fs-work__read_file`, `mcp__fs-personal__read_file`, etc. Allow/deny lists scope cleanly:
 
 ```json
 {
   "permissions": {
     "allow": ["mcp__pg-staging__*"],
-    "ask":   ["mcp__pg-prod-readonly__query"],
-    "deny":  ["mcp__pg-prod-readonly__execute"]
+    "ask":   ["mcp__pg-prod-readonly__execute_sql"],
+    "deny":  ["mcp__pg-prod-readonly__analyze_workload_indexes"]
   }
 }
 ```
@@ -304,7 +306,7 @@ if [[ "$ENABLE_PROD_MCP" != "1" ]]; then
   echo "prod MCP disabled" >&2
   exit 1
 fi
-exec npx -y @modelcontextprotocol/server-postgres "$PG_PROD_URL"
+DATABASE_URI="$PG_PROD_URL" exec uvx postgres-mcp --access-mode=restricted
 ```
 
 ```json
@@ -348,13 +350,13 @@ For org-wide deployments, render the final JSON from a template at provision tim
 
 Most hosts now issue tool calls **in parallel** by default when the model emits multiple independent calls in one turn. This is a 2–5× latency win on multi-tool tasks but it stresses MCP servers in three ways:
 
-1. **Request concurrency**: a server must handle interleaved `tools/call` requests on the same session. The reference SDKs do this correctly; check third-party servers' READMEs.
+1. **Request concurrency**: a server must handle interleaved `tools/call` requests (on the same session for 2025-era servers; on 2026-07-28 each request is independent and may even land on a different instance). The reference SDKs do this correctly; check third-party servers' READMEs.
 2. **Resource contention**: a Postgres server hit with 8 parallel queries may exhaust the underlying pool. Configure the pool with at least as many connections as the host's max parallel calls.
 3. **Rate limits**: 8 parallel GitHub API calls trip the secondary rate limit much faster than 8 sequential calls. Hosted MCPs usually back off correctly; self-hosted ones often don't.
 
 Some hosts and frameworks expose knobs (e.g. the OpenAI Agents SDK accepts `parallel_tool_calls=False` to force sequential calls); Claude Code does not currently expose a parallelism setting — the model decides when to batch independent calls.
 
-If a server misbehaves under parallel load, the practical mitigations are server-side: size connection pools for concurrent calls, add per-session locking around non-reentrant operations, and back off on upstream rate limits. The right fix is to file an issue against the server.
+If a server misbehaves under parallel load, the practical mitigations are server-side: size connection pools for concurrent calls, add locking around non-reentrant operations, and back off on upstream rate limits. The right fix is to file an issue against the server.
 
 ---
 
@@ -416,7 +418,7 @@ Some servers ship both stdio and Streamable HTTP. Don't configure both in the sa
 
 ### Unicode and quoting in args
 
-JSON requires strings; if your `args` array contains paths with spaces or unicode, the host passes them as-is. Don't shell-escape (no `\ `, no `\"`) — JSON does that for you.
+JSON requires strings; if your `args` array contains paths with spaces or unicode, the host passes them as-is. Don't shell-escape (no backslash-space, no `\"`) — JSON does that for you.
 
 ### Multiple hosts fighting over the same stdio server
 
@@ -450,9 +452,10 @@ A realistic project `.mcp.json` covering most of the patterns above:
       ]
     },
     "pg-staging": {
-      "command": "/opt/homebrew/bin/npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${PG_STAGING_URL}"],
+      "command": "/opt/homebrew/bin/uvx",
+      "args": ["postgres-mcp", "--access-mode=restricted"],
       "env": {
+        "DATABASE_URI": "${PG_STAGING_URL}",
         "PATH": "/opt/homebrew/bin:/usr/local/bin:${PATH}"
       }
     },
@@ -461,12 +464,8 @@ A realistic project `.mcp.json` covering most of the patterns above:
       "args": ["mcp-server-git", "--repository", "/Users/me/code/project"]
     },
     "k8s": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-v", "/Users/me/.kube:/home/mcp/.kube:ro",
-        "quay.io/manusa/kubernetes_mcp_server"
-      ]
+      "command": "/opt/homebrew/bin/npx",
+      "args": ["-y", "kubernetes-mcp-server@latest"]
     },
     "github": {
       "type": "http",
@@ -493,7 +492,7 @@ And the matching `.claude/settings.json` permissions:
       "mcp__fs__list_directory",
       "mcp__fs__search_files",
       "mcp__git__*",
-      "mcp__pg-staging__query",
+      "mcp__pg-staging__execute_sql",
       "mcp__github__list_issues",
       "mcp__github__get_pull_request",
       "mcp__github__list_pull_requests",
@@ -510,7 +509,6 @@ And the matching `.claude/settings.json` permissions:
       "mcp__k8s__resources_create_or_update"
     ],
     "deny": [
-      "mcp__pg-staging__execute",
       "mcp__github__delete_repository",
       "mcp__github__merge_pull_request"
     ]
@@ -521,9 +519,9 @@ And the matching `.claude/settings.json` permissions:
 Notes on the above:
 
 - Absolute paths for `command` to survive GUI launches.
-- The Postgres reference server is archived — shown here for the positional-connection-string pattern; substitute a maintained server (Postgres MCP Pro, Neon, Supabase) for new setups. Staging only; no prod connection at all — prod access lives in a separate profile that requires an explicit shell switch.
+- Postgres via Postgres MCP Pro in `restricted` (read-only) mode, connection string in `env` rather than `args`. Staging only; no prod connection at all — prod access lives in a separate profile that requires an explicit shell switch.
 - GitHub via hosted MCP — no token in the config file.
-- Slow servers (the Docker-pulled `k8s` image, long Playwright runs) are handled with `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env vars at launch, not per-server fields.
+- Slow servers (a cold `npx` download, long Playwright runs) are handled with `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env vars at launch, not per-server fields.
 - Allow / ask / deny tiered by destructiveness; wildcards used only on namespaces where everything is genuinely read-only.
 
 This is roughly the shape you want every team to be running by the time MCP is wired into critical workflows.
@@ -533,5 +531,5 @@ This is roughly the shape you want every team to be running by the time MCP is w
 ## Next
 
 - [`building.md`](./building.md) — build your own MCP server.
-- [`advanced.md`](./advanced.md) — sampling, notifications, security, federation.
+- [`advanced.md`](./advanced.md) — the stateless core, elicitation, extensions, security, federation.
 - [`catalog.md`](./catalog.md) — the server catalog.

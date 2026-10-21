@@ -2,7 +2,7 @@
 
 How to budget tokens, structure context windows, and cache aggressively across Claude Code, Cursor, Gemini CLI, GitHub Copilot, and Cody.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -34,27 +34,25 @@ The goal is **just enough context, structured to be cached, with stable content 
 
 ---
 
-## Context Windows by Tool (June 2026)
+## Context Windows by Model (as of October 2026)
 
-| Tool | Model | Context | Output cap | Notes |
-|------|-------|---------|------------|-------|
-| Claude Code | Fable 5 / Opus 4.8 | 1,000,000 | 64K | Current flagships; 1M context at standard pricing; cache 5-min TTL, optional 1h |
-| Claude Code | Sonnet 4.6 | 1,000,000 | 64K | Default for most workflows; 1M at standard pricing |
-| Claude Code | Haiku 4.5 | 200,000 | 64K | Cheap dispatcher / subagent |
-| Cursor | Claude Sonnet 4.6 | 1,000,000 | 64K | Same upstream model, smaller effective window in chat |
-| Cursor | GPT-5.5 / GPT-5.4 | 400,000 | 128K | Current OpenAI lineup; Codex variants tuned for code |
-| Cursor | Gemini 2.5 Pro | 1,048,576 | 65,536 | Use for whole-repo analysis |
-| Gemini CLI | Gemini 2.5 Pro | 1,048,576 | 65,536 | 1M-class window |
-| Gemini CLI | Gemini 2.5 Flash | 1,048,576 | 65,536 | Cheap fast tier |
-| GitHub Copilot (chat) | GPT-5.x / Claude Sonnet 4.6 | ~128K effective | ~16K | Chat surfaces share this budget |
-| Copilot coding agent | GPT-5.x backend | ~200K | ~16K | Issue-to-PR flow; includes plan + diff state |
-| Sourcegraph Cody | Claude Sonnet 4.6 | 200K | 64K | Plus repo-graph context injection |
-| Sourcegraph Cody | Gemini 2.5 Pro | 1M | 65,536 | Used for whole-repo Q&A |
-| Codeium / Windsurf Cascade | Mixed (Sonnet, GPT-5.x) | 200K | 32K | Cascade plans use ~30K for planning state |
+These are the providers' published API limits. The tool wrapping the model (Claude Code, Cursor, Copilot, Codex, Antigravity) may expose a smaller effective window — check each tool's guide.
+
+| Provider | Model (API ID) | Context | Max output | Notes |
+|----------|----------------|---------|------------|-------|
+| Anthropic | Claude Fable 5.1 (`claude-fable-5-1`) | 1M | 128K | Top tier; 1M at standard pricing |
+| Anthropic | Claude Opus 5.5 (`claude-opus-5-5`) | 1M | 128K | Anthropic's suggested default for most workloads |
+| Anthropic | Claude Sonnet 5.5 (`claude-sonnet-5-5`) | 1M | 128K | Speed/intelligence balance |
+| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`) | 1M | 128K | Cheapest tier; prompts over 100K tokens are billed at a higher rate |
+| OpenAI | GPT-6 Astra / GPT-6.1 Sol / GPT-6 Luna | 1.05M | 128K | Prompts over 272K input tokens billed at long-context rates |
+| Google | Gemini 4 Argon (`gemini-4-argon`) | 1M | — | Flagship; Google documents token limits on the models page |
+| Google | Gemini 3.8 Flash, 3.1 Pro (preview) | not restated here | — | See Google's model cards; 3.1 Pro bills >200K prompts at a higher tier |
+
+Sources: [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview), [OpenAI models](https://developers.openai.com/api/docs/models), [Gemini models](https://ai.google.dev/gemini-api/docs/models).
 
 **"Effective" vs "advertised" context.** Advertised window is the model's API limit. Effective window is what the tool surface actually feeds the model after subtracting:
 
-- System prompt (Claude Code system prompt is ~25K tokens)
+- System prompt (agent harnesses ship large system prompts)
 - Tool-schema JSON (each MCP server adds 1-5K)
 - Conversation history
 - Tool-call results so far
@@ -81,7 +79,7 @@ A "200K" tool typically gives you ~140-160K of *your* content before the cliff.
 
 ### Budget allocations (200K-class window)
 
-A sustainable budget for a Sonnet 4.6 session:
+Current Claude models all have 1M windows, but a 200K-sized working budget is still a sensible default for interactive sessions (cheaper, faster, less degradation). A sustainable 200K budget:
 
 | Slot | Tokens | Notes |
 |------|--------|-------|
@@ -98,7 +96,7 @@ A sustainable budget for a Sonnet 4.6 session:
 
 ### Budget allocations (1M-class window)
 
-For Fable 5 / Opus 4.8 or Gemini 2.5 Pro:
+For Fable 5.1 / Opus 5.5 / Sonnet 5.5, GPT-6-family, or Gemini 4 Argon:
 
 | Slot | Tokens | Notes |
 |------|--------|-------|
@@ -197,7 +195,7 @@ Cursor respects `.cursorignore` for indexing AND for `@codebase` references. Wit
 
 ### Cody and Copilot
 
-- Sourcegraph Cody respects `.cody/ignore` (per-repo) and global config.
+- Sourcegraph Cody respects `.cody/ignore` (per-repo) and global config. (Cody Free and Pro were discontinued in July 2025; Cody remains an Enterprise product.)
 - GitHub Copilot has no per-repo ignore today; it uses GitHub's content exclusions configured at the org level. Configure those in **Settings → Copilot → Content exclusion**.
 
 ### What ignore files do NOT do
@@ -318,7 +316,7 @@ This works because recent tokens have the most attention weight. It pulls the mo
 
 - **Claude Code** has `/compact` (manual) and auto-compaction when the window fills. Auto-compact summarizes earlier turns into a synthetic message and continues. You see a `[Compacted]` marker.
 - **Cursor** does not auto-compact but offers "New chat with summary" in the chat menu.
-- **Gemini CLI** has `/compress`, which serves the same purpose as Claude Code's `/compact`.
+- **Gemini CLI** has `/compress`, which serves the same purpose as Claude Code's `/compact`. (For free-tier and Google AI Pro/Ultra users, Gemini CLI was replaced by Antigravity CLI on 2026-06-18; Gemini CLI remains for paid API-key and Code Assist Standard/Enterprise users.)
 - **Copilot Chat** does not compact; start a new chat manually.
 
 ### What to keep when compacting
@@ -333,14 +331,15 @@ When you trigger a manual `/compact`, the implicit prompt asks the model to pres
 
 ## Cache-Aware Structuring
 
-Prompt caching converts repeat input from "billed" to "near-free" (10% of input cost on Anthropic; cached reads on Vertex are implicit and free where they hit).
+Prompt caching converts repeat input from "billed" to "near-free". As of October 2026, an Anthropic cache hit costs 10% of base input on most models, 5% on Opus 5.5 and Sonnet 5.5, and 2.5% on Fable 5.1; OpenAI and Google bill cached input at a steep discount too (see [Cost Analysis](../comparisons/cost-analysis.md)).
 
 ### Anthropic prompt cache (Claude Code, Claude API)
 
 - **Default TTL: 5 minutes** since last cache read.
-- **Extended TTL: 1 hour** (`cache_control: { type: "ephemeral", ttl: "1h" }`) — costs more on write, same on read.
-- **Cached input cost:** 10% of base input cost on hit, 125% on write (one-time).
-- **Minimum cacheable block: 1024 tokens** for Sonnet/Opus, 2048 for Haiku.
+- **Extended TTL: 1 hour** (`cache_control: { type: "ephemeral", ttl: "1h" }`) — 2x base input on write, same read price.
+- **Cached input cost (as of October 2026):** cache write is 1.25x base input (5-minute) or 2x (1-hour); a hit is 0.1x base input on most models, 0.05x on Opus 5.5 / Sonnet 5.5, 0.025x on Fable 5.1. Source: [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+- **Automatic caching:** a single top-level `cache_control` field lets the API manage breakpoints as the conversation grows; explicit per-block breakpoints are still available.
+- **Minimum cacheable length** varies by model — check the prompt-caching docs before relying on caching for short prompts.
 - **Cache key:** the exact byte sequence of the prefix up to and including the `cache_control` marker.
 
 **The critical rule: caches are prefix-only.** If you put a variable thing before a stable thing, you bust the cache.
@@ -368,13 +367,13 @@ In Claude Code this happens automatically — the system prompt, tool schemas, a
 
 ### Vertex / Gemini implicit caching
 
-Gemini 2.5 caches the prefix of identical prompts automatically. No `cache_control` field. Hits show in response metadata as `cachedContentTokenCount`. The cache lifetime is ~5 minutes on first launch and extends with reuse.
+Gemini models cache the prefix of identical prompts implicitly — no `cache_control` field (Gemini 4 Argon is listed as implicit-caching only). Hits show in response metadata as `cachedContentTokenCount`. Explicit context caching is also available on most models, billed per cached token plus hourly storage.
 
 For Gemini, the cache-friendly structure is the same: put stable content at the front. Avoid sprinkling timestamps, request IDs, or random nonces into your prompts — those silently bust prefix caches.
 
-### GPT-5 / OpenAI prompt caching
+### OpenAI prompt caching
 
-OpenAI offers automatic prompt caching for prompts ≥1024 tokens with the same prefix discipline. Cached input is discounted 90% (you pay 10% of the base input price). Cache lasts 5-10 minutes typically. No explicit markers required.
+OpenAI caches repeated prompt prefixes automatically with the same prefix discipline. No explicit markers required. As of October 2026, cached input is 90% off on GPT-6 Astra and 95% off on GPT-6.1 Sol ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)). Cache lifetime isn't guaranteed — measure hit rates rather than assuming.
 
 ### Practical cache strategy
 
@@ -476,7 +475,7 @@ curl https://api.anthropic.com/v1/messages/count_tokens \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"..."}]}'
+  -d '{"model":"claude-sonnet-5-5","messages":[{"role":"user","content":"..."}]}'
 ```
 
 ---
@@ -507,7 +506,7 @@ When things degrade:
 - [ ] Compact and re-prime
 - [ ] Start a fresh session with a structured handoff
 - [ ] Reduce the working set; close subagent threads
-- [ ] Switch to a larger window only if you need it — Fable 5 / Opus 1M / Gemini 1M
+- [ ] Use the full window only if you need it — current Claude, GPT-6, and Gemini 4 Argon models all offer ~1M tokens, but you pay for every token you load
 
 ---
 

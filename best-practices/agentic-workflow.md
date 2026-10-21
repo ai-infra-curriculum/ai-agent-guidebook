@@ -2,7 +2,7 @@
 
 The plan → execute → verify loop that makes coding agents reliable, and how to set it up in Claude Code, Cursor, and other tools.
 
-Last updated 2026-06-22.
+Last updated 2026-10-21.
 
 ---
 

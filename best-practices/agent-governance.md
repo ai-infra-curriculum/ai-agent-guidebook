@@ -2,7 +2,7 @@
 
 Governance for AI agents moving from POC to production: trust scoring, guardrails, portable identity, audit ledgers. DIY patterns and managed platforms.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
