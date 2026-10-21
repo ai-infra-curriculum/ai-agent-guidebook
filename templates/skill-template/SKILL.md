@@ -1,59 +1,56 @@
 ---
 # ─────────────────────────────────────────────────────────────────────────────
-# Skill metadata. Every field below is meaningful — read the comments before
-# changing anything. Anything marked REQUIRED breaks loading if missing.
+# Skill metadata. Follows the open Agent Skills spec (agentskills.io) plus a few
+# Claude Code extensions, marked below. Claude Code silently ignores unknown
+# keys; claude.ai uploads and the Skills API REJECT them. Don't invent keys —
+# put your own data under `metadata`.
+# Last verified: 2026-10.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# REQUIRED. Kebab-case, globally unique within the skills directory it lives in.
-# Convention: <verb>-<noun> or <noun>-<modifier>, e.g. "audit-dependencies",
-# "postgres-backup", "react-component-scaffold".
+# REQUIRED (spec). 1-64 chars: lowercase letters, digits, single hyphens; no
+# leading/trailing hyphen. MUST match this folder's name. In Claude Code it is
+# also the slash command (/example-skill).
+# Convention: <verb>-<noun>, e.g. "audit-dependencies", "scaffold-nest-resource".
 name: example-skill
 
-# REQUIRED. One sentence. Shown in skill pickers. Aim for ≤120 characters.
-# Lead with the verb. Avoid "this skill helps you" — say what it does.
-description: Example skill template — replace this description with your skill's one-sentence purpose.
+# REQUIRED (spec). Max 1,024 chars. Say what the skill does AND when to use it,
+# with concrete trigger phrases. This is the only text Claude sees before the
+# skill loads, so it decides whether the skill is ever auto-invoked.
+description: >-
+  Scaffolds a NestJS controller, service, module, DTOs, and spec for a named
+  resource. Use when the user asks to scaffold, generate, or add a NestJS
+  resource or CRUD module. Skip for renames and for non-NestJS frameworks.
 
-# REQUIRED for /skill-name slash invocation. Set to false for skills that
-# should only be auto-discovered (not user-invokable by name).
-invokable: true
+# OPTIONAL (spec). Environment requirements, max 500 chars. Most skills omit it.
+compatibility: Requires Bash 4+ and a NestJS project
 
-# OPTIONAL. Semver. Bump on breaking change to the skill's interface or output
-# shape so dependents can pin.
-version: 0.1.0
+# OPTIONAL (spec, experimental). PRE-APPROVES these tools so they run without
+# a permission prompt during the invoking turn. It does NOT restrict other
+# tools. Keep patterns narrow; never list bare `Bash` or `Write`.
+# ${CLAUDE_SKILL_DIR} expands to this folder in Claude Code.
+allowed-tools: Read Bash(bash ${CLAUDE_SKILL_DIR}/scripts/example.sh --dry-run *)
 
-# OPTIONAL. The agent runtime will route to this skill more eagerly when a user
-# message matches one of these triggers. Use sparingly — too many triggers and
-# the skill will fire when it shouldn't.
-triggers:
-  - "when the user asks to <verb> a <noun>"
-  - "when a file matching <glob> is opened"
-  - "/example-skill"
+# OPTIONAL (Claude Code). true = only a human can invoke it via /example-skill;
+# Claude never auto-loads it. Recommended for anything that writes files.
+disable-model-invocation: true
 
-# OPTIONAL. List the tools/MCP servers the skill expects to be available.
-# The runtime won't enforce this, but the body of the skill should fail fast
-# with a clear error if a required tool is missing.
-requires:
-  - filesystem
-  - github      # only if you actually need it
-  # - postgres
-  # - slack
+# OPTIONAL (Claude Code). Shown in autocomplete after the slash command.
+argument-hint: "[ResourceName] [target-path]"
 
-# OPTIONAL. Tags for searchability and grouping in the skill catalog.
-tags:
-  - example
-  - template
-  - scaffold
+# OPTIONAL (Claude Code). Names for positional arguments: $resource and
+# $target in the body below map to the first and second argument.
+arguments: [resource, target]
 
-# OPTIONAL. The skill's author. Useful for ownership and contact when something
-# breaks. Email or GitHub handle, not "the AI team".
-author: your-name@example.com
-
-# OPTIONAL. Last-updated date. Set to today when you copy this template.
-last_updated: 2026-05-24
-
-# OPTIONAL. License the skill's helper scripts ship under. Defaults to the
-# parent repo's license if omitted.
+# OPTIONAL (spec). License for the skill's bundled files.
 license: MIT
+
+# OPTIONAL (spec). Free-form map of string keys to STRING values. Your own
+# version, owner, and catalog data live here — not as top-level keys.
+metadata:
+  version: "0.2.0"
+  owner: your-name@example.com
+  tags: "example, template, scaffold"
+  last-updated: "2026-10-21"
 ---
 
 # Example Skill
@@ -62,6 +59,9 @@ license: MIT
 > does, when it activates, and what the user can expect from it. Be concrete:
 > "Generates a NestJS controller-service-DTO scaffold for a named resource"
 > is far better than "Helps with NestJS scaffolding."
+>
+> Invocation: `/example-skill Payment src/payments`. In the body, `$resource`
+> and `$target` expand to those arguments, and `$ARGUMENTS` to the whole string.
 
 ---
 
@@ -92,8 +92,8 @@ not guess.
 
 | Input | Type | Required | Notes |
 |---|---|---|---|
-| `target_path` | string (path) | yes | Where to write output. Must exist. |
-| `resource_name` | string | yes | PascalCase. The "thing" being scaffolded. |
+| `target_path` (`$target`) | string (path) | yes | Where to write output. Must exist. |
+| `resource_name` (`$resource`) | string | yes | PascalCase. The "thing" being scaffolded. |
 | `template_variant` | enum (`minimal` \| `full`) | no (default `minimal`) | Controls scaffold depth. |
 
 ---
@@ -109,19 +109,21 @@ If a step needs branching, name the branches inline rather than nesting.
    - On failure, return a one-line error naming the invalid field.
 
 2. **Resolve template.**
-   - Read `scripts/example.sh` (the helper script).
+   - Read `${CLAUDE_SKILL_DIR}/scripts/example.sh` (the helper script).
    - Compose the command line from inputs.
 
 3. **Dry-run preview.**
-   - Run `scripts/example.sh --dry-run …` and capture stdout.
+   - Run `bash ${CLAUDE_SKILL_DIR}/scripts/example.sh --dry-run --target $target --name $resource`
+     and capture stdout. (This exact form is pre-approved in `allowed-tools`.)
    - Show the user a summary of files that *would* be created.
 
 4. **Confirm with user.**
-   - If running non-interactively (e.g., from another agent), skip this step
-     iff the caller passed `--auto-confirm`.
+   - Show the preview and wait for an explicit yes. If the caller is another
+     agent and passed `--auto-confirm` in the arguments, skip this step.
 
 5. **Execute.**
-   - Run `scripts/example.sh …`.
+   - Run `bash ${CLAUDE_SKILL_DIR}/scripts/example.sh --target $target --name $resource`.
+     This is not pre-approved, so it goes through the normal permission check.
    - On non-zero exit, surface stderr and stop.
 
 6. **Verify.**
@@ -137,8 +139,9 @@ If a step needs branching, name the branches inline rather than nesting.
 ## Example
 
 A complete invocation, including the user message and the skill's response.
-This block is load-bearing — it is what the runtime uses to learn the skill's
-*shape*. Make it realistic.
+There's no special runtime parsing of this section — but the model reads the
+whole body when the skill loads and imitates examples closely, so a realistic
+example is the cheapest way to get consistent output.
 
 ````text
 User:
@@ -211,8 +214,10 @@ short — link only to things a reader will plausibly want.
 
 ## Maintenance
 
-Notes for future maintainers — not for the runtime. The runtime stops reading
-at `## See Also`; everything below is for humans.
+Notes for future maintainers. The runtime does NOT stop reading at a heading —
+the whole file loads into context when the skill is invoked, and in Claude Code
+the first 5,000 tokens are what survive compaction. Keep this section short,
+or move it to the README so it doesn't cost context on every invocation.
 
 ### How to test this skill
 
@@ -222,10 +227,10 @@ mkdir -p /tmp/skill-test
 bash scripts/example.sh --dry-run --target /tmp/skill-test --name Sample
 ```
 
-### When to bump version
+### When to bump `metadata.version`
 
 - Patch (`0.x.y`): wording changes, internal refactor of the helper script.
-- Minor (`0.y.0`): new optional inputs, new output files, new tags.
+- Minor (`0.y.0`): new optional inputs, new output files.
 - Major (`y.0.0`): renamed inputs, removed outputs, changed step order in a
   way that downstream callers can observe.
 

@@ -11,7 +11,8 @@ Complete guide to using GitHub Copilot, GitHub's AI pair programmer for IDE and 
 - [Copilot in IDE](#copilot-in-ide)
 - [Copilot CLI](#copilot-cli)
 - [Copilot Chat](#copilot-chat)
-- [Copilot Coding Agent](#copilot-coding-agent)
+- [Copilot Cloud Agent](#copilot-cloud-agent)
+- [GitHub Copilot App](#github-copilot-app)
 - [Best Practices](#best-practices)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
@@ -28,7 +29,7 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 - Real-time code completions
 - Inline suggestions as you type
 - Multi-line completions
-- Available in VS Code, JetBrains, Vim, Visual Studio
+- Available in VS Code, Visual Studio, JetBrains, Vim/Neovim, Xcode, and Eclipse
 
 **GitHub Copilot Chat**
 - Conversational AI in your IDE
@@ -39,21 +40,32 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 **GitHub Copilot CLI**
 - Standalone agentic terminal assistant, invoked as `copilot`
 - Plans and executes tasks: edits files, runs commands (with approval)
-- MCP support, model selection, custom instructions
+- Plan and autopilot modes, MCP, custom agents, skills, hooks, BYOK/local models
 - Replaces the retired `gh copilot` extension (dead since Oct 25, 2025)
 
-**Copilot Coding Agent**
-- Assign a GitHub issue to Copilot; it opens a draft PR
-- Runs in an ephemeral GitHub Actions environment
+**GitHub Copilot App**
+- Desktop app (macOS, Windows, Linux) for running agent sessions in parallel, each on its own branch and worktree
+- Built on the Copilot CLI; GA June 17, 2026, available on every plan since July 7, 2026
+
+**Copilot Cloud Agent** (formerly "coding agent")
+- Assign a GitHub issue to Copilot; it opens a pull request
+- Runs in an ephemeral cloud environment built on GitHub Actions
 - Successor to the sunset Copilot Workspace preview
+- Third-party Claude and Codex agents (public preview) run on the same Copilot subscription
+
+**Copilot Code Review**
+- Request Copilot as a PR reviewer, or configure automatic reviews
+- Agentic context gathering; Lite and Balanced (default) effort levels
 
 ### Key Features
 
 - ✅ **Real-time Completions** - Suggestions as you type
-- ✅ **Agent Mode** - Autonomous multi-step tasks in IDE, CLI, and cloud
-- ✅ **Model Picker** - Choose among Claude, GPT, and Gemini models per task
-- ✅ **Custom Instructions** - Repo conventions via `.github/copilot-instructions.md`
+- ✅ **Agent Mode** - Autonomous multi-step tasks in IDE, CLI, desktop app, and cloud
+- ✅ **Model Picker** - Choose among Claude, GPT, Gemini, and other models per task, or let **Auto** pick
+- ✅ **Custom Instructions** - Repo conventions via `.github/copilot-instructions.md` or `AGENTS.md`
+- ✅ **Custom Agents and Skills** - Reusable agent profiles (`.github/agents/`) and skills (`.github/skills/`)
 - ✅ **MCP Support** - Extend Copilot with Model Context Protocol servers
+- ✅ **Copilot Spaces** - Curated, shareable context (repos, files, issues, notes) for chat
 - ✅ **Multi-language Support** - Python, JavaScript, TypeScript, Go, Ruby, and more
 - ✅ **Context-Aware** - Understands your codebase
 - ✅ **Comment-to-Code** - Generate code from comments
@@ -74,8 +86,8 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 
 1. **Subscribe to Copilot**
    - Visit https://github.com/features/copilot
-   - Choose plan (Free, Pro, Pro+, Business, Enterprise)
-   - Free tier available; expanded free access for students and verified open-source maintainers
+   - Choose plan (Free, Pro, Pro+, Max, Business, Enterprise)
+   - Free tier available; verified students get Copilot Student, and verified teachers and maintainers of popular open-source projects can get Copilot Pro free
 
 2. **Authorize in Settings**
    - Go to https://github.com/settings/copilot
@@ -85,13 +97,13 @@ GitHub Copilot is an AI-powered code completion and chat assistant that helps yo
 
 #### VS Code
 
-```bash
-# Install from VS Code Marketplace
-# Search for "GitHub Copilot"
-# Or via command line:
-code --install-extension GitHub.copilot
-code --install-extension GitHub.copilot-chat
-```
+Copilot ships as built-in AI features in VS Code — you don't install extensions by hand:
+
+1. Hover over the Copilot icon in the Status Bar and select **Use AI Features** (or run **GitHub Copilot: Sign in** from the Command Palette).
+2. Sign in with GitHub. Your existing Copilot plan is used; otherwise you're signed up for Copilot Free.
+3. The required Copilot extensions install automatically on first setup.
+
+See the [VS Code guide](../vscode/README.md) for agent mode, MCP, and customization.
 
 #### JetBrains IDEs
 
@@ -216,8 +228,9 @@ def calculate_compound_interest(principal, rate, time, frequency):
 ### Accessing Chat
 
 **VS Code:**
-- Click Copilot icon in sidebar
-- Or: `Ctrl + Shift + I` / `Cmd + Shift + I`
+- Open the Chat view
+- Or: `Ctrl + Alt + I` / `Ctrl + Cmd + I`
+- Pick **Ask**, **Plan**, or **Agent** (or a custom agent) from the agent picker
 
 **Inline Chat:**
 - Select code
@@ -260,14 +273,16 @@ Optimize this code for performance
 
 **Quick actions in chat:**
 
-- `/explain` - Explain selected code
-- `/fix` - Propose fix for problems
-- `/tests` - Generate unit tests
-- `/doc` - Add documentation comments
-- `/optimize` - Suggest performance improvements
-- `/clear` - Clear chat history
-- `/help` - Get help with Copilot
-- `/new` - Start a fresh thread
+- `/explain` - Explain selected code (inline chat)
+- `/fix` - Propose fix for problems (inline chat)
+- `/tests` - Generate unit tests (inline chat)
+- `/doc` - Add documentation comments (inline chat)
+- `/plan` - Draft an implementation plan before coding
+- `/new` or `/clear` - Start a fresh session
+- `/compact` - Summarize the conversation to free context
+- `/delegate` - Hand the session to Copilot cloud agent
+
+The exact list varies by IDE — type `/` to see what's available.
 
 **Example:**
 ```
@@ -312,16 +327,18 @@ Useful in-session tricks:
 ```text
 @path/to/file.py      # pull a file into context
 !git status           # run a shell command directly (no model call)
-Shift+Tab             # toggle plan mode (plan before code)
+Shift+Tab             # cycle standard / plan / autopilot modes
 ```
 
 ### Key Slash Commands
 
 ```text
 /login        # authenticate with GitHub
-/model        # pick the model for the session
-/mcp add      # add an MCP server (GitHub's is pre-configured)
+/model        # pick the model (or Auto) for the session
+/plan         # build an implementation plan before coding
+/mcp          # manage MCP servers (GitHub's is built in)
 /agent        # select a built-in or custom agent
+/delegate     # hand the task to cloud agent as a pull request
 /usage        # session stats, including AI Credits used
 /feedback     # send feedback
 ```
@@ -330,7 +347,7 @@ Shift+Tab             # toggle plan mode (plan before code)
 
 ```bash
 # One-shot prompt (scripts, CI)
-copilot --prompt "list TODO comments in src/ grouped by file"
+copilot -p "list TODO comments in src/ grouped by file"
 
 # Resume your last session
 copilot --continue
@@ -338,19 +355,19 @@ copilot --continue
 
 ### Approvals
 
-Copilot asks before running any tool that modifies files or executes programs. Approve once, approve for the session, or reject with feedback. `--allow-all` skips approvals — only use it in disposable environments.
+Copilot asks before running any tool that modifies files or executes programs. Approve once, approve for the session, or reject with feedback. Prefer targeted `--allow-tool` / `--deny-tool` rules and the local sandbox (`/sandbox enable`); `--allow-all` skips approvals entirely — only use it in disposable environments.
 
-See the [full CLI guide](cli-guide.md) for installation, MCP configuration, custom agents, and migration from the dead `gh copilot` extension.
+See the [full CLI guide](cli-guide.md) for installation, MCP configuration, custom agents, BYOK, and migration from the dead `gh copilot` extension.
 
 ---
 
-## Copilot Coding Agent
+## Copilot Cloud Agent
 
-> **Note**: Copilot Workspace (the browser-based preview) was sunset on May 30, 2025. Its issue-to-PR workflow lives on in the **Copilot coding agent**, available on all paid Copilot plans.
+> **Note**: GitHub renamed the "Copilot coding agent" to **Copilot cloud agent** in 2026. Copilot Workspace (the browser-based preview) was sunset on May 30, 2025; its issue-to-PR workflow lives on in cloud agent.
 
-### What is the Coding Agent?
+### What is Cloud Agent?
 
-The coding agent works asynchronously in the cloud: hand it a task and it researches your repo, implements the change on a branch, runs tests, and opens a draft pull request for review.
+Cloud agent works asynchronously in the cloud: hand it a task and it researches your repo, implements the change on a branch, runs tests, and opens a pull request for review. It's included on Pro, Pro+, Max, Business, Enterprise, and Copilot Student (not Copilot Free).
 
 ### Workflow
 
@@ -358,24 +375,28 @@ The coding agent works asynchronously in the cloud: hand it a task and it resear
 ```
 Assign a GitHub issue to "Copilot" — or start a task from
 the agents panel at https://github.com/copilot/agents,
-or comment @copilot on an existing PR
+comment @copilot on an existing PR, or /delegate from the CLI
 ```
 
 **2. The agent works**
-- Spins up an ephemeral GitHub Actions environment
+- Spins up an ephemeral cloud environment built on GitHub Actions
 - Explores the code, plans, and implements on a branch
 - Runs your tests and linters
 
-**3. Review the draft PR**
+**3. Review the PR**
 - Read the agent's description and session log
 - Leave PR comments; the agent pushes revisions
-- Merge when satisfied — the agent can't bypass branch protections
+- Merge when satisfied — repository rules and branch protections still apply
 
 ### Setup
 
 - **Environment**: preinstall your toolchain in `.github/workflows/copilot-setup-steps.yml` (job must be named `copilot-setup-steps`)
-- **Conventions**: encode build/test commands and style rules in `.github/copilot-instructions.md` or `AGENTS.md`
+- **Conventions**: encode build/test commands and style rules in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md`
 - **MCP**: GitHub and Playwright MCP servers are enabled by default; add more in repo settings
+
+### Third-Party Agents
+
+On Pro, Pro+, Max, Business, and Enterprise you can also enable the **Anthropic Claude** and **OpenAI Codex** coding agents (public preview). They run on your Copilot subscription and are started the same ways — agents tab, issue assignment, or `@AGENT_NAME` in a PR comment.
 
 ### Best Practices
 
@@ -388,7 +409,21 @@ or comment @copilot on an existing PR
 ✅ **Invest in Setup and Instructions**
 - Fix recurring environment failures in `copilot-setup-steps.yml`, not per-issue
 
-See the [full coding agent guide](workspace-guide.md) for details and limitations.
+See the [full cloud agent guide](workspace-guide.md) for details and limitations.
+
+---
+
+## GitHub Copilot App
+
+The **GitHub Copilot app** is a desktop app (macOS, Windows, Linux) for agent-driven development, built on the Copilot CLI. It went GA on June 17, 2026 and has been available on every Copilot plan — including Copilot Free and GitHub Education — since July 7, 2026.
+
+- Start sessions from an issue, a pull request, or a prompt; run several in parallel across repositories, each on its own branch and worktree
+- Review diffs and validate work in the integrated terminal and browser, then open a PR that runs your normal checks
+- **Canvases**: shared surfaces where you and the agent work on the same plan, PR, terminal, or browser session
+- **Cloud automations**: schedule recurring agent work that runs in the cloud
+- Pick the model per session, connect tools via MCP, or bring your own model provider (BYOK) — no Copilot subscription required with BYOK
+
+Download it from <https://github.com/github/app>, or run `copilot app` from a terminal. On Business and Enterprise plans an admin must enable Copilot CLI in policy settings before members can use the app.
 
 ---
 
@@ -445,10 +480,10 @@ VS Code Settings:
   "github.copilot.enable": {
     "*": true,
     "yaml": false,
-    "plaintext": false
+    "plaintext": false,
+    "markdown": false
   },
-  "github.copilot.inlineSuggest.enable": true,
-  "github.copilot.editor.enableAutoCompletions": true
+  "github.copilot.nextEditSuggestions.enabled": true
 }
 ```
 
@@ -469,8 +504,8 @@ VS Code Settings:
 - Always review before committing
 
 ✅ **Sensitive Data**
-- Copilot doesn't store your code
-- But be cautious with secrets
+- On Free, Pro, and Pro+, interaction data may be used for model training unless you opt out (see [Pricing](#pricing))
+- Use content exclusion for paths Copilot shouldn't read — but note it isn't honored by every agentic surface
 - Never commit API keys or passwords
 
 ### Performance Tips
@@ -531,12 +566,16 @@ def login_user(username, password):
 - Available in PR description
 
 **Code Review:**
-- Copilot can suggest improvements
-- Available in review comments
+- Add Copilot as a reviewer, or configure automatic reviews (on open, on new pushes, on drafts) per user, repo, or org — rulesets can trigger them too
+- Agentic: gathers full-repo context on GitHub Actions runners, and can use repository MCP servers and skills
+- Effort levels: **Lite** (fast, targeted) and **Balanced** (higher-reasoning; the default since September 28, 2026)
+- Reads `.github/copilot-instructions.md`, path-specific instructions, and `AGENTS.md` from the PR's head branch
+- Can be requested through the REST and GraphQL APIs (GA October 2, 2026)
+- Consumes AI Credits (plus Actions minutes); not included in Copilot Free
 
-**Issue Triage:**
-- Copilot can help categorize issues
-- Suggest labels and assignments
+**Copilot Spaces:**
+- Curate repositories, files, PRs, issues, notes, and uploads into a shareable context collection
+- Use it in Copilot Chat on GitHub.com, or from your IDE through the GitHub MCP server
 
 ---
 
@@ -556,8 +595,8 @@ def login_user(username, password):
 
 ✅ **GitHub workflow integration**
 - PR summaries and reviews
-- Issue management
-- GitHub CLI operations
+- Issue-to-PR delegation via cloud agent
+- One subscription covering Copilot, Claude, and Codex agents on GitHub
 
 ### When to Use Claude Code
 
@@ -660,12 +699,13 @@ gh extension remove gh-copilot
 - `Esc` - Dismiss suggestion
 - `Alt/Option + ]` - Next suggestion
 - `Alt/Option + [` - Previous suggestion
-- `Alt/Option + \` - Open suggestions panel
+- `Alt/Option + \` - Trigger suggestion
 
 **Chat:**
-- `Ctrl/Cmd + Shift + I` - Open chat
-- `Ctrl/Cmd + I` - Inline chat
-- `Ctrl/Cmd + K` - Quick actions
+- `Ctrl + Alt + I` / `Ctrl + Cmd + I` - Open Chat view
+- `Ctrl/Cmd + I` - Inline chat (editor and terminal)
+- `Ctrl + Shift + Alt + L` / `Shift + Option + Cmd + L` - Quick Chat
+- `Ctrl/Cmd + N` (in the Chat view) - New chat session
 
 ### CLI
 
@@ -700,35 +740,30 @@ copilot help                # Full command reference
 
 ## Pricing
 
-> **Billing change (June 1, 2026):** Copilot moved from "premium requests" to **GitHub AI Credits** — usage-based, token-metered billing where 1 credit = $0.01 and cost depends on the model and tokens used. Each paid plan includes a monthly credit allowance; overage and budgets are managed in billing settings.
+> **Billing model (since June 1, 2026):** Copilot bills model usage in **GitHub AI Credits** — usage-based, token-metered billing where **1 credit = $0.01** and cost depends on the model and tokens used. The old "premium requests" system is gone. Code completions and next edit suggestions are **not** billed in credits and are unlimited on paid plans. Credits reset monthly (00:00 UTC on the 1st) and don't roll over; beyond your allowance you can upgrade, set a USD budget for additional usage, or wait for the reset.
 
-**GitHub Copilot Free**
-- $0 — limited completions and chat per month
-- Includes Copilot CLI
+Individual paid plans include **base** credits (equal to the price, fixed) plus a **flex** allotment (can change over time; used after base credits):
 
-**GitHub Copilot Pro**
-- $10/month
-- Unlimited completions, coding agent, code review
-- Monthly AI Credit allowance included
+| Plan | Price | Monthly AI Credits | Highlights |
+|------|-------|--------------------|------------|
+| **Copilot Free** | $0 | Limited allowance | 2,000 completions/month, limited chat and agents, Auto model selection only |
+| **Copilot Student** | $0 (verified students) | Limited allowance | Auto model selection only; agents included except third-party agents |
+| **Copilot Pro** | $10/month | 1,000 base + 500 flex = 1,500 | Cloud agent, agent mode, code review, MCP, third-party agents, a selection of models |
+| **Copilot Pro+** | $39/month | 3,900 base + 3,100 flex = 7,000 | Everything in Pro, premium models |
+| **Copilot Max** | $100/month | 10,000 base + 10,000 flex = 20,000 | Everything in Pro+, priority access to premium models |
+| **Copilot Business** | $19/user/month | 1,900 per user | Centralized management and policy control |
+| **Copilot Enterprise** | $39/user/month | 3,900 per user | Everything in Business, priority premium-model access; requires GitHub Enterprise Cloud |
 
-**GitHub Copilot Pro+**
-- $39/month
-- Everything in Pro, larger AI Credit allowance, premium models
-
-**GitHub Copilot Business**
-- $19/user/month
-- Organization license and policy management, pooled AI Credits
-
-**GitHub Copilot Enterprise**
-- $39/user/month
-- Everything in Business, GitHub.com-native integration, codebase indexing, larger pooled credits
+**Auto discount:** using Auto model selection in Copilot Chat, the CLI, the Copilot app, or cloud agent gets a 10% discount on model costs on paid plans.
 
 **Free Access:**
-- Verified students and teachers
-- Maintainers of popular open-source projects
+- Verified students: Copilot Student
+- Verified teachers and maintainers of popular open-source projects: Copilot Pro at no cost
 - Apply at https://education.github.com/
 
-Current details: https://github.com/features/copilot/plans
+**Data use:** since April 24, 2026, GitHub may use interaction data from Copilot Free, Pro, and Pro+ for AI model training unless you opt out in the **Privacy** section of <https://github.com/settings/copilot>. Business and Enterprise are not affected.
+
+Current details: https://docs.github.com/en/copilot/get-started/plans
 
 ---
 
@@ -751,4 +786,4 @@ Current details: https://github.com/features/copilot/plans
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

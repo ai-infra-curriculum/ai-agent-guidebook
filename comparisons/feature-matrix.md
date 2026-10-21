@@ -1,50 +1,56 @@
 # AI Coding Assistant Feature Comparison
 
-Comprehensive comparison of Claude Code, GitHub Copilot, and Gemini CLI.
+Comparison of Claude Code, OpenAI Codex, GitHub Copilot, and Gemini CLI / Antigravity CLI, plus the AI editors (Cursor, VS Code, Google Antigravity).
+
+Last updated 2026-10-21. Feature claims are checked against each vendor's docs as of October 2026; see each tool's guide for source-cited detail.
 
 ---
 
 ## Quick Comparison
 
-| Feature | Claude Code | GitHub Copilot | Gemini CLI |
-|---------|-------------|----------------|------------|
-| **IDE Integration** | ✅ VS Code, JetBrains (official extensions) | ✅ VS Code, JetBrains, Vim | ❌ CLI only |
-| **Real-time Completions** | ❌ | ✅ | ❌ |
-| **Chat Interface** | ✅ | ✅ | ✅ |
-| **CLI Tool** | ✅ | ✅ | ✅ |
-| **MCP Server Support** | ✅ 50+ servers | ✅ Agent mode + coding agent | ✅ Native |
-| **Multi-Agent Orchestration** | ✅ Subagents | ⚠️ Agent mode + autonomous coding agent | ❌ |
-| **Skills System** | ✅ | ❌ | ⚠️ Custom commands |
-| **Event Hooks** | ✅ | ❌ | ❌ |
-| **Checkpoint/Resume** | ✅ | ❌ | ❌ |
-| **Async Coding Agent (issue → PR)** | ❌ | ✅ Copilot coding agent (GA) | ❌ |
-| **Multimodal** | ✅ | ❌ | ✅ |
-| **Code Context** | Very Large (1M tokens, current models) | Medium | Very Large (1M tokens) |
-| **Pricing** | API usage or Claude subscription ($20-200/mo) | $0-39/mo | Free tier + API usage |
+| Feature | Claude Code | OpenAI Codex | GitHub Copilot | Gemini CLI / Antigravity CLI |
+|---------|-------------|--------------|----------------|------------------------------|
+| **Surfaces** | CLI, desktop app, VS Code + JetBrains extensions, Agent SDK | CLI, IDE extension, ChatGPT desktop/web/mobile, Codex Cloud | IDE extensions, Copilot CLI, cloud agent on GitHub | CLI (Antigravity CLI is the successor for consumer plans) |
+| **Real-time Completions** | ❌ | ❌ | ✅ | ❌ |
+| **MCP Server Support** | ✅ | ✅ | ✅ | ✅ |
+| **Subagents / Multi-Agent** | ✅ Built-in + custom subagents, background agents, agent teams | ✅ Subagents | ⚠️ Custom agents; CLI delegates to specialized agents | ✅ Subagents |
+| **Skills** | ✅ | ✅ Skills and plugins | ✅ Agent skills | ✅ Agent Skills |
+| **Event Hooks** | ✅ | ✅ | ✅ (Copilot CLI) | ✅ |
+| **Plan Mode** | ✅ | ⚠️ See [Codex guide](../guides/codex/README.md) | ✅ (Copilot CLI) | ⚠️ See guide |
+| **Async Agent (issue → PR)** | ⚠️ Via GitHub Actions / background agents | ✅ Codex Cloud + GitHub code review | ✅ Copilot cloud agent | ❌ |
+| **Project Instructions** | `CLAUDE.md` | `AGENTS.md` | `.github/copilot-instructions.md`, custom instructions | `GEMINI.md` |
+| **Context Window** | 1M tokens (all current Claude models) | ~1.05M tokens (GPT-6 models) | Up to 1M on latest models | Model-dependent (Gemini 4 Argon: 1M) |
+| **Pricing (as of Oct 2026)** | Claude Pro $20 / Max from $100, Team, or API | ChatGPT Free → Pro ($100-500), Business, or API key | Free / $10 / $39 / $100; Business $19, Enterprise $39 per user | Gemini CLI: paid API key or Code Assist Standard/Enterprise; Antigravity CLI: no charge for individuals |
 
-The table above covers the CLI / assistant tools. The three GUI editors and
-agent-first IDEs below are a distinct category — full editing environments
+Notes:
+
+- **Gemini CLI status.** On June 18, 2026, Gemini CLI stopped serving free individual, Google AI Pro, and Google AI Ultra users, who moved to **Antigravity CLI**. Gemini CLI remains available to Gemini Code Assist Standard/Enterprise organizations and with paid Gemini API keys. Skills, hooks, subagents, and extensions (now "Antigravity plugins") carry over, without full parity at launch ([Google Developers Blog](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/)).
+- **Codex** is new to this matrix; see the [Codex guide](../guides/codex/README.md).
+- ⚠️ means partial support or not confirmed in primary docs for this revision.
+
+The table above covers the CLI / assistant tools. The GUI editors and
+agent-first IDEs below are a distinct category: full editing environments
 rather than CLIs or extensions.
 
 ### AI Editors & Agentic IDEs
 
 | Feature | Cursor | VS Code (agentic) | Google Antigravity |
 |---------|--------|-------------------|--------------------|
-| **Type** | AI-first editor (VS Code fork) | Editor + AI/agent layer (Copilot) | Agent-first IDE |
+| **Type** | AI-first editor (VS Code fork) | Editor + AI/agent layer (Copilot) | Agent-first platform: desktop app, IDE, CLI, Python SDK |
 | **Real-time Completions** | ✅ Tab | ✅ (via Copilot) | ⚠️ Agent-centric |
-| **Agent Mode** | ✅ Agent (`Cmd/Ctrl+I`) | ✅ Agent mode in chat | ✅ Agent Manager (core surface) |
+| **Agent Mode** | ✅ Agent | ✅ Agent mode in chat | ✅ Agent manager; parallel local agents |
 | **Plan Mode** | ✅ | ⚠️ Plan via agent | ✅ Plans / task lists |
-| **MCP Server Support** | ✅ `~/.cursor/mcp.json` | ✅ `.vscode/mcp.json` | ✅ |
-| **Custom Rules / Instructions** | ✅ `.cursor/rules/*.mdc`, AGENTS.md | ✅ instructions + `*.agent.md` | ✅ `.agents/` |
-| **Models** | Composer + frontier models, BYOK | Copilot models, BYOK | Gemini 3 Pro, Claude Sonnet 4.5, GPT-OSS |
-| **Multi-Agent** | ⚠️ Background/cloud agents | ⚠️ Agent mode | ✅ Multiple agents via Agent Manager |
+| **MCP Server Support** | ✅ | ✅ `.vscode/mcp.json` | ✅ |
+| **Custom Rules / Skills** | ✅ Rules, skills, plugins | ✅ instructions + `*.agent.md` | ✅ Skills, plugins |
+| **Models** | Cursor's Composer models and Grok models; third-party models billed by usage | Copilot models, BYOK | Gemini models (Gemini 4 Argon for Google AI Pro/Ultra) |
+| **Multi-Agent** | ⚠️ Cloud agents (Premium and up) | ⚠️ Agent mode | ✅ Multiple agents in parallel |
 | **Platforms** | macOS, Windows, Linux | macOS, Windows, Linux | macOS, Windows, Linux |
-| **Pricing** | Free (Hobby) / Pro $20 / Pro+ $60 / Ultra $200 | Free editor; Copilot $0-39/mo | Public preview, free for individuals |
+| **Pricing (as of Oct 2026)** | Free / Plus $8 / Premium $30 / Super $100 / Ultra $200 / Teams $30+ per user | Free editor; Copilot $0-100/mo | No charge for individuals; higher limits on Google AI Pro/Ultra |
 
-> Specific model lists, exact pricing tiers, and some config paths for these
-> editors change frequently — see each tool's guide for current, source-cited
-> detail, and note the `needs-research` markers where official docs were
-> ambiguous at time of writing.
+> Model lists, pricing tiers, and config paths for these editors change
+> often. See each tool's guide for current, source-cited detail:
+> [Cursor](../guides/cursor/), [VS Code](../guides/vscode/),
+> [Antigravity](../guides/antigravity/).
 
 ---
 
@@ -53,375 +59,188 @@ rather than CLIs or extensions.
 ### Code Completion
 
 #### Claude Code
-- **Type**: Conversational, no inline completions
+- **Type**: Conversational and agentic, no inline completions
 - **Scope**: Multi-file, project-wide
 - **Context**: 1M tokens on current models
 - **Best For**: Complex refactoring, architecture changes
 - **Limitations**: No real-time completions
 
-#### GitHub Copilot
-- **Type**: Real-time inline suggestions
-- **Scope**: Single file or function
-- **Context**: Current file + imports
-- **Best For**: Writing code line-by-line
-- **Limitations**: Limited multi-file understanding
+#### OpenAI Codex
+- **Type**: Conversational and agentic (local CLI/IDE, or cloud tasks), no inline completions
+- **Scope**: Multi-file, project-wide
+- **Context**: ~1.05M tokens on GPT-6 models
+- **Best For**: Delegated tasks, parallel cloud tasks, PR review
+- **Limitations**: No real-time completions
 
-#### Gemini CLI
-- **Type**: Conversational, no inline completions
-- **Scope**: Large context (1M tokens)
-- **Context**: Very large context window
-- **Best For**: Complex analysis, large codebases
-- **Limitations**: No real-time completions, CLI only
+#### GitHub Copilot
+- **Type**: Real-time inline suggestions, plus chat, agent mode, CLI, and cloud agent
+- **Scope**: Inline completions are file-local; agent mode and the CLI work across the repo
+- **Best For**: Writing code line-by-line; GitHub-native issue → PR flows
+
+#### Gemini CLI / Antigravity CLI
+- **Type**: Conversational and agentic, no inline completions
+- **Context**: Model-dependent; Gemini 4 Argon documents a 1M window
+- **Best For**: Terminal agent work in Google's ecosystem
+- **Limitations**: Consumer users must move to Antigravity CLI (see notes above)
 
 ---
 
 ### Chat & Conversation
 
-#### Claude Code
-- **Interface**: Terminal-based chat
-- **Strengths**:
-  - Deep explanations
-  - Multi-step reasoning
-  - Agent orchestration
-- **Context Management**: Excellent
-- **Multi-turn**: ✅ Excellent
-- **Code Execution**: ✅ Via Bash tool
-
-#### GitHub Copilot Chat
-- **Interface**: IDE sidebar + inline
-- **Strengths**:
-  - Quick answers
-  - Slash commands
-  - Contextual suggestions
-- **Context Management**: Good
-- **Multi-turn**: ✅ Good
-- **Code Execution**: ❌
-
-#### Gemini CLI
-- **Interface**: Terminal-based
-- **Strengths**:
-  - Very large context
-  - Multimodal support
-  - Complex reasoning
-- **Context Management**: Excellent
-- **Multi-turn**: ✅ Good
-- **Code Execution**: Limited
+| | Claude Code | OpenAI Codex | GitHub Copilot | Gemini / Antigravity CLI |
+|---|---|---|---|---|
+| **Interface** | Terminal, desktop app, IDE panel | Terminal, IDE panel, ChatGPT apps | IDE sidebar + inline, terminal (CLI) | Terminal |
+| **Multi-turn** | ✅ | ✅ | ✅ | ✅ |
+| **Runs commands** | ✅ Bash / PowerShell tools | ✅ Sandboxed, with approval modes | ✅ Agent mode / CLI | ✅ |
+| **Session resume** | ✅ | ✅ | ⚠️ | ⚠️ |
 
 ---
 
 ### Extensibility
 
 #### Claude Code
-- **MCP Servers**: ✅ 50+ available
-  - Databases (PostgreSQL, SQLite, MongoDB)
-  - Infrastructure (Kubernetes, Docker)
-  - APIs (GitHub, Slack, Discord)
-  - Quality tools (Ruff, linters, testers)
-- **Custom Tools**: ✅ Build MCP servers
+- **MCP Servers**: ✅ Databases, infrastructure, APIs, quality tools
 - **Skills**: ✅ Reusable task packs
 - **Hooks**: ✅ Event-driven customization
+- **Plugins**: ✅ Bundle skills, agents, hooks, MCP servers
+
+#### OpenAI Codex
+- **MCP**: ✅
+- **Skills and plugins**: ✅
+- **Hooks**: ✅
+- **Config**: `AGENTS.md`, `config.toml`, sandboxing and permission profiles
 
 #### GitHub Copilot
-- **Extensions**: ✅ Copilot Extensions marketplace
-- **Custom Tools**: ✅ MCP servers in agent mode and the coding agent
-- **Skills**: ❌
-- **Hooks**: ❌
-- **Note**: MCP support is GA across agent mode and the coding agent
+- **MCP**: ✅ Agent mode, CLI, and cloud agent
+- **Custom agents**: ✅
+- **Skills**: ✅
+- **Hooks**: ✅ Copilot CLI runs shell commands at key points during agent execution
 
-#### Gemini CLI
-- **Extensions**: ✅ Extensions system
-- **Custom Tools**: ✅ Native MCP server support
-- **Skills**: ⚠️ Custom commands (similar role)
-- **Hooks**: ❌
+#### Gemini CLI / Antigravity CLI
+- **Extensions / plugins**: ✅ (Gemini CLI extensions became Antigravity plugins)
+- **MCP**: ✅
+- **Skills and hooks**: ✅
 
-**Winner**: Claude Code (deepest stack: MCP + skills + hooks), though all three now support MCP
+**Takeaway**: All four now support MCP, skills, and hooks. The differences are in maturity, configuration surface, and ecosystem; compare the tool guides rather than the checkmarks.
 
 ---
 
 ### Multi-Agent Capabilities
 
 #### Claude Code
-- **Agent Types**: general-purpose, Explore, Plan, Custom
-- **Orchestration**: ✅ Full support
-- **Parallel Execution**: ✅
-- **State Management**: ✅ Memory MCP
-- **Custom Agents**: ✅ Define in `.claude/agents/*.md` (with name/description/tools frontmatter)
-- **Use Cases**:
-  - Research → Design → Implement → Test → Deploy
-  - Parallel independent tasks
-  - Complex multi-phase workflows
+- **Agent Types**: built-in Explore, Plan, and general-purpose subagents, plus custom subagents
+- **Custom Agents**: `.claude/agents/*.md` with `name`, `description`, optional `tools` and `model` frontmatter
+- **Spawning**: the Agent tool (renamed from Task in v2.1.63; `Task` still works as an alias)
+- **Parallel Execution**: ✅ Background subagents run concurrently (20 by default); agent teams for coordinated sessions
+- **Programmatic**: Claude Agent SDK (`claude-agent-sdk` for Python, `@anthropic-ai/claude-agent-sdk` for TypeScript)
+
+#### OpenAI Codex
+- **Subagents**: ✅ (see [Codex guide](../guides/codex/README.md))
+- **Cloud tasks**: run in parallel in Codex Cloud environments
 
 #### GitHub Copilot
-- **Agents**: ✅ Agent mode (multi-step, MCP-enabled) + autonomous coding agent (GA, issue → PR)
-- **Orchestration**: ⚠️ No user-defined multi-agent topologies
-- **Note**: Coding agent runs asynchronously in GitHub Actions
+- **Agents**: Agent mode, custom agents, Copilot CLI (delegates common tasks to specialized agents), cloud agent (issue → PR)
+- **Third-party agents**: Pro+ and Max can delegate tasks to Claude and OpenAI Codex agents (preview)
 
-#### Gemini CLI
-- **Agents**: ❌ None
-- **Orchestration**: ❌
-
-**Winner**: Claude Code (most complete: subagents, parallel dispatch, custom agent definitions)
+#### Gemini CLI / Antigravity CLI
+- **Subagents**: ✅ (Antigravity CLI manages background subagents)
 
 ---
 
 ### IDE Integration
 
-#### Claude Code
-- **VS Code**: ✅ Official extension
-- **JetBrains**: ✅ Official extension
-- **Vim**: ⚠️ Runs in any terminal (no dedicated plugin)
-- **Other**: Terminal-based, works alongside any editor
+| | Claude Code | OpenAI Codex | GitHub Copilot | Gemini / Antigravity CLI |
+|---|---|---|---|---|
+| **VS Code** | ✅ Official extension | ✅ IDE extension | ✅ | ⚠️ Antigravity IDE instead |
+| **JetBrains** | ✅ Official plugin | ⚠️ See guide | ✅ | ❌ |
+| **Vim/Neovim** | ⚠️ Runs in any terminal | ⚠️ Runs in any terminal | ✅ | ⚠️ Runs in any terminal |
 
-#### GitHub Copilot
-- **VS Code**: ✅ Excellent
-- **JetBrains**: ✅ Excellent
-- **Vim/Neovim**: ✅ Good
-- **Visual Studio**: ✅ Good
-- **Other**: Limited
-
-#### Gemini CLI
-- **IDE Integration**: ❌ None
-
-**Winner**: GitHub Copilot (broadest coverage and inline completions); Claude Code now has official VS Code and JetBrains extensions
+**Winner**: GitHub Copilot for breadth of editor coverage and inline completions.
 
 ---
 
 ### Development Workflow
 
 #### Claude Code
-- **Best For**:
-  - Complex refactoring
-  - Multi-file changes
-  - Architecture design
-  - Research and analysis
-  - Long-running workflows
-  - Multi-phase projects
-- **Workflow**: Conversational, task-oriented
-- **Iteration**: Excellent
+- **Best For**: Complex refactoring, multi-file changes, architecture design, research, long-running and multi-phase workflows
+- **Workflow**: Conversational, task-oriented, with plan mode and subagents
+
+#### OpenAI Codex
+- **Best For**: Delegating well-scoped tasks (local or cloud), parallel task runs, automated PR review, CI use via API key
+- **Workflow**: Task-oriented; sandboxed execution with approval modes
 
 #### GitHub Copilot
-- **Best For**:
-  - Daily coding
-  - Function implementation
-  - Test generation
-  - Quick completions
-  - Documentation
-  - Bug fixes
-- **Workflow**: Real-time suggestions
-- **Iteration**: Good
+- **Best For**: Daily coding, function implementation, test generation, quick completions, GitHub-native issue → PR
+- **Workflow**: Real-time suggestions plus agent mode
 
-#### Gemini CLI
-- **Best For**:
-  - Complex analysis
-  - Large codebase understanding
-  - Research
-  - Multimodal tasks
+#### Gemini CLI / Antigravity CLI
+- **Best For**: Terminal agent work tied to Google Cloud or Gemini models
 - **Workflow**: Conversational
-- **Iteration**: Good
 
 ---
 
 ### Context Management
 
-#### Claude Code
-- **Context Window**: 1M tokens (current models)
-- **Context Sources**:
-  - File reads
-  - MCP servers (databases, APIs, etc.)
-  - Memory persistence
-  - Agent communication
-- **Context Control**: `permissions.deny` in `.claude/settings.json` (`.claudeignore` is not supported)
-- **Multi-session**: ✅ Via Memory MCP
+| | Claude Code | OpenAI Codex | GitHub Copilot | Gemini / Antigravity CLI |
+|---|---|---|---|---|
+| **Context Window** | 1M tokens | ~1.05M (GPT-6 models) | Up to 1M on latest models | Model-dependent |
+| **Project memory** | `CLAUDE.md` (also reads imports) | `AGENTS.md` | Custom instruction files | `GEMINI.md` |
+| **Exclude files** | `permissions.deny` in `.claude/settings.json` | Sandbox / permission profiles | Org-level content exclusion | `.geminiignore` |
 
-#### GitHub Copilot
-- **Context Window**: Moderate
-- **Context Sources**:
-  - Current file
-  - Open files
-  - Imports
-  - Project structure
-- **Context Control**: IDE settings
-- **Multi-session**: ❌
-
-#### Gemini CLI
-- **Context Window**: 1M tokens
-- **Context Sources**:
-  - Files
-  - Images
-  - Large documents
-- **Context Control**: Manual
-- **Multi-session**: Limited
-
-**Winner**: Tie on context size (both 1M); Claude Code (context sources)
+With every major tool at or near 1M tokens, context size no longer separates them. How well each tool *chooses* what to load (grep-first navigation, compaction, subagent isolation) matters more. See [context-management.md](../best-practices/context-management.md).
 
 ---
 
-### Testing & Quality
+### Testing, Databases, Infrastructure, Documentation
 
-#### Claude Code
-- **MCP Integrations**:
-  - Quality Guard MCP (formatting, linting, security)
-  - Code Checker MCP (pytest, pylint)
-  - Ruff MCP (Python linting)
-  - Custom quality tools
-- **Test Generation**: ✅ Via agents
-- **Code Review**: ✅ Via QA agent
-- **CI/CD**: ✅ Via GitHub MCP
+All four agentic CLIs can run tests, linters, migrations, `kubectl`, and `terraform` through their shell tools, and all four can reach databases and cloud APIs through MCP servers. The practical differences:
 
-#### GitHub Copilot
-- **Test Generation**: ✅ Good
-- **Code Review**: ✅ In GitHub
-- **CI/CD**: Limited
-- **Linting**: ❌
-
-#### Gemini CLI
-- **Testing**: Limited
-- **Quality**: Manual
-
-**Winner**: Claude Code
-
----
-
-### Database Operations
-
-#### Claude Code
-- **PostgreSQL**: ✅ MCP server
-- **SQLite**: ✅ MCP server
-- **MongoDB**: ✅ MCP server
-- **Queries**: ✅ Execute directly
-- **Schema**: ✅ Inspect and modify
-- **Migrations**: ✅ Generate
-
-#### GitHub Copilot
-- **Database**: ❌ Limited
-- **Queries**: Code completion only
-- **Schema**: ❌
-- **Migrations**: Code generation only
-
-#### Gemini CLI
-- **Database**: ❌ Limited
-
-**Winner**: Claude Code
-
----
-
-### Infrastructure & DevOps
-
-#### Claude Code
-- **Kubernetes**: ✅ MCP server
-- **Docker**: ✅ MCP server
-- **Terraform**: ✅ MCP server
-- **CI/CD**: ✅ Via GitHub MCP
-- **Monitoring**: ✅ Custom MCP servers
-
-#### GitHub Copilot
-- **Infrastructure**: Code completion
-- **DevOps**: Limited
-
-#### Gemini CLI
-- **Infrastructure**: Limited
-
-**Winner**: Claude Code
-
----
-
-### Documentation
-
-#### Claude Code
-- **Generation**: ✅ Excellent
-- **Multi-format**: ✅ Via MCP servers
-- **API Docs**: ✅ Mintlify MCP
-- **Conversion**: ✅ MarkItDown MCP
-- **Maintenance**: ✅ Documentation agent
-
-#### GitHub Copilot
-- **Generation**: ✅ Good
-- **Inline**: ✅ Docstrings, comments
-- **API Docs**: Limited
-
-#### Gemini CLI
-- **Generation**: ✅ Good
-- **Multi-format**: ✅ Multimodal
-
-**Winner**: Tie (Claude Code for automation, Gemini for multimodal)
+- **Claude Code**: deepest local customization (hooks to enforce lint/test, skills, subagents for review). Strong for infra and database work through MCP.
+- **OpenAI Codex**: sandboxed execution with approval modes; Codex Cloud and GitHub code review fit test-and-review loops on PRs.
+- **GitHub Copilot**: test generation inline; code review in GitHub PRs; cloud agent runs in GitHub Actions.
+- **Gemini / Antigravity CLI**: comparable shell and MCP access; tightest fit with Google Cloud.
 
 ---
 
 ### Cost
 
+All prices as of October 2026; see [cost-analysis.md](cost-analysis.md) for full tables and sources.
+
 #### Claude Code
-- **Model**: Fable, Opus, Sonnet, Haiku
-- **Pricing**: Per-token API usage, or Claude subscription (Pro $20 / Max 5x $100 / Max 20x $200)
-- **Estimate**:
-  - Light use: $10-30/mo
-  - Heavy use: $100-500/mo (see [cost-analysis.md](cost-analysis.md))
+- **Models**: Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5
+- **Pricing**: Claude Pro ($20/mo), Max (from $100/mo), Team, Enterprise, or per-token API (Sonnet 5.5 $2 / $10 per MTok)
+
+#### OpenAI Codex
+- **Models**: GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna
+- **Pricing**: Included in ChatGPT Free, Go ($8), Plus ($20), Pro ($100/$200/$500), Business; or API key at API rates
 
 #### GitHub Copilot
 - **Free**: $0 (limited)
-- **Pro**: $10/mo; **Pro+**: $39/mo
-- **Business**: $19/user/mo
-- **Enterprise**: $39/user/mo
-- **Note**: Since June 1, 2026, usage is billed via GitHub AI Credits (replaced premium requests)
+- **Pro**: $10/mo; **Pro+**: $39/mo; **Max**: $100/mo
+- **Business**: $19/user/mo; **Enterprise**: $39/user/mo
+- **Note**: Usage is metered in GitHub AI Credits (1 credit = $0.01)
 
-#### Gemini CLI
-- **Model**: Gemini 3 family (3 Pro / 3 Flash / 3.1 Pro preview) + 2.5 family
-- **Pricing**: Free tier (personal Google account: 60 req/min, 1,000 req/day) or per-token API usage
-- **Estimate**:
-  - Light use: $0-15/mo (free tier covers a lot)
-  - Heavy use: $30-100/mo
+#### Gemini CLI / Antigravity CLI
+- **Gemini CLI**: paid Gemini API key (Gemini 3.8 Flash $0.75 / $3.75 per MTok) or a Gemini Code Assist Standard/Enterprise license
+- **Antigravity**: no charge for individuals; higher limits with Google AI Pro/Ultra
 
-**Winner**: Varies by usage pattern
+**Winner**: Varies by usage pattern.
 
 ---
 
 ## Use Case Recommendations
 
-### Daily Coding
-**Winner**: GitHub Copilot
-- Real-time completions
-- IDE integration
-- Quick suggestions
-
-### Complex Refactoring
-**Winner**: Claude Code
-- Multi-file awareness
-- Agent orchestration
-- Comprehensive context
-
-### Large Codebase Analysis
-**Winner**: Gemini CLI
-- 1M token context with a generous free tier
-- Deep analysis
-- Complex reasoning
-- (Claude Code's current models also offer 1M context)
-
-### Infrastructure Management
-**Winner**: Claude Code
-- Kubernetes MCP
-- Docker MCP
-- DevOps automation
-
-### Test Generation
-**Tie**: Claude Code & GitHub Copilot
-- Both excellent
-- Different strengths
-
-### Documentation
-**Tie**: Claude Code & Gemini CLI
-- Claude: Automation
-- Gemini: Multimodal
-
-### Database Work
-**Winner**: Claude Code
-- Direct database access
-- Query execution
-- Schema operations
-
-### Multi-Phase Projects
-**Winner**: Claude Code
-- Agent orchestration
-- State persistence
-- Checkpoint system
+| Use case | Pick | Why |
+|----------|------|-----|
+| Daily coding (inline) | GitHub Copilot | Real-time completions, broadest IDE coverage |
+| Complex refactoring | Claude Code | Subagents, plan mode, hooks, deep customization |
+| Delegated / parallel tasks | OpenAI Codex or Copilot cloud agent | Cloud task runs that end in a PR |
+| Large codebase analysis | Any 1M-context tool | Context size is no longer a differentiator; use grep-first navigation |
+| Infrastructure management | Claude Code | MCP + hooks + subagents for multi-step infra work |
+| Test generation | Claude Code or Copilot | Agentic suites vs. inline speed |
+| PR review | Copilot or Codex | GitHub-native review integrations |
+| Google Cloud-centric work | Antigravity CLI / Gemini CLI | Native fit with Gemini and Google Cloud |
+| Multi-phase projects | Claude Code | Agent orchestration, state persistence |
 
 ---
 
@@ -429,83 +248,50 @@ rather than CLIs or extensions.
 
 ### Optimal Workflow
 
-**Use GitHub Copilot for**:
-- Daily coding tasks
-- Real-time completions
-- Quick function implementations
-- Inline documentation
+**Use GitHub Copilot for**: daily coding, real-time completions, quick functions, inline docs, GitHub PR review.
 
-**Use Claude Code for**:
-- Project setup and architecture
-- Complex multi-file refactoring
-- Database operations
-- Infrastructure management
-- Multi-phase workflows
-- Quality assurance
+**Use Claude Code for**: project setup and architecture, complex multi-file refactoring, database and infrastructure work, multi-phase workflows, quality gates via hooks.
 
-**Use Gemini CLI for**:
-- Large codebase analysis
-- Complex research tasks
-- Multimodal requirements
-- Deep dive investigations
+**Use OpenAI Codex for**: delegating scoped tasks to the cloud in parallel, automated PR review, CI jobs on an API key.
+
+**Use Antigravity CLI / Gemini CLI for**: work centered on Gemini models or Google Cloud.
 
 ### Example: Building a New Feature
 
-1. **Research** (Claude Code)
-   - Spawn research-agent
-   - Analyze requirements
-   - Research best practices
-
-2. **Design** (Claude Code)
-   - Architecture-agent
-   - Design system
-   - Plan implementation
-
-3. **Implementation** (GitHub Copilot)
-   - Write code with completions
-   - Quick function implementations
-   - Inline suggestions
-
-4. **Complex Refactoring** (Claude Code)
-   - Multi-file changes
-   - Database migrations
-   - Infrastructure updates
-
-5. **Testing** (Claude Code + Copilot)
-   - Claude: Generate test suites
-   - Copilot: Quick test fixes
-
-6. **Documentation** (Claude Code)
-   - API documentation
-   - User guides
-   - Architecture docs
-
-7. **Deployment** (Claude Code)
-   - K8s configurations
-   - CI/CD setup
-   - Monitoring
+1. **Research** (Claude Code): Explore subagent maps the codebase; analyze requirements.
+2. **Design** (Claude Code): plan mode produces an implementation plan for review.
+3. **Implementation** (Copilot or Claude Code): completions for line-level work; agent for multi-file changes.
+4. **Parallel side tasks** (Codex Cloud or Copilot cloud agent): docs, test backfill, small fixes as separate PRs.
+5. **Testing** (Claude Code + Copilot): Claude generates suites; Copilot for quick fixes.
+6. **Review** (Copilot or Codex code review on the PR, plus a human).
+7. **Deployment** (Claude Code): K8s configs, CI/CD changes, monitoring.
 
 ---
 
 ## Summary
 
 **Claude Code**:
-- Best for: Complex tasks, infrastructure, orchestration
-- Unique: Deepest agent stack — subagents, skills, hooks (plus official VS Code/JetBrains extensions)
-- Weakness: No inline completions
+- Best for: complex tasks, infrastructure, orchestration
+- Unique: subagents, agent teams, skills, hooks, plugins, Agent SDK
+- Weakness: no inline completions
+
+**OpenAI Codex**:
+- Best for: delegated and parallel tasks, PR review, CI automation
+- Unique: local + cloud surfaces under one ChatGPT plan; sandboxing and approval modes
+- Weakness: no inline completions
 
 **GitHub Copilot**:
-- Best for: Daily coding, real-time completions
-- Unique: IDE integration, autonomous coding agent (issue → PR)
-- Weakness: Less extensible than Claude Code (though agent mode now supports MCP)
+- Best for: daily coding, real-time completions, GitHub-native flows
+- Unique: broadest IDE coverage, cloud agent, third-party agent delegation
+- Weakness: deep customization is newer and spread across surfaces
 
-**Gemini CLI**:
-- Best for: Large context, multimodal tasks
-- Unique: 1M token context on a generous free tier
-- Weakness: Limited tooling (though it has MCP support, extensions, and custom commands)
+**Gemini CLI / Antigravity CLI**:
+- Best for: Gemini- and Google Cloud-centric work
+- Unique: Antigravity platform (app, IDE, CLI, SDK) at no charge for individuals
+- Weakness: consumer Gemini CLI was retired in June 2026; Antigravity CLI is not at full feature parity yet
 
-**Recommendation**: Use Claude Code + GitHub Copilot together for maximum productivity.
+**Recommendation**: Pair one agentic tool (Claude Code or Codex) with one IDE tool (Copilot or Cursor).
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

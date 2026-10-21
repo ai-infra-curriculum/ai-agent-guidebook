@@ -2,7 +2,7 @@
 
 Errors AI coding tools surface vs errors AI coding tools cause. How to retry, fall back, log, and escalate.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -59,7 +59,7 @@ Common triggers:
 
 Response pattern:
 1. **Reframe with intent.** Add a sentence about why the task is legitimate. "We're auditing our own auth code for replay attacks. Show me the vulnerable patterns to look for."
-2. **Switch model.** If Sonnet refuses, Opus is often more willing on legitimate security work. Gemini and GPT-5 have different refusal surfaces; trying another model is a valid fallback.
+2. **Switch model.** Different model tiers and providers (Claude, GPT, Gemini) have different refusal surfaces; trying another model is a valid fallback for legitimate work.
 3. **Don't escalate adversarially.** Trying to "jailbreak" a refusal usually fails and burns trust.
 
 ### Hallucinations
@@ -83,15 +83,15 @@ Mitigations:
 The model truncates code, leaves `// TODO`, or returns "the rest follows the same pattern."
 
 Triggers:
-- Output token cap (64K on Claude 4.x, 128K on the GPT-5 family including Codex, 65,536 on Gemini 2.5 Pro)
+- Output token cap (as of October 2026: 128K on current Claude models and on the GPT-6 family; check Google's model cards for Gemini)
 - Long file edits exceeding output budget
 - Reasoning tokens (extended thinking) consuming output budget
 
 Responses:
 - **Split the work.** Edit file A, then file B. Don't ask for a 5-file rewrite in one turn.
-- **Use diff/patch tool calls** (Edit, MultiEdit, str_replace_editor) instead of "rewrite the file" — these don't echo the unchanged content back through output tokens.
-- **Lower extended-thinking budget** if you're hitting the cap with reasoning still going. `MAX_THINKING_TOKENS=8000` in Claude Code.
-- **Switch to a larger output cap** model: GPT-5-family 128K beats Gemini 2.5 Pro 65,536 and Claude Sonnet/Opus 64K.
+- **Use diff/patch tool calls** (Edit, `str_replace`-style editors) instead of "rewrite the file" — these don't echo the unchanged content back through output tokens.
+- **Lower the effort level** if you're hitting the cap with reasoning still going. Current Claude models use adaptive thinking steered by the `effort` parameter; the old fixed `budget_tokens` extended-thinking mode is not accepted on models after the 4.6 generation.
+- **Use the Batch API for very long outputs.** On Anthropic's Message Batches API, current Opus/Sonnet/Haiku models support up to 300K output tokens with the `output-300k-2026-03-24` beta header.
 
 ### Wrong-but-confident
 
@@ -141,19 +141,19 @@ delay = min(60, (2 ** attempt) + random.uniform(0, 1))
 
 ### Overload (529)
 
-Anthropic returns 529 when capacity is saturated even within your quota. Treat like 429 but with longer backoff (start at 5s, not 1s). On sustained 529s, switch to a different model tier (Sonnet → Haiku) or pause non-critical workflows.
+Anthropic returns 529 when capacity is saturated even within your quota. Treat like 429 but with longer backoff (start at 5s, not 1s). On sustained 529s, switch to a different model tier (e.g. Sonnet → Haiku) or pause non-critical workflows.
 
 ### Timeouts
 
-Default tool timeouts:
+Where tool timeouts live (defaults change between releases — check the tool's current docs rather than trusting a number here):
 
-| Tool | Default | How to raise |
-|------|---------|--------------|
-| Claude Code Bash | 120s (max 600s) | `timeout` parameter |
-| Claude Code tool call (overall) | ~10 min | `--timeout` flag or env |
-| Cursor MCP call | 30s | per-server config |
-| Gemini CLI shell | 60s | shell-tool timeout in `settings.json` |
-| Copilot coding agent task | per-task budget | managed by the service |
+| Tool | How to raise |
+|------|--------------|
+| Claude Code Bash | per-call `timeout` parameter; env/settings for the default |
+| Cursor MCP call | per-server config |
+| Gemini CLI / Antigravity CLI shell | shell-tool timeout in `settings.json` |
+| Codex CLI | `config.toml` |
+| Copilot coding agent task | managed by the service |
 
 Timeouts often mean:
 - The command hung (no output, no exit)
@@ -169,7 +169,7 @@ Returned as 400 with `context_length_exceeded` or similar. The model received mo
 Response (in order):
 1. **Compact.** Remove tool-call results you no longer need.
 2. **Drop redundant files** from context.
-3. **Switch to a 1M-context model.** Fable 5, Opus 4.8, and Sonnet 4.6 all support 1M context at standard pricing; Gemini 2.5 Pro is also 1M.
+3. **Switch to a 1M-context model.** As of October 2026, every current Claude model (Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5) has a 1M window, as do GPT-6 Astra / 6.1 Sol / 6 Luna (1.05M) and Gemini 4 Argon. Watch long-context pricing: Haiku 5.5 bills prompts over 100K tokens higher, OpenAI over 272K, Gemini 3.1 Pro over 200K.
 4. **Restart with a summary.** Don't keep stuffing.
 
 ### Auth errors (401/403)
@@ -298,7 +298,7 @@ When the circuit is open, fail fast and escalate, instead of stalling the whole 
 When the primary model fails (refusal, overload, capacity), fall back through a ladder:
 
 ```text
-Fable 5 / Opus 4.8  →  Sonnet 4.6  →  Haiku 4.5
+Fable 5.1 / Opus 5.5  →  Sonnet 5.5  →  Haiku 5.5
                                             ↓
                                         (escalate to human)
 ```
@@ -306,7 +306,7 @@ Fable 5 / Opus 4.8  →  Sonnet 4.6  →  Haiku 4.5
 Cross-provider ladder:
 
 ```text
-Claude Sonnet 4.6  →  GPT-5.5  →  Gemini 2.5 Pro
+Claude Sonnet 5.5  →  GPT-6.1 Sol  →  Gemini 3.8 Flash
                                         ↓
                                     (escalate to human)
 ```
@@ -388,7 +388,7 @@ Use JSON logs for anything you'll want to query later:
   "trace_id": "01HXVC...",
   "span_id": "8a3f...",
   "event": "model.retry",
-  "model": "claude-sonnet-4-6",
+  "model": "claude-sonnet-5-5",
   "error_code": 529,
   "attempt": 2,
   "backoff_ms": 4123,
@@ -467,7 +467,7 @@ Avoid the failure mode where the agent says "I encountered an error; please advi
 
 ### Gemini CLI
 
-- Quota errors are common on the free tier; switch to a billed key if you're working seriously.
+- Gemini CLI stopped serving free-tier and Google AI Pro/Ultra users on 2026-06-18 (replaced by Antigravity CLI); it still works with paid Gemini API keys and Code Assist Standard/Enterprise. Quota errors on a paid key usually mean you need a higher tier.
 - Shell-tool timeouts are configured in Gemini CLI's `settings.json` (there is no `--exec-timeout` flag); raise the tool timeout there for long-running commands.
 
 ### Copilot coding agent

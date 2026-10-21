@@ -2,7 +2,7 @@
 
 The first week. Common early tasks: bringing an existing repo into the workflow, your first multi-file edit, your first agent dispatch, your first hook.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -82,7 +82,7 @@ secrets/
 *.swp
 ```
 
-`.geminiignore` for Gemini CLI — same content.
+`.geminiignore` for Gemini CLI — same content. (Gemini CLI now serves only Code Assist Standard/Enterprise orgs and paid API keys; free and Google AI Pro/Ultra users moved to Antigravity CLI on June 18, 2026 — see the [Gemini CLI guide](gemini-cli/).)
 
 For Claude Code, there is no `.claudeignore` file — add `permissions.deny` entries to `.claude/settings.json` instead. Prioritize secrets, then the noisiest paths:
 
@@ -109,7 +109,7 @@ For GitHub Copilot, configure content exclusions at the org level (Settings → 
 
 Create one of these at the repo root:
 - `CLAUDE.md` (Claude Code)
-- `AGENTS.md` (generic, also read by Cursor and many tools)
+- `AGENTS.md` (generic, read by OpenAI Codex, Copilot, Cursor, and many other tools)
 - `.cursor/rules/main.md` (Cursor)
 - `.github/copilot-instructions.md` (Copilot)
 
@@ -218,9 +218,11 @@ Show me the plan first, then execute.
 
 **Claude Code:** plan mode (Shift+Tab to toggle) is great for this. Plan first, then execute.
 
-**Cursor Composer:** open Composer with Cmd/Ctrl+I. Give it the prompt. Composer shows you all proposed diffs in one panel before applying.
+**Cursor:** open the agent panel (Cmd/Ctrl+I) and use Plan Mode first for multi-file work. Review the proposed diffs before applying.
 
-**Copilot:** weakest at multi-file in the editor. Hand the task to the Copilot coding agent (assign an issue to Copilot) if you have access; otherwise this is a Claude Code or Cursor task.
+**Copilot:** use agent mode in the editor, or Copilot CLI's plan mode (Shift+Tab). For a hands-off version, assign an issue to the Copilot cloud agent (paid plans), which opens a pull request.
+
+**Codex:** run `codex` in the repo and give it the same prompt; Codex reads `AGENTS.md` for project rules. See the [Codex Guide](codex/README.md).
 
 ### Time budget: 30 minutes including verification
 
@@ -255,19 +257,19 @@ Then in the session:
 Use the general-purpose agent to add error handling to all functions in src/lib/api/ that throw uncaught errors. Skip files in src/lib/api/__tests__/. Verify tests still pass after each batch of changes.
 ```
 
-Claude dispatches a subagent, runs it, and reports back. You see the steps.
+Claude dispatches a subagent via its Agent tool (formerly called Task), runs it, and reports back. You see the steps.
 
 For non-interactive mode (good for CI / cron):
 
 ```bash
-claude --print "Audit src/components/ for unused imports and report a list. Do not modify files."
+claude -p "Audit src/components/ for unused imports and report a list. Do not modify files."
 ```
 
 Output goes to stdout; exit code reflects success.
 
 ### Cursor
 
-Cursor's Composer in "Agent" mode does the equivalent. Open Composer, switch to Agent mode (toggle in the panel), prompt:
+Cursor's agent does the equivalent. Open the agent panel, make sure you're in Agent (not Plan or Ask) mode, and prompt:
 
 ```text
 Add error handling to all functions in src/lib/api/ that throw uncaught errors. Skip tests. Run pnpm test after each batch.
@@ -329,11 +331,11 @@ Restart Claude Code. Try a code change. You should see the hook output in the co
 
 ### Cursor hooks
 
-Cursor's hooks arrived in the 1.x releases (2025) (Settings → Rules / Hooks). For format/lint, the more reliable path is to use existing IDE features (Format on Save, ESLint extension's "Fix on Save") — these aren't AI-specific, they just always run.
+Check Cursor's current docs for its hook support. For format/lint, the more reliable path in any editor is existing IDE features (Format on Save, ESLint extension's "Fix on Save") — these aren't AI-specific, they just always run.
 
-### Copilot hooks
+### Copilot and Codex hooks
 
-Copilot doesn't have a hook system. Same approach as Cursor: configure your IDE's standard format/lint-on-save.
+Copilot CLI supports hooks that "execute custom shell commands at key points during agent execution", and OpenAI Codex documents hooks too — see the [GitHub Copilot guide](github-copilot/) and [Codex guide](codex/README.md) for their config formats. Inside the VS Code editor, IDE format/lint-on-save is still the simplest path.
 
 ### More hook ideas
 
@@ -415,23 +417,13 @@ Pick one that's useful for your work:
 - **Slack MCP** — read channels you have access to
 - **Sentry MCP** — fetch error details
 
-GitHub MCP example. Edit `~/.claude.json`:
+GitHub MCP example, using GitHub's official hosted server:
 
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."
-      }
-    }
-  }
-}
+```bash
+claude mcp add --transport http github https://api.githubcopilot.com/mcp/
 ```
 
-(Better: use a fine-grained PAT scoped to one repo, and source the token from a secret manager.)
+Then run `/mcp` inside Claude Code to authenticate. (The old `@modelcontextprotocol/server-github` npm package is archived; if you must self-host, use [`github/github-mcp-server`](https://github.com/github/github-mcp-server) with a fine-grained PAT scoped to one repo, sourced from a secret manager.)
 
 Restart Claude Code. Now you can:
 
@@ -488,7 +480,7 @@ The agent runs `git diff main...HEAD`, reads context, and reports.
 
 ### Cursor
 
-In Composer or chat:
+In the agent panel or chat:
 
 ```text
 @Diff (or paste the diff) — review for the same list of issues, return as a checklist with severity.
@@ -564,7 +556,8 @@ After your first week, the depth options:
 **If you want to go deeper on the tool itself:**
 - [Claude Code Guide](claude-code/) — full feature surface
 - [GitHub Copilot Guide](github-copilot/) — IDE, coding agent, agent mode
-- [Gemini CLI Guide](gemini-cli/) — large-context patterns
+- [OpenAI Codex Guide](codex/README.md) — CLI, IDE extension, cloud tasks
+- [Gemini CLI Guide](gemini-cli/) — large-context patterns and the Antigravity CLI transition
 
 **If you want to build with the AI, not just use it:**
 - [Agents & Subagents](agents-subagents/) — multi-agent design

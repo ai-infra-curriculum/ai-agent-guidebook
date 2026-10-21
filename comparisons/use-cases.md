@@ -2,7 +2,7 @@
 
 Matrix of common development scenarios mapped to the AI coding tools that fit best, with rationale.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -34,7 +34,7 @@ Last updated 2026-06-11.
 
 For each scenario there's a primary recommendation, often a secondary, and the rationale. "Primary" means "the tool that wins outright for this task." "Secondary" means "good enough if you don't have the primary, or excels in a specific subcase."
 
-Recommendations are based on tool capabilities and observable behavior as of June 2026. Specific model and feature releases change the picture; revisit quarterly.
+Recommendations are based on tool capabilities and observable behavior as of October 2026. Specific model and feature releases change the picture; revisit quarterly.
 
 ---
 
@@ -42,12 +42,13 @@ Recommendations are based on tool capabilities and observable behavior as of Jun
 
 The tools considered in this matrix:
 
-- **Claude Code** — Anthropic's terminal-based agent, MCP-rich, multi-agent, deep extensibility
-- **Cursor** — VS Code fork with first-class AI integration, Composer agent mode, multi-model
-- **GitHub Copilot** — inline completions + chat in IDEs, autonomous coding agent for spec-to-PR flows (Copilot Workspace was sunset May 2025)
-- **Gemini CLI** — Google's terminal client with 1M-context Gemini models (3.1 Pro / 2.5 Pro), MCP support, and a generous free tier
-- **Sourcegraph Cody** — IDE plugin with repo-graph context, multi-repo aware
-- **Windsurf** (formerly Codeium; acquired by Cognition) — competitor to Cursor with Cascade agent mode
+- **Claude Code** — Anthropic's agent (CLI, desktop app, VS Code/JetBrains extensions), MCP-rich, subagents, skills, hooks
+- **OpenAI Codex** — OpenAI's coding agent (CLI, IDE extension, ChatGPT apps, Codex Cloud, GitHub code review), included in ChatGPT plans; see the [Codex guide](../guides/codex/README.md)
+- **Cursor** — VS Code fork with first-class AI integration, agent and plan modes, Composer models; third-party models billed by usage
+- **GitHub Copilot** — inline completions + chat in IDEs, Copilot CLI, cloud agent for issue → PR flows
+- **Gemini CLI / Antigravity CLI** — Google's terminal agents. Consumer Gemini CLI users moved to Antigravity CLI on June 18, 2026; Gemini CLI remains for Code Assist Standard/Enterprise and paid API keys
+- **Sourcegraph Cody** — repo-graph context, multi-repo aware; enterprise-only since Cody Free/Pro ended in July 2025
+- **Windsurf** — competitor to Cursor with Cascade agent mode (now part of Cognition)
 - **JetBrains AI Assistant** — built into JetBrains IDEs, integrates with multiple model providers
 - **Tabnine** — older completion tool, privacy-focused, supports self-host
 - **Continue (.dev)** — open-source IDE plugin, bring-your-own-model
@@ -59,27 +60,27 @@ The tools considered in this matrix:
 | Scenario | Primary | Secondary | Why |
 |----------|---------|-----------|-----|
 | Greenfield app | Claude Code | Cursor | Multi-agent planning + tool use beats single-threaded IDE |
-| Legacy refactor (multi-file) | Claude Code | Cursor Composer | Agent mode + MCP tooling for navigation |
-| Docs from code | Claude Code | Gemini CLI | MCP doc tools + structured output |
-| Code from spec | Copilot coding agent | Claude Code | Purpose-built spec→PR flow, GitHub-native |
+| Legacy refactor (multi-file) | Claude Code | Cursor Agent | Agent mode + MCP tooling for navigation |
+| Docs from code | Claude Code | Codex | MCP doc tools + structured output |
+| Code from spec | Copilot cloud agent or Codex Cloud | Claude Code | Purpose-built spec→PR flows |
 | Single-file edit | Cursor | Copilot | IDE feels right, fastest loop |
 | Inline completion while typing | Copilot | Cursor Tab | Mature; lowest TTFT |
-| Whole-repo Q&A | Gemini CLI | Cursor (Gemini) | 1M context, cheap bulk reading on the free tier |
+| Whole-repo Q&A | Claude Code or Codex | Antigravity / Gemini CLI | 1M-class context on all major tools; grep-first navigation keeps it cheap |
 | Multi-repo Q&A | Cody | Claude Code (with MCP) | Cody's repo graph is unique |
 | Security audit | Claude Code | Cursor | Agent dispatch + MCP scanners |
-| Debugging hard bug | Cursor Composer | Claude Code | IDE-integrated repro + iteration is faster than terminal switching |
+| Debugging hard bug | Cursor Agent | Claude Code | IDE-integrated repro + iteration is faster than terminal switching |
 | Test generation | Cursor or Copilot | Claude Code | Inline test generation is fastest |
 | Schema / migration design | Claude Code | Cursor | DB MCP servers are unique |
 | Infra (K8s, Terraform) | Claude Code | Cursor | MCP tools for K8s, Docker, Terraform |
-| Code review (in PR) | Copilot | Cody | GitHub-native PR review |
+| Code review (in PR) | Copilot or Codex | Cody (enterprise) | GitHub-native PR review |
 | Code review (pre-PR) | Claude Code | Cursor | Agent runs full check before push |
 | Performance optimization | Cursor | Claude Code | Visual profiling integration |
 | Library migration | Claude Code | Cursor | Long-running multi-file agent task |
-| Mass dependency upgrade | Claude Code | Gemini CLI | Agent + repo-wide |
-| Background agent (PR triage, etc.) | Claude Code | Custom (LangChain) | First-class hooks and non-interactive mode |
+| Mass dependency upgrade | Claude Code | Codex | Agent + repo-wide |
+| Background agent (PR triage, etc.) | Claude Code (Agent SDK / `-p`) | Codex (API key in CI) or custom | First-class hooks and non-interactive mode |
 | Quick scratch / one-off | Copilot Chat | Cursor | Lowest friction |
 | Pair-programming feel | Cursor | Copilot | Tight IDE loop |
-| Onboarding a new repo | Cody | Gemini CLI | Repo-graph + 1M context for orientation |
+| Onboarding a new repo | Claude Code (Explore subagent) | Cody (enterprise) | Read-only exploration + repo graph |
 
 ---
 
@@ -97,11 +98,11 @@ Claude Code wins because:
 
 Cursor catches up when:
 - You prefer visual scaffolding and immediate IDE feedback.
-- Composer mode handles the multi-file scaffold in one pass.
+- Cursor's agent handles the multi-file scaffold in one pass.
 - The greenfield is small enough that one agent run does it.
 
 Both struggle with:
-- Greenfields where the tech choices aren't fixed. The model picks defaults that may not match your shop's standards. CLAUDE.md / .cursorrules with your standards mitigates this.
+- Greenfields where the tech choices aren't fixed. The model picks defaults that may not match your shop's standards. CLAUDE.md / AGENTS.md / `.cursor/rules` with your standards mitigates this.
 
 Typical session shape (Claude Code):
 1. Plan mode: requirements, architecture, stack choices.
@@ -114,7 +115,7 @@ Typical session shape (Claude Code):
 
 ## Legacy Refactor
 
-**Primary: Claude Code. Secondary: Cursor Composer.**
+**Primary: Claude Code. Secondary: Cursor Agent.**
 
 Refactoring across many files in an unfamiliar codebase is the canonical agent task. You need to understand call sites, change them safely, run tests, iterate.
 
@@ -130,14 +131,14 @@ Cursor wins when:
 
 Typical pitfalls:
 - Refactors that change behavior subtly. Without tests, you won't notice. Write tests first or insist on differential testing (see [testing.md](../best-practices/testing.md)).
-- Refactors touching code the model can't ground itself on (proprietary patterns, unusual frameworks). Add a CLAUDE.md / .cursorrules with examples.
+- Refactors touching code the model can't ground itself on (proprietary patterns, unusual frameworks). Add a CLAUDE.md / AGENTS.md / `.cursor/rules` with examples.
 - Cross-language refactors. The agent often gets one language right and misses callsites in the other. Explicit search.
 
 ---
 
 ## Docs from Code
 
-**Primary: Claude Code. Secondary: Gemini CLI.**
+**Primary: Claude Code. Secondary: OpenAI Codex.**
 
 Generating API docs, architecture overviews, or runbooks from source.
 
@@ -146,9 +147,11 @@ Claude Code wins because:
 - Read + Grep + structured output gives consistent results across hundreds of files.
 - Can be wired as a CI job that updates docs on every merge.
 
-Gemini CLI wins when:
-- You want to load an entire mid-size repo in one pass — the 1M context handles it cheaply, especially on the free tier.
-- You want a single-pass summary rather than file-by-file generation.
+Codex wins when:
+- You want doc updates delegated as parallel cloud tasks that each land as a PR.
+- Your team already pays for ChatGPT Business or Enterprise.
+
+Any 1M-context tool can load an entire mid-size repo in one pass for a single-pass summary; that costs more tokens than file-by-file generation.
 
 Both fall short on:
 - Docs that need accurate examples beyond the codebase (deployment runbooks, ops procedures). The model invents details unless you ground it.
@@ -158,14 +161,16 @@ Both fall short on:
 
 ## Code from Spec
 
-**Primary: Copilot coding agent. Secondary: Claude Code.**
+**Primary: Copilot cloud agent or Codex Cloud. Secondary: Claude Code.**
 
 You have a spec (issue, PRD, design doc) and you want code that implements it.
 
-The Copilot coding agent (GA since September 2025; it replaced Copilot Workspace, which was sunset in May 2025) wins because:
-- The product is literally designed for this: assign an issue to Copilot and the agent plans, implements in a GitHub Actions sandbox, and opens a draft PR.
+The Copilot cloud agent (formerly "coding agent"; it replaced Copilot Workspace, which was sunset in May 2025) wins because:
+- The product is designed for this: assign an issue to Copilot and the agent plans, implements in a GitHub Actions sandbox, and opens a PR.
 - Integrates natively with GitHub Issues / Projects and supports MCP tools.
 - Reviewers iterate by leaving PR review comments; the agent responds with new commits.
+
+Codex Cloud is the equivalent if your team is on ChatGPT plans: delegate a task, let it run in a cloud environment, review the resulting PR.
 
 Claude Code wins when:
 - The spec is ambiguous and the model needs to ask clarifying questions interactively.
@@ -180,14 +185,14 @@ Bad fit:
 
 ## Multi-File Edit
 
-**Primary: Claude Code. Secondary: Cursor Composer.**
+**Primary: Claude Code. Secondary: Cursor Agent.**
 
 A change that touches 3-30 files coherently.
 
 Both work. Differences:
 
 - Claude Code: best for 10+ files, especially when the change requires reading more than it writes. Better tool use, can run tests between edits.
-- Cursor Composer: best for 3-10 files when you want fast visual feedback. Composer's "preview all diffs, accept atomically" flow is smoother for medium-size changes.
+- Cursor Agent: best for 3-10 files when you want fast visual feedback. Its "preview all diffs, accept atomically" flow is smoother for medium-size changes.
 
 Past 30 files, neither tool is fast — that's a planned-migration scenario where you should explicitly chunk the work.
 
@@ -219,13 +224,13 @@ Use AI to widen the net and prioritize, not as the only line of defense.
 
 ## Debugging Hard Bugs
 
-**Primary: Cursor Composer. Secondary: Claude Code.**
+**Primary: Cursor Agent. Secondary: Claude Code.**
 
 Reproducing, isolating, and fixing a real bug.
 
 Cursor wins on debugging because:
 - The IDE has the debugger, breakpoints, terminal, and test runner in one place.
-- Composer agent can iterate: try fix → run test → see failure → try again, all without context switching.
+- The agent can iterate: try fix → run test → see failure → try again, all without context switching.
 - You see the diff in line with the failing test.
 
 Claude Code wins when:
@@ -262,15 +267,14 @@ Universal failure mode: AI tests that pass because they assert what the implemen
 
 Schema design, migration writing, query optimization.
 
-Claude Code is the only tool with first-class DB MCP servers:
-- `postgres-mcp` — read schema, run queries, propose migrations.
-- `sqlite-mcp` — local development.
-- `mongo-mcp` — document DBs.
-- `clickhouse-mcp` — analytical workloads.
+Claude Code's edge is the combination of database MCP servers, hooks, and subagents for multi-step migration work:
+- Postgres MCP servers — read schema, run queries, propose migrations.
+- SQLite — local development.
+- MongoDB, ClickHouse — document and analytical workloads.
 
 These let the agent inspect actual schema and propose informed changes, instead of writing migrations against an imagined schema.
 
-Cursor / Copilot can write migrations from code context but can't query a running DB.
+Codex, Cursor, and Copilot also support MCP, so they can reach the same servers; the difference is mostly workflow depth, not access.
 
 Caveats:
 - Production credentials should never be on the agent's path. Use read-only roles on staging snapshots.
@@ -289,7 +293,7 @@ Claude Code wins because:
 - Skills like "kubernetes-deployment", "terraform-skill", "cdk-patterns" carry battle-tested patterns.
 - Bash tool for running `kubectl`, `terraform plan`, `aws`, `gcloud`.
 
-Cursor / Copilot can write IaC from scratch competently but can't validate against the real environment.
+Cursor, Copilot, and Codex can write IaC competently; with shell access and MCP servers they can also run `terraform plan` or `kubectl --dry-run`. Whatever the tool, validate against the real environment before applying.
 
 The non-negotiable: agents touching infra must run in a sandboxed identity, with deploy gates, with audit. See [agent-governance.md](../best-practices/agent-governance.md).
 
@@ -305,7 +309,7 @@ The non-negotiable: agents touching infra must run in a sandboxed identity, with
 
 ### In-PR review (on others' PRs)
 
-**Primary: Copilot.** GitHub-native, comments inline. Reviews respect your repo settings. Cody is a strong alternative when you need cross-repo context.
+**Primary: Copilot or Codex.** Both offer GitHub-native PR review with inline comments. Cody (enterprise only) is an alternative when you need cross-repo context.
 
 Both are supplements, not replacements, for human review on:
 - Auth, crypto, payments, PII
@@ -322,7 +326,7 @@ Profiling and optimizing real code.
 
 Cursor wins:
 - IDE has the profiler integration (where the language supports it).
-- Composer can iterate fix → profile → fix.
+- The agent can iterate fix → profile → fix.
 - Inline annotations show hot paths.
 
 Claude Code wins for:
@@ -340,11 +344,11 @@ Three sub-scenarios:
 
 ### Library migration (e.g., Webpack → Vite)
 
-**Primary: Claude Code.** Long-running, multi-file, requires running build to verify. Cursor Composer is a viable backup for smaller projects.
+**Primary: Claude Code.** Long-running, multi-file, requires running build to verify. Cursor Agent is a viable backup for smaller projects.
 
 ### Framework migration (e.g., React class → hooks, Vue 2 → Vue 3)
 
-**Primary: Cursor.** Within-file transforms benefit from inline review. Composer handles file-at-a-time well. Claude Code for bulk operations.
+**Primary: Cursor.** Within-file transforms benefit from inline review. The agent handles file-at-a-time well. Claude Code for bulk operations.
 
 ### Language migration (e.g., Python 2 → 3, JS → TS)
 
@@ -359,15 +363,15 @@ For any migration:
 
 ## Whole-Repo Q&A
 
-**Primary: Gemini CLI. Secondary: Cursor (with Gemini 3.1 Pro selected).**
+**Primary: Claude Code or Codex. Secondary: Antigravity CLI / Gemini CLI.**
 
 "How does authentication work in this codebase?" "Where are all the places we call Stripe?" "What's the data flow from request to DB?"
 
-Gemini wins on raw context economics — 1M tokens lets you load entire mid-size repos and ask questions without precise search, often within the free tier.
+Context size no longer separates the tools: all current Claude models (1M), GPT-6 models (~1.05M), and Gemini 4 Argon (1M) can hold an entire mid-size repo. The difference is navigation: grep-first exploration (Claude Code's Explore subagent, Cursor's codebase search) is usually cheaper and faster than loading everything. Reserve the full-window load for questions that genuinely span the whole repo.
 
-Cody is competitive for multi-repo: its repo-graph indexes give it dense semantic search beyond what brute-force context can match.
+Watch long-context pricing: Claude models (except Haiku 5.5) bill the full 1M window at standard rates, while OpenAI charges more above 272K input tokens and Gemini 3.1 Pro above 200K. See [cost-analysis.md](cost-analysis.md).
 
-Claude Code and Cursor are no longer window-limited here — Sonnet 4.6 supports a 1M context too. In practice, grep-first navigation (Grep / @codebase) is usually cheaper and faster than loading everything; reserve the full-window load for questions that genuinely span the whole repo.
+Cody (enterprise) is competitive for multi-repo: its repo-graph indexes give it dense semantic search beyond what brute-force context can match.
 
 ---
 
@@ -377,9 +381,9 @@ Claude Code and Cursor are no longer window-limited here — Sonnet 4.6 supports
 
 Tab-tab-tab while typing.
 
-Copilot has had years of polish here. Lowest TTFT, best in-line acceptance UX, deepest IDE integration. Hard to beat for raw completion speed.
+Copilot has had years of polish here: mature in-line acceptance UX and the deepest IDE integration. Completions don't consume AI Credits on paid plans.
 
-Cursor Tab uses similar tech with Cursor's own predictive completion. Comparable quality, sometimes faster because Cursor batches in-window prediction differently.
+Cursor Tab is Cursor's own predictive completion. Quality is comparable; pick on editor preference.
 
 Tabnine and Windsurf (formerly Codeium) also compete here. All four are good enough for daily completion; pick on price and IDE feel.
 
@@ -387,15 +391,17 @@ Tabnine and Windsurf (formerly Codeium) also compete here. All four are good eno
 
 ## Agent / Background Work
 
-**Primary: Claude Code. Secondary: custom LangChain / LangGraph / CrewAI.**
+**Primary: Claude Code (or the Claude Agent SDK). Secondary: Codex on an API key, or custom LangGraph / CrewAI.**
 
 PR triage bots, issue summarizers, on-call runbook executors, doc-update agents — anything that runs without a human in the loop.
 
 Claude Code wins because:
-- `--print` mode runs non-interactively, perfect for CI / cron.
+- `-p` (print) mode runs non-interactively, perfect for CI / cron; the Claude Agent SDK embeds the same loop in Python or TypeScript.
 - Hooks fire on tool events; subagents handle parallelism.
 - MCP gives a uniform tool interface.
 - Skills make repeatable workflows codified.
+
+Codex also runs on an API key, which OpenAI positions for automation in shared environments like CI.
 
 For more complex multi-agent topologies (e.g., 10-agent crew with conditional handoffs), custom LangGraph or CrewAI deployments are worth the investment. They're harder to set up but more controllable for production-grade fleets.
 
@@ -410,27 +416,27 @@ Most teams end up using more than one tool. Common combinations:
 ### Cursor + Claude Code
 - Cursor for daily coding and debugging
 - Claude Code for multi-file refactors, infra, background agents
-- Same models under the hood (often Sonnet 4.6); different surfaces
+- Cursor can use Claude models (billed by usage); different surfaces
 
 ### Copilot + Claude Code
 - Copilot for inline completions and quick chat in IDE
 - Claude Code for multi-file, infra, deep analysis
 - Best for shops already on Copilot Business / Enterprise
 
-### Cursor + Gemini CLI
-- Cursor for everything daily
-- Gemini CLI for whole-repo questions and large analysis
-- Use Cursor's Gemini 3.1 Pro option to consolidate where possible
+### Copilot + Codex
+- Copilot for inline completions and IDE chat
+- Codex for delegated cloud tasks and PR review
+- Copilot Pro+ and Max can also delegate to Codex directly (preview)
 
 ### Cody + Copilot
-- Cody for repo / multi-repo Q&A
+- Cody (enterprise) for repo / multi-repo Q&A
 - Copilot for inline + IDE chat
 - Common at Sourcegraph-customer enterprises
 
 ### Three-tool stack
 - Copilot for inline + PR review
 - Cursor or Claude Code for active work
-- Gemini CLI or Cody for analysis / Q&A
+- Codex or Antigravity for delegated tasks and analysis
 
 Pick based on:
 - Which IDE your team lives in

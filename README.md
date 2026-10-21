@@ -26,7 +26,7 @@ Comprehensive guides for AI-powered coding assistants, multi-agent orchestration
 
 ## Overview
 
-This guidebook provides in-depth documentation, best practices, templates, and examples for working with modern AI coding assistants. Whether you're using Claude Code, GitHub Copilot, Gemini CLI, or building multi-agent systems, this repository is your complete reference.
+This guidebook provides in-depth documentation, best practices, templates, and examples for working with modern AI coding assistants. Whether you're using Claude Code, OpenAI Codex, GitHub Copilot, Cursor, Google Antigravity, or building multi-agent systems, this repository is your complete reference.
 
 ## What's Inside
 
@@ -35,11 +35,12 @@ This guidebook provides in-depth documentation, best practices, templates, and e
 Complete documentation for major AI coding assistants:
 
 - **[Claude Code](guides/claude-code/)** - Anthropic's CLI tool with MCP servers, agents, and skills
-- **[GitHub Copilot](guides/github-copilot/)** - GitHub's AI pair programmer (CLI and IDE)
-- **[Gemini CLI](guides/gemini-cli/)** - Google's Gemini integration for command line
+- **[OpenAI Codex](guides/codex/)** - OpenAI's coding agent: open-source Codex CLI (`codex`, `codex exec`), IDE extension, Codex Cloud, `@codex review`, MCP, GitHub Action, and SDKs
+- **[GitHub Copilot](guides/github-copilot/)** - Copilot CLI, cloud agent, code review, the Copilot app, and IDE integration
+- **[Gemini CLI](guides/gemini-cli/)** - Google's open-source terminal agent — now for Code Assist Standard/Enterprise and paid API keys (consumer accounts moved to Antigravity CLI on 2026-06-18)
 - **[Cursor](guides/cursor/)** - AI-first code editor: Agent, Plan mode, `.cursor/rules`, and MCP
 - **[VS Code](guides/vscode/)** - VS Code as an agentic environment: agent mode, MCP, and custom instructions
-- **[Google Antigravity](guides/antigravity/)** - Agent-first IDE: Editor view + Agent Manager, built on Gemini
+- **[Google Antigravity](guides/antigravity/)** - Google's agent-first platform (Antigravity 2.0): desktop App, standalone IDE, and the `agy` [Antigravity CLI](guides/antigravity/cli.md)
 
 ### 🔌 MCP Servers
 
@@ -109,13 +110,25 @@ cp templates/CLAUDE.md /path/to/your/project/
 # Read the Copilot guide
 cat guides/github-copilot/README.md
 
-# Install Copilot CLI
-gh extension install github/gh-copilot
+# Install the standalone Copilot CLI
+npm install -g @github/copilot
 ```
 
-**Trying Gemini CLI?**
+**Using OpenAI Codex?**
 ```bash
-# Read the Gemini CLI guide
+# Read the Codex guide
+cat guides/codex/README.md
+
+# Install Codex CLI
+npm install -g @openai/codex
+```
+
+**Using Google's tools?**
+```bash
+# Personal Google accounts: Antigravity CLI
+cat guides/antigravity/cli.md
+
+# Code Assist Standard/Enterprise or paid API keys: Gemini CLI
 cat guides/gemini-cli/README.md
 ```
 
@@ -160,6 +173,7 @@ ai-agent-guidebook/
 │   │   ├── agents.md                   # Agent orchestration
 │   │   ├── skills.md                   # Claude Skills usage
 │   │   ├── hooks.md                    # Event hooks
+│   │   ├── background-and-scheduled-work.md # Background tasks & routines
 │   │   ├── advanced.md                 # Advanced techniques
 │   │   └── troubleshooting.md          # Common issues
 │   ├── github-copilot/
@@ -167,8 +181,21 @@ ai-agent-guidebook/
 │   │   ├── cli-guide.md                # CLI usage
 │   │   ├── ide-guide.md                # IDE integration
 │   │   ├── chat-guide.md               # Copilot Chat
-│   │   ├── workspace-guide.md          # Workspace context
+│   │   ├── workspace-guide.md          # Cloud agent & third-party agents
 │   │   └── best-practices.md           # Usage patterns
+│   ├── codex/
+│   │   ├── README.md                   # Codex overview, surfaces, models, plans
+│   │   ├── installation.md             # Install & auth
+│   │   ├── usage.md                    # CLI, exec, sandbox, config.toml
+│   │   └── mcp-and-integration.md      # MCP, GitHub Action, SDKs
+│   ├── cursor/                         # Cursor editor, CLI, rules, MCP
+│   ├── vscode/                         # VS Code agent sessions & MCP
+│   ├── antigravity/
+│   │   ├── README.md                   # Antigravity 2.0 overview
+│   │   ├── installation.md             # App, IDE, CLI, SDK setup
+│   │   ├── usage.md                    # Projects, artifacts, MCP
+│   │   ├── agents.md                   # Permissions, subagents, rules, skills
+│   │   └── cli.md                      # Antigravity CLI (agy)
 │   ├── gemini-cli/
 │   │   ├── README.md                   # Gemini CLI overview
 │   │   ├── installation.md             # Setup guide
@@ -176,7 +203,8 @@ ai-agent-guidebook/
 │   │   └── integration.md              # Integration patterns
 │   ├── mcp-servers/
 │   │   ├── guide.md                    # MCP introduction
-│   │   ├── catalog.md                  # Server catalog (50+)
+│   │   ├── catalog.md                  # Server catalog (core)
+│   │   ├── catalog-specialized.md      # Server catalog (specialized)
 │   │   ├── installation.md             # Setup instructions
 │   │   ├── configuration.md            # Configuration guide
 │   │   ├── building.md                 # Build your own
@@ -196,6 +224,7 @@ ai-agent-guidebook/
 │   ├── CLAUDE.md                       # Claude orchestration template
 │   ├── AGENTS.md                       # Multi-agent template
 │   ├── mcp-config.json                 # MCP configuration
+│   ├── k8s-mcp.toml                    # Read-only Kubernetes MCP config
 │   ├── skill-template/                 # Claude Skill template
 │   └── prompt-templates/               # Explore→Plan→Implement→Verify prompts
 ├── examples/
@@ -238,17 +267,23 @@ ai-agent-guidebook/
 ### GitHub Copilot
 
 - ✅ **IDE Integration** - Deep integration with VS Code, JetBrains, Vim
-- ✅ **CLI Assistant** - Command-line helper with `gh copilot`
-- ✅ **Copilot Chat** - Conversational coding assistance
-- ✅ **Workspace Context** - Project-aware suggestions
+- ✅ **Copilot CLI** - Standalone agentic terminal tool (`copilot`)
+- ✅ **Cloud Agent** - Assign issues and get PRs back, plus third-party Claude and Codex agents
+- ✅ **Code Review** - Copilot reviews on pull requests
 - ✅ **Code Completion** - Real-time code suggestions
 
-### Gemini CLI
+### OpenAI Codex
 
-- ✅ **Google AI Integration** - Access to Gemini models
-- ✅ **Command Line Interface** - Terminal-based interaction
-- ✅ **Multimodal Support** - Text, images, and more
-- ✅ **Context Windows** - Large context support
+- ✅ **Codex CLI** - Open-source terminal agent with sandboxed execution
+- ✅ **Non-interactive mode** - `codex exec` for scripts and CI
+- ✅ **Codex Cloud & review** - Delegate tasks and `@codex review` on GitHub
+- ✅ **Included in ChatGPT plans** - Or use an API key
+
+### Google Antigravity & Gemini CLI
+
+- ✅ **Antigravity CLI and App** - Multi-agent, background work on Gemini models
+- ✅ **Gemini CLI** - Open-source terminal agent for enterprise and API-key users
+- ✅ **Large context** - 1M-token Gemini models
 
 ---
 
@@ -270,11 +305,15 @@ ai-agent-guidebook/
 - Quick command-line assistance
 - Pair programming scenarios
 
-**Use Gemini CLI when:**
-- Need multimodal AI capabilities
-- Working with Google ecosystem
-- Terminal-based workflows
-- Large context requirements
+**Use OpenAI Codex when:**
+- You already pay for ChatGPT
+- You want an open-source CLI with OS-level sandboxing
+- Delegating tasks to the cloud and reviewing PRs on GitHub
+
+**Use Antigravity / Gemini CLI when:**
+- Working in the Google ecosystem
+- Need multimodal capabilities and Gemini models
+- Gemini CLI specifically: your org has Code Assist Standard/Enterprise or uses paid API keys
 
 ---
 
@@ -372,6 +411,9 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 - **[Claude Code Docs](https://docs.claude.com/claude-code)** - Official Claude Code documentation
 - **[GitHub Copilot Docs](https://docs.github.com/copilot)** - Official Copilot documentation
 - **[Gemini API Docs](https://ai.google.dev/docs)** - Google Gemini documentation
+- **[OpenAI Codex Docs](https://learn.chatgpt.com/docs)** - Official Codex documentation
+- **[Google Antigravity Docs](https://antigravity.google/docs/)** - Antigravity App, IDE, and CLI
+- **[Cursor Docs](https://cursor.com/docs)** - Official Cursor documentation
 - **[MCP Specification](https://spec.modelcontextprotocol.io/)** - Model Context Protocol spec
 
 ### Community Resources
@@ -410,9 +452,9 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 **Version**: 1.2.0
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21
 
-**Status**: 🚀 Active Development — covering the current Claude models (Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5), the standalone GitHub Copilot CLI + coding agent, Gemini CLI (Gemini 3.x), and MCP spec revision 2025-11-25.
+**Status**: 🚀 Active Development — covering the current Claude models (Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5), OpenAI Codex (GPT-6 family), GitHub Copilot CLI + cloud agent, Google Antigravity 2.0 and Gemini CLI, Cursor, and MCP spec revision 2026-07-28.
 
 ---
 

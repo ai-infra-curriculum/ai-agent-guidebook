@@ -1,6 +1,8 @@
 # Claude Code Guide
 
-Complete guide to using Claude Code, Anthropic's official CLI for AI-assisted development.
+Complete guide to using Claude Code, Anthropic's agentic coding tool — available as a CLI, in VS Code and JetBrains, in the Claude Desktop app, on the web, and from mobile.
+
+Last verified: 2026-10 (against [code.claude.com/docs](https://code.claude.com/docs/en/overview); latest release at time of writing: v2.1.306).
 
 ---
 
@@ -8,6 +10,7 @@ Complete guide to using Claude Code, Anthropic's official CLI for AI-assisted de
 
 - [Overview](#overview)
 - [Installation](#installation)
+- [Models](#models)
 - [Core Features](#core-features)
 - [MCP Servers](#mcp-servers)
 - [Multi-Agent Orchestration](#multi-agent-orchestration)
@@ -21,14 +24,17 @@ Complete guide to using Claude Code, Anthropic's official CLI for AI-assisted de
 
 ## Overview
 
-Claude Code is an interactive CLI tool that helps with software engineering tasks. It provides:
+Claude Code is an agentic coding tool that reads your codebase, edits files, runs commands, and integrates with your development tools. It provides:
 
-- **AI-Assisted Coding** - Natural language to code generation
-- **MCP Server Integration** - Extend functionality with 50+ servers
-- **Multi-Agent Systems** - Spawn specialized agents for complex tasks
-- **Claude Skills** - Reusable task packs and workflows
-- **Event Hooks** - Customize behavior with shell commands
-- **Context Management** - Efficient token usage
+- **AI-Assisted Coding** - Natural language to code changes, with checkpoints you can rewind
+- **MCP Server Integration** - Connect databases, issue trackers, and internal APIs
+- **Multi-Agent Systems** - Background and nested sub-agents, forks, agent teams, and script-driven [dynamic workflows](background-and-scheduled-work.md#dynamic-workflows)
+- **Claude Skills** - Reusable task packs following the open [Agent Skills](https://agentskills.io) standard
+- **Event Hooks** - Customize behavior with shell commands, HTTP calls, or model checks
+- **Auto Mode** - A classifier reviews actions instead of prompting you (the interactive default since v2.1.283)
+- **Background & Scheduled Work** - Background sessions (`claude agents`), `/goal`, `/loop`, and cloud scheduled tasks
+- **Artifacts** - Publish live, shareable pages from a session to claude.ai
+- **Plugins** - Bundle skills, agents, hooks, MCP servers, and output styles; install from marketplaces
 
 ### Key Differentiators
 
@@ -50,15 +56,23 @@ Claude Code is an interactive CLI tool that helps with software engineering task
 
 ### Prerequisites
 
-- macOS 13+, Windows 10 1809+ (native or WSL 2), or Linux (Ubuntu 20.04+, Debian 10+)
-- Node.js 18+ (only if installing via npm)
-- A Claude subscription (Pro/Max/Team/Enterprise) or Anthropic API access
+- macOS 13+, Windows 10 1809+ / Server 2019+ (native or WSL 2), or Linux (Ubuntu 20.04+, Debian 10+, Alpine 3.19+)
+- Node.js 22+ (only if installing via npm)
+- A Claude subscription (Pro/Max/Team/Enterprise), a Claude Console (API) account, or a cloud provider (Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry). The free claude.ai plan doesn't include Claude Code.
 
 ### Install via native installer (recommended)
 
 ```bash
+# macOS, Linux, WSL
 curl -fsSL https://claude.ai/install.sh | bash
 ```
+
+```powershell
+# Windows PowerShell
+irm https://claude.ai/install.ps1 | iex
+```
+
+Native installs auto-update in the background.
 
 ### Install via npm
 
@@ -66,11 +80,17 @@ curl -fsSL https://claude.ai/install.sh | bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-### Install via Homebrew (macOS)
+### Install via Homebrew (macOS) or WinGet (Windows)
 
 ```bash
 brew install --cask claude-code
 ```
+
+```powershell
+winget install Anthropic.ClaudeCode
+```
+
+Homebrew and WinGet installs don't auto-update by default. Signed apt/dnf/apk repositories also exist. See [installation.md](installation.md) for details.
 
 ### First Run
 
@@ -86,9 +106,25 @@ Claude Code looks for configuration in:
 - `~/.claude/settings.json` - User settings (model, permissions, hooks)
 - `~/.claude.json` - User- and local-scoped MCP servers
 - `.mcp.json` (project root) - Project-scoped MCP servers, committed to version control
-- Project-specific: `.claude/` directory (settings, skills, agents, hooks)
+- Project-specific: `.claude/` directory (`settings.json`, `settings.local.json`, skills, agents, rules, hooks, output styles)
+- Managed settings deployed by your organization override all of the above
+
+See [settings-and-permissions.md](settings-and-permissions.md).
 
 ---
+
+## Models
+
+Current Claude models (Anthropic API IDs; list prices per million input/output tokens from the [official pricing page](https://platform.claude.com/docs/en/about-claude/pricing)):
+
+| Model | ID | Alias | Price (in / out) | Notes |
+|-------|----|-------|------------------|-------|
+| Claude Fable 5.1 | `claude-fable-5-1` | `fable` | $10 / $50 | Most capable; long-horizon, ambiguous work. Never the default; may bill to usage credits on subscriptions |
+| Claude Opus 5.5 | `claude-opus-5-5` | `opus` | $4 / $20 | **Default model** on Pro, Max, Team, Enterprise, and the API since v2.1.280 |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | `sonnet` | $2 / $10 | Speed/intelligence balance |
+| Claude Haiku 5.5 | `claude-haiku-5-5` | `haiku` | $0.10 / $0.50 (prompts ≤100K tokens; $0.50 / $2.50 above) | Fast, high-volume work |
+
+All four have a 1M-token context window and 128K max output, and always use adaptive thinking (steer it with `/effort`). Switch with `/model <alias>` — the choice is saved as your default; press `s` in the picker for this session only. On Bedrock, Agent Platform, and Foundry, aliases may resolve to older models; pin full IDs there. Previous models (Fable 5, Opus 5, Sonnet 5, Opus 4.8 and earlier) remain available as legacy models.
 
 ## Core Features
 
@@ -120,13 +156,14 @@ Claude Code can:
 
 ### 4. Tool Integration
 
-Built-in tools:
-- **Read** - Read files
-- **Write** - Create/modify files
-- **Edit** - Precise file edits
-- **Bash** - Execute shell commands
-- **Grep** - Search code
-- **Glob** - Find files by pattern
+Built-in tools include:
+- **Read** / **Write** / **Edit** - Read, create, and precisely edit files
+- **Bash** (and **PowerShell** on Windows) - Execute shell commands, optionally in the background
+- **Grep** / **Glob** - Search code and find files (on macOS, Linux, and WSL these are left out by default; Claude searches with embedded `grep`/`find` via Bash)
+- **WebFetch** / **WebSearch** - Fetch pages and search the web
+- **Agent** - Spawn sub-agents (formerly `Task`)
+- **Monitor** - Watch a background command or WebSocket and react to each event
+- **Skill**, **ToolSearch**, **LSP**, **Artifact**, and more — see the [tools reference](https://code.claude.com/docs/en/tools-reference)
 
 ---
 
@@ -149,14 +186,15 @@ Add servers with the `claude mcp` CLI:
 
 ```bash
 # stdio server (local process) — everything after -- runs the server
-claude mcp add github -- npx -y @modelcontextprotocol/server-github
+claude mcp add git -- uvx mcp-server-git
 
-# HTTP server (remote)
+# HTTP server (remote); OAuth servers sign in via /mcp or `claude mcp login <name>`
 claude mcp add --transport http notion https://mcp.notion.com/mcp
 
-# Pass environment variables, share with your team via .mcp.json
-claude mcp add --scope project --env GITHUB_TOKEN=ghp_xxx github -- \
-  npx -y @modelcontextprotocol/server-github
+# Remote server with a header, shared with your team via .mcp.json
+# (\$ keeps the literal ${GITHUB_TOKEN} in the file; Claude Code expands it at connect time)
+claude mcp add --scope project --transport http github https://api.githubcopilot.com/mcp/ \
+  --header "Authorization: Bearer \${GITHUB_TOKEN}"
 ```
 
 Storage by scope: `local` and `user` scopes live in `~/.claude.json`; `project` scope lives in `.mcp.json` at the repo root (committed to version control):
@@ -165,10 +203,10 @@ Storage by scope: `local` and `user` scopes live in `~/.claude.json`; `project` 
 {
   "mcpServers": {
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
       }
     },
     "notion": {
@@ -182,33 +220,25 @@ Storage by scope: `local` and `user` scopes live in `~/.claude.json`; `project` 
 ### Popular MCP Servers
 
 **Development:**
-- `@modelcontextprotocol/server-github` - GitHub operations
-- `@modelcontextprotocol/server-filesystem` - File operations
-- `@modelcontextprotocol/server-git` - Git operations
+- GitHub's official server — hosted at `https://api.githubcopilot.com/mcp/` or self-hosted from `github/github-mcp-server` (the old `@modelcontextprotocol/server-github` npm package is archived and deprecated)
+- `mcp-server-git` (Python, via `uvx`) - Git operations
+- `@modelcontextprotocol/server-filesystem` - File operations outside the project (Claude Code's built-in file tools already cover the project itself)
 
 **Databases:**
-- `@modelcontextprotocol/server-postgres` - PostgreSQL
-- `@modelcontextprotocol/server-sqlite` - SQLite
+- `postgres-mcp` ("Postgres MCP Pro", via `uvx`) - PostgreSQL; the reference `@modelcontextprotocol/server-postgres` is archived
+- `mcp-server-sqlite` (Python, via `uvx`) - SQLite
 
 **Infrastructure:**
-- `@containers/kubernetes-mcp-server` - Kubernetes
+- `kubernetes-mcp-server` (from the `containers` GitHub org) - Kubernetes
 - Docker MCP servers
 
-**Quality Assurance:**
-- `@mojoatomic/quality-guard-mcp` - Code quality
-- `@MarcusJellinghaus/mcp-code-checker` - Testing
-- `@drewsonne/ruff-mcp-server` - Python linting
+Package names and maintenance status change often — check the catalog before adopting one.
 
 **See full catalog**: [MCP Server Catalog](../mcp-servers/catalog.md)
 
 ### Installing MCP Servers
 
-MCP servers are installed automatically on first use:
-
-```bash
-# Claude Code will install when needed
-# No manual npm install required
-```
+Claude Code doesn't install servers itself. For `npx`/`uvx` stdio servers, the package runner downloads the package the first time the server starts (and again after cache eviction); remote HTTP servers need no local install at all. Project-scoped servers from `.mcp.json` wait for your approval in `/mcp` before they connect in interactive sessions.
 
 ### Using MCP Servers
 
@@ -235,21 +265,22 @@ Claude Code can spawn specialized agents for complex tasks.
 
 Agents are autonomous Claude instances that:
 - Focus on specific sub-tasks
-- Run independently with their own context
+- Run independently with their own context window (forks are the exception: they inherit the conversation)
+- Run in the background by default, surfacing permission prompts in your main session
 - Report results back to the orchestrator
-- Cannot spawn further sub-agents (nesting is limited to one level)
+- Can spawn their own sub-agents, up to three layers deep by default
 
 ### Agent Types
 
 **Built-in Agents:**
 
 1. **general-purpose** - Complex multi-step tasks
-2. **Explore** - Codebase exploration and search
-3. **Plan** - Task planning and breakdown
+2. **Explore** - Read-only codebase exploration and search
+3. **Plan** - Read-only research during plan mode
 
 **Custom Agents:**
 
-Define as Markdown files with YAML frontmatter in `.claude/agents/` (project) or `~/.claude/agents/` (user). Manage interactively with the `/agents` command.
+Define as Markdown files with YAML frontmatter in `.claude/agents/` (project) or `~/.claude/agents/` (user). Ask Claude to write one or create the file directly; `/tasks` shows running agents. (`/agents` no longer opens a management UI as of v2.1.198.)
 
 ### Using Agents
 
@@ -262,6 +293,7 @@ Define as Markdown files with YAML frontmatter in `.claude/agents/` (project) or
 **Explicitly:**
 ```
 "Use a general-purpose agent to refactor the entire API module"
+@"code-reviewer (agent)" look at the auth changes
 ```
 
 ### Agent Configuration
@@ -288,7 +320,8 @@ Only `name` and `description` are required. The `description` is what the orches
 Agents communicate via:
 - **Input**: Task description and context
 - **Output**: Results and findings
-- **Memory**: Shared state via Memory MCP
+- **SendMessage**: Resume a finished sub-agent, message agent-team teammates, or reach your other Claude Code sessions
+- **Files**: Shared state written to disk (or an MCP server such as a memory server)
 
 ### Multi-Phase Workflows
 
@@ -389,7 +422,7 @@ Provide a summary of:
 - Actionable recommendations
 ```
 
-The directory name becomes the slash command (`/code-validator`); the `description` is what Claude uses to decide when to load the skill automatically.
+The frontmatter `name` (or, if omitted, the directory name) becomes the slash command (`/code-validator`); the `description` is what Claude uses to decide when to load the skill automatically. `allowed-tools` *pre-approves* those tools for the invoking turn — it doesn't restrict others. Claude Code also ships bundled skills such as `/code-review`, `/simplify`, `/doctor`, `/loop`, and `/verify`.
 
 See: [Skills Guide](../skills/guide.md)
 
@@ -401,9 +434,9 @@ Hooks customize Claude Code behavior at specific events.
 
 ### What are Hooks?
 
-Hooks are shell commands that run:
+Hooks are handlers — shell commands, HTTP endpoints, MCP tools, or model/agent checks — that run:
 - Before/after tool calls
-- On specific events
+- On ~30 lifecycle events (prompts, compaction, sub-agents, model switches, file changes, …)
 - For validation or side effects
 
 ### Hook Types
@@ -414,6 +447,8 @@ Core lifecycle events:
 - `PreToolUse` / `PostToolUse` - Before/after tool calls
 - `SessionStart` / `SessionEnd` - When the session starts/ends
 - `Stop` - When the assistant turn ends
+
+See [hooks.md](hooks.md) for the rest.
 
 ### Configuration
 
@@ -434,7 +469,7 @@ Configured in `settings.json` (`~/.claude/settings.json` or `.claude/settings.js
 }
 ```
 
-Hooks receive a JSON event description on stdin (including `tool_name` and `tool_input`). Exit code 2 blocks the action and surfaces stderr to the model.
+Hooks receive a JSON event description on stdin (including `tool_name` and `tool_input`). Exit code 2 blocks the action and surfaces stderr to the model. In interactive sessions, hooks run only after you accept the workspace trust dialog; `claude -p` treats the folder as trusted, so review a repo's `.claude/settings.json` before scripting against it.
 
 ### Example Hooks
 
@@ -489,6 +524,8 @@ There is no `.claudeignore` file — keep noise and secrets out of context with 
 
 Claude Code automatically checkpoints the state of your code before each edit; every user prompt creates a new checkpoint. To undo, run `/rewind` (or press `Esc` twice with an empty prompt) and choose whether to restore the code, the conversation, or both. Note: files changed by bash commands are not tracked.
 
+For long or parallel work, see [background-and-scheduled-work.md](background-and-scheduled-work.md): background sessions (`claude --bg`, `claude agents`), `/goal`, `/loop`, and cloud scheduled tasks.
+
 ### 3. Parallel Operations
 
 Run multiple agents in parallel:
@@ -502,11 +539,10 @@ Run multiple agents in parallel:
 
 ### 4. Memory Persistence
 
-Use Memory MCP for cross-session state:
+Durable project facts belong in `CLAUDE.md` (ask Claude to add them). Claude Code also has built-in **auto memory**, where Claude saves its own notes about your preferences and project across sessions; review and edit it with `/memory`. See [claude-md.md](claude-md.md).
 
 ```
-"Remember that we're using PostgreSQL for this project"
-"What database are we using?" → "PostgreSQL"
+"Add to the project CLAUDE.md: we use PostgreSQL 16 and Alembic for migrations"
 ```
 
 ### 5. Custom Tools
@@ -575,7 +611,7 @@ server.registerTool(
 
 ✅ **Use AGENTS.md**
 - A shared instructions file read by many coding agents
-- Document project conventions for any agent tool, not just Claude Code
+- Claude Code reads it natively only when there's no `CLAUDE.md`; if you have both, start `CLAUDE.md` with `@AGENTS.md`
 
 ✅ **Configure MCP Servers**
 - Install relevant servers
@@ -645,10 +681,10 @@ claude mcp add <name> -- <command> [args...]
 
 #### Context Window Full
 
-**Problem**: "Context window exceeded"
+**Problem**: "Prompt is too long" / context limit reached
 
 **Solution**:
-- Run `/compact` to summarize older turns
+- Run `/compact` to summarize older turns (auto-compaction normally does this near the limit)
 - Be more specific about files to read
 - Use agents for sub-tasks
 - Clear conversation (`/clear`) and start fresh
@@ -658,9 +694,9 @@ claude mcp add <name> -- <command> [args...]
 **Problem**: Agent doesn't complete
 
 **Solution**:
-- Break task into smaller steps
+- Check `/tasks` — sub-agents run in the background by default and may simply still be working
+- Break task into smaller steps; set `maxTurns` in the agent definition
 - Use checkpoints
-- Increase timeout if possible
 
 ### Getting Help
 
@@ -672,6 +708,7 @@ claude mcp add <name> -- <command> [args...]
 
 ## Related Guides
 
+- [Background and Scheduled Work](background-and-scheduled-work.md)
 - [MCP Servers Guide](../mcp-servers/guide.md)
 - [Agent Architecture](../agents-subagents/architecture.md)
 - [Skills Guide](../skills/guide.md)
@@ -683,7 +720,8 @@ claude mcp add <name> -- <command> [args...]
 ## Resources
 
 - **Official Docs**: https://code.claude.com/docs/en/overview
-- **MCP Specification**: https://spec.modelcontextprotocol.io/
+- **Changelog**: https://code.claude.com/docs/en/changelog (weekly digests: https://code.claude.com/docs/en/whats-new/index)
+- **MCP Specification**: https://modelcontextprotocol.io/specification
 - **Awesome MCP**: https://github.com/wong2/awesome-mcp-servers
 - **MCP Directory**: https://mcpservers.org/
 
@@ -694,6 +732,7 @@ claude mcp add <name> -- <command> [args...]
 2. [Write a lean CLAUDE.md](claude-md.md) for your project
 3. [Configure settings & permissions](settings-and-permissions.md) to cut approval prompts
 4. [Configure MCP Servers](mcp-servers.md)
-5. [Try your first agent](agents.md#quick-start)
+5. [Try your first agent](agents.md#what-the-agent-tool-does)
+6. [Run work in the background](background-and-scheduled-work.md)
 
-**Configuration deep dives:** [CLAUDE.md & memory](claude-md.md) · [Settings & permissions](settings-and-permissions.md) · [Event hooks](hooks.md) · [Advanced usage](advanced.md) — plus the cross-tool [agentic workflow](../../best-practices/agentic-workflow.md).
+**Configuration deep dives:** [CLAUDE.md & memory](claude-md.md) · [Settings & permissions](settings-and-permissions.md) · [Event hooks](hooks.md) · [Advanced usage](advanced.md) · [Background & scheduled work](background-and-scheduled-work.md) — plus the cross-tool [agentic workflow](../../best-practices/agentic-workflow.md).
