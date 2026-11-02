@@ -81,6 +81,7 @@ Production-ready templates for project setup:
 - **[Feature Comparison Matrix](comparisons/feature-matrix.md)** - Compare AI assistants
 - **[Use Case Guide](comparisons/use-cases.md)** - Which tool for which task
 - **[Best Practices](best-practices/)** - Proven patterns and anti-patterns
+- **[Harness Engineering](best-practices/harness-engineering.md)** - Improve agent results by changing the instructions, tools, permissions, hooks, and feedback loops around the model
 
 ### 💡 Examples
 
@@ -240,6 +241,7 @@ ai-agent-guidebook/
 ├── best-practices/
 │   ├── prompting.md                    # Effective prompts
 │   ├── agentic-workflow.md             # Plan → execute → verify loop
+│   ├── harness-engineering.md          # Guides, sensors, and harness surfaces
 │   ├── context-management.md           # Managing context
 │   ├── error-handling.md               # Error recovery
 │   ├── security.md                     # Security practices

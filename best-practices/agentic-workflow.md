@@ -23,6 +23,8 @@ Last updated 2026-10-21.
 
 The difference between an agent that one-shots a feature and one that flails is rarely the prompt — it's the loop around it. A good loop separates *understanding* from *doing*, and gives the agent a way to check its own work so you can step away. The recommendations below are Anthropic's official Claude Code guidance, but the shape applies to any capable agent (Cursor, Gemini CLI, Copilot's agent mode).
 
+See also: [Harness Engineering](harness-engineering.md) — how to improve the instructions, hooks, and checks around this loop when the agent keeps making the same mistake.
+
 ---
 
 ## Explore → Plan → Implement → Commit

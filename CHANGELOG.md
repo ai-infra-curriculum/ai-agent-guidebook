@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Harness engineering (2026-11-02)
+- `best-practices/harness-engineering.md` — cross-tool overview and decision guide: inner vs outer harness, guides vs sensors and computational vs inferential controls (Böckeler), a harness-surface table mapping Claude Code / Codex CLI / Cursor / Copilot to the per-tool guides, the "every repeated mistake is a harness bug" steering loop, instruction files as a map, long-running work with a JSON feature list and progress file (Anthropic), evaluating harness changes, and build-vs-configure
+- Linked from the README and cross-linked from `guides/claude-code/hooks.md` and `best-practices/agentic-workflow.md`
+
 ### Added — Claude Code configuration best practices (verified against code.claude.com/docs)
 - `guides/claude-code/claude-md.md` — authoring lean, effective CLAUDE.md memory files (memory hierarchy, `/init`, the <~200-line rule, include/exclude, `#`, `@imports`, `CLAUDE.local.md`, compaction steering)
 - `guides/claude-code/settings-and-permissions.md` — `settings.json` precedence hierarchy, managed settings, `allow`/`ask`/`deny` rules (deny wins), rule syntax + path anchors, permission modes, `env`/`additionalDirectories`, worked example

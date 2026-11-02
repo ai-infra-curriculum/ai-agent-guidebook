@@ -573,3 +573,4 @@ Profile with `claude --debug` and grep the `Hooks:` duration lines. `/doctor` al
 - [MCP Servers](mcp-servers.md) — for governance heavier than what hooks can express.
 - [Agents](agents.md) — `SubagentStart`/`SubagentStop` hooks and per-agent `hooks` frontmatter.
 - [Troubleshooting](troubleshooting.md) — when hooks break commits or block legitimate work.
+- See also: [Harness Engineering](../../best-practices/harness-engineering.md) — when to use a hook vs an instruction, linter, or permission rule.
