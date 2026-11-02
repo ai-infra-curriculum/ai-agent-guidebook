@@ -15,6 +15,7 @@ How Cursor integrates the Model Context Protocol: where config lives, the config
 - [Authentication and OAuth](#authentication-and-oauth)
 - [One-Click Install and the UI](#one-click-install-and-the-ui)
 - [Tool Approval](#tool-approval)
+- [MCP in the CLI](#mcp-in-the-cli)
 - [Debugging MCP](#debugging-mcp)
 - [Security](#security)
 
@@ -22,7 +23,7 @@ How Cursor integrates the Model Context Protocol: where config lives, the config
 
 ## What MCP Adds
 
-Cursor ships built-in tools (file ops, terminal, semantic search, web). The **Model Context Protocol** extends that surface with external **tools**, **prompts**, and **resources** — databases, issue trackers, browsers, internal APIs — without modifying Cursor itself. An MCP server is a process (local or remote) that speaks the protocol; Cursor discovers its tools and offers them to the agent.
+Cursor ships built-in tools (file ops, terminal, semantic search, web, browser). The **Model Context Protocol** extends that surface with external **tools**, **prompts**, and **resources** — databases, issue trackers, browsers, internal APIs — without modifying Cursor itself. An MCP server is a process (local or remote) that speaks the protocol; Cursor discovers its tools and offers them to the agent.
 
 Source: [Model Context Protocol (MCP)](https://cursor.com/docs/mcp).
 
@@ -59,7 +60,7 @@ Both files use the same top-level `mcpServers` object, keyed by a server name yo
 }
 ```
 
-Cursor supports three transports: **stdio** (local), **SSE** (local/remote), and **Streamable HTTP** (local/remote).
+Cursor supports three transports: **stdio** (local, manually authenticated), **SSE**, and **Streamable HTTP** (both local or remote, with OAuth support). On the protocol side, Cursor supports MCP **tools, prompts, resources, roots, elicitation**, and the **Apps** extension.
 
 ---
 
@@ -69,32 +70,28 @@ A local server is a child process Cursor launches. Fields:
 
 | Field | Required | Purpose |
 |-------|----------|---------|
-| `type` | optional | `"stdio"` (the default for command-based entries) |
+| `type` | yes (per current docs) | `"stdio"` |
 | `command` | yes | Executable to run (e.g. `npx`, `python`, `node`, `uvx`) |
 | `args` | no | Arguments passed to the command |
 | `env` | no | Environment variables for the server process |
 | `envFile` | no | Path to a `.env` file to load (stdio only) |
 
-Example — a GitHub server and a read-only Postgres server, both local:
+Example — the Context7 documentation server, run locally:
 
 ```json
 {
   "mcpServers": {
-    "github": {
+    "context7": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
-      }
-    },
-    "postgres": {
-      "command": "uvx",
-      "args": ["mcp-server-postgres", "--read-only"],
+      "args": ["-y", "@upstash/context7-mcp"],
       "envFile": "${workspaceFolder}/.env.local"
     }
   }
 }
 ```
+
+> The old `@modelcontextprotocol/server-github` npm package is archived. For GitHub, use GitHub's official hosted server (below) — see the [MCP catalog](../mcp-servers/catalog.md).
 
 Source: [MCP](https://cursor.com/docs/mcp).
 
@@ -107,6 +104,12 @@ A remote server is reached over HTTP. Use `url` (and optionally `headers` for au
 ```json
 {
   "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${env:GITHUB_TOKEN}"
+      }
+    },
     "internal-tools": {
       "url": "https://mcp.corp.internal/mcp",
       "headers": {
@@ -146,7 +149,8 @@ Cursor resolves variables in `command`, `args`, `env`, `url`, and `headers`:
 | `${env:NAME}` | Environment variable `NAME` from your shell/system |
 | `${userHome}` | Your home directory |
 | `${workspaceFolder}` | The project root |
-| `${pathSeparator}` | OS path separator (`/` or `\`) |
+| `${workspaceFolderBasename}` | The project root's folder name |
+| `${pathSeparator}` or `${/}` | OS path separator (`/` or `\`) |
 
 This is how you keep secrets out of committed config: reference `${env:GITHUB_TOKEN}` in `.cursor/mcp.json` and export the actual value in your shell profile (or a secret manager) before launching Cursor.
 
@@ -158,9 +162,24 @@ Source: [MCP](https://cursor.com/docs/mcp).
 
 - **Token in header** — the common pattern for remote servers: `"Authorization": "Bearer ${env:TOKEN}"`.
 - **Environment variables** — for stdio servers, pass credentials via `env` or `envFile`.
-- **OAuth** — remote servers can use static OAuth credentials via an `auth` object (client ID, client secret, scopes). The first connection performs the flow; the server manages refresh.
+- **OAuth** — SSE and Streamable HTTP servers can authenticate with OAuth. When the provider gives you a fixed client ID, requires redirect-URL allowlisting, or lacks Dynamic Client Registration, add a static `auth` object:
 
-<!-- needs-research: The exact JSON shape of the `auth`/OAuth object for remote MCP servers is documented but evolving. Confirm the current field names at https://cursor.com/docs/mcp before relying on a specific structure. -->
+```json
+{
+  "mcpServers": {
+    "example": {
+      "url": "https://mcp.example.com/mcp",
+      "auth": {
+        "CLIENT_ID": "your-oauth-client-id"
+      }
+    }
+  }
+}
+```
+
+`CLIENT_ID` is required; `CLIENT_SECRET` and `scopes` are optional (if `scopes` is omitted, Cursor discovers them from `/.well-known/oauth-authorization-server`). Variable interpolation is documented only for `command`, `args`, `env`, `url`, and `headers` — so if you need a `CLIENT_SECRET`, put that server in your global `~/.cursor/mcp.json` rather than a committed project file. Register `https://www.cursor.com/agents/mcp/oauth/callback` (web) and `http://localhost:8787/callback` (desktop) as redirect URLs with the provider.
+
+Source: [MCP](https://cursor.com/docs/mcp).
 
 ---
 
@@ -171,6 +190,9 @@ You can add MCP servers without hand-editing JSON:
 - Browse the **Cursor MCP marketplace** (and community directories such as cursor.directory) and **one-click install** official and community servers.
 - Manage servers in **Cursor Settings → MCP**: see connection status, enable/disable servers, and view the tools each exposes.
 
+- Admins can publish **Team MCP servers** to a team marketplace (Dashboard → Plugins & MCPs) so members install approved integrations without configuring them, and restrict marketplaces to organization groups.
+- The **Customize** page manages MCPs alongside skills, rules, and hooks at user, team, or workspace scope.
+
 Hand-editing `mcp.json` remains the most precise option once you have several servers; validate it with a JSON linter before saving.
 
 Source: [MCP integrations](https://cursor.com/help/customization/mcp).
@@ -179,7 +201,25 @@ Source: [MCP integrations](https://cursor.com/help/customization/mcp).
 
 ## Tool Approval
 
-When the agent wants to call an MCP tool, Cursor surfaces the call for approval (you can approve once, or trust a server/tool going forward). Treat write-capable tools (anything that mutates a database, files, or external state) more conservatively than read-only ones. On Team/Enterprise plans, admins can apply MCP access controls centrally.
+By default Cursor asks for approval before running MCP tools. MCP tool calls follow the same **Run Modes** as terminal commands: in **Auto-review**, allowlisted tools run immediately and others are checked by the classifier; in **Allowlist**, only allowlisted tools skip approval; **Run Everything** runs them all. Treat write-capable tools (anything that mutates a database, files, or external state) more conservatively than read-only ones, and consider a `beforeMCPExecution` [hook](rules-and-context.md#hooks) for hard policy. On Team/Enterprise plans, admins can apply MCP access controls centrally.
+
+Sources: [MCP](https://cursor.com/docs/mcp), [Run modes](https://cursor.com/docs/agent/run-modes).
+
+---
+
+## MCP in the CLI
+
+The Cursor CLI uses the same MCP configuration as the editor (project, then global, then nested configs):
+
+```bash
+agent mcp list                      # interactive list: status, config source, transport
+agent mcp list-tools <server>       # tool names, descriptions, parameters
+agent mcp login <server>            # authenticate with a server defined in mcp.json
+agent mcp enable <server>           # add to the local approved list
+agent mcp disable <server>          # stop it from loading or prompting
+```
+
+Source: [CLI MCP](https://cursor.com/docs/cli/mcp).
 
 ---
 
@@ -219,5 +259,5 @@ Source: [MCP](https://cursor.com/docs/mcp).
 
 ---
 
-**Last Updated**: 2026-06-16
+**Last Updated**: 2026-10-21
 </content>

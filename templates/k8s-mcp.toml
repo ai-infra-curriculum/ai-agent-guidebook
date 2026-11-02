@@ -1,0 +1,16 @@
+# Safe-by-default config for kubernetes-mcp-server (containers/kubernetes-mcp-server).
+# Referenced by templates/mcp-config.json. Copy it next to your .mcp.json.
+#
+# The server has no CLI flag or env var for read-only mode, and both keys
+# below default to false, so keep this file with the template.
+# Reference: https://github.com/containers/kubernetes-mcp-server/blob/main/docs/configuration.md
+
+# Expose only tools marked readOnlyHint=true (get/list/describe/logs).
+read_only = true
+
+# Belt and braces: if someone flips read_only to false, destructive tools
+# (delete, etc.) stay disabled until this is also changed deliberately.
+disable_destructive = true
+
+# Minimal toolsets (the server default).
+toolsets = ["core", "config"]

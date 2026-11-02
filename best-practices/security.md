@@ -2,7 +2,7 @@
 
 Security for AI-assisted development. Secrets, prompt injection, tool sandboxing, output validation, supply chain, audit.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -86,7 +86,7 @@ Better:
 
 ### What about LLM API keys?
 
-Same care. Anthropic, OpenAI, Google AI Studio, and Vertex keys can spend money fast — an agent in a loop can burn $1000 in an hour on Opus.
+Same care. Anthropic, OpenAI, Google AI Studio, and Vertex keys can spend money fast — an agent stuck in a loop on a top-tier model can run up a large bill in hours.
 
 Hygiene:
 - Per-environment keys (dev / staging / prod separated)
@@ -480,8 +480,9 @@ These are not mutually exclusive. A typical production stack uses one for runtim
 - Copilot does not train on your code if you're on Business/Enterprise.
 - Disable Copilot for repos with regulated content if your subscription tier requires.
 
-### Gemini CLI
+### Gemini CLI / Antigravity CLI
 
+- Gemini CLI was replaced by Antigravity CLI for free-tier and Google AI Pro/Ultra users on 2026-06-18; Gemini CLI still serves paid API-key and Code Assist Standard/Enterprise users. Re-check config paths if you migrated.
 - `.geminiignore` for excluded paths.
 - API key via env, not config file.
 - For Vertex AI: use service accounts with minimum-scope IAM, not personal OAuth.

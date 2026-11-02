@@ -4,6 +4,10 @@ What Claude Skills are, when they earn their place in a workflow, and where they
 
 This guide is pragmatic. It assumes you've used Claude Code (or another Claude Skills-compatible client) for at least a few real tasks and have hit the moments where you wished a repeatable workflow could be invoked by name.
 
+Skills follow the open **Agent Skills** standard ([agentskills.io](https://agentskills.io/specification)), which Claude Code, claude.ai, the Claude API, and a growing list of other agent tools read. Claude Code adds its own frontmatter extensions on top; this guide flags which is which.
+
+Last verified: 2026-10 (against agentskills.io and [code.claude.com/docs/en/skills](https://code.claude.com/docs/en/skills)).
+
 ---
 
 ## 1. What a Claude Skill Actually Is
@@ -27,7 +31,7 @@ Mentally, treat a skill as a slash command in a chat-style tool. Users type `/mi
 
 This model has implications:
 
-- **Skills are discoverable.** Each skill shows up as its own slash command — users find them via `/help` or the client's slash-command autocomplete.
+- **Skills are discoverable.** Each skill shows up as its own slash command — users find them via `/skills`, `/help`, or slash-command autocomplete.
 - **Skills are invocable.** Either explicitly (`/skill-name`) or by Claude itself when the active task matches the skill's description.
 - **Skills compose with the active conversation.** A loaded skill doesn't replace what's happening; it adds to it.
 - **Skills are version-controlled.** The folder lives in a repo. Changes go through review.
@@ -80,15 +84,16 @@ The description is the routing logic. Treat it like code.
 
 ## 4. Skill Scope
 
-Skills live at one of three scopes. The scope determines who sees them and where they're stored.
+Skills live at one of several scopes. The scope determines who sees them and where they're stored. (Paths below are Claude Code's; other clients use their own.)
 
 | Scope | Location | Visible to | Use for |
 |-------|----------|------------|---------|
 | Project | `.claude/skills/` in repo | Anyone working in that repo | Project-specific workflows, conventions, codebase tours |
 | User | `~/.claude/skills/` | The individual user across all projects | Personal productivity skills, preferred patterns |
 | Plugin | Inside an installed plugin package | Anyone with the plugin installed | Shared / public / commercial skills |
+| Enterprise | Managed settings directory | Everyone the org deploys it to | Org-wide mandated workflows |
 
-A skill of the same name at a more-specific scope wins. Project skills override user skills override plugin skills. This lets a team standardize on a project-level version of a skill while individuals keep their personal variants.
+Precedence in Claude Code is the opposite of what many people expect: **enterprise beats personal, and personal beats project.** If `deploy` exists in both `~/.claude/skills/` and the repo's `.claude/skills/`, `/deploy` runs *your* personal copy. Plugin skills never collide because they're namespaced (`/plugin-name:skill-name`). If a team needs everyone on the same version, give the project skill a distinct name or ship it in a plugin.
 
 ### 4.1 Picking a scope
 
@@ -104,7 +109,7 @@ Most skills should start as project or user scope. Plugins are for distribution,
 
 The `SKILL.md` frontmatter declares what the skill is and what it's allowed to do.
 
-Minimum viable frontmatter:
+Minimum viable frontmatter (the spec requires `name` and `description`; `name` must be lowercase letters, digits, and single hyphens, at most 64 characters, and **match the folder name**; `description` is at most 1,024 characters):
 
 ```yaml
 ---
@@ -116,46 +121,48 @@ description: |
 ---
 ```
 
-Common optional fields:
+The spec's optional fields are `license`, `compatibility` (environment requirements, ≤500 characters), `metadata` (a map of string keys to **string** values), and `allowed-tools` (experimental). Anything else you want to track — version, owner, category — goes under `metadata`:
 
 ```yaml
 ---
 name: migrate-rails-7-to-8
-version: 1.2.0
 description: |
   ...
-allowed-tools:
-  - Read
-  - Edit
-  - Bash
-  - Grep
+compatibility: Requires Ruby, Bundler, and a Rails 7 app
+allowed-tools: Read Grep Bash(bundle outdated *) Bash(bin/rails app:update)
 metadata:
+  version: "1.2.0"
   category: migration
-  tags: [rails, ruby, upgrade]
-  author: platform-team
+  owner: platform-team
 ---
 ```
 
 ### 5.1 `allowed-tools`
 
-The most important non-description field. Restricts which tools Claude can use while the skill is active.
+The most important non-description field — and the most misunderstood. **`allowed-tools` pre-approves tools; it does not restrict them.** In the spec it's "a space-separated string of pre-approved tools the skill may use." In Claude Code, listed tools run **without a permission prompt** during the turn that invokes the skill; every other tool stays callable under your normal permission rules.
 
-**It must be a top-level frontmatter field.** If you nest it under `metadata:`, the client treats it as inert metadata and the restriction is *not enforced* — a security-relevant footgun.
+So the field *widens* what runs unattended. Treat it accordingly:
 
-- **Set it narrow.** If the skill is "format this file," it doesn't need `WebFetch`. Don't grant it.
-- **Set it explicit.** Listing allowed tools is faster than enumerating disallowed ones.
-- **Set it auditable.** When reviewing a skill, `allowed-tools` is the first thing to scrutinize.
+- **It must be a top-level frontmatter field.** Nested under `metadata:`, it is inert data and nothing is pre-approved.
+- **Grant narrow patterns, never whole dangerous tools.** `Bash(npm audit *)` is reasonable; bare `Bash` pre-approves *any* shell command for that turn.
+- **Audit it first.** When reviewing someone else's skill, `allowed-tools` is the first thing to scrutinize — in Claude Code it applies even to repository skills in folders you haven't trusted.
+- **To restrict, use something else.** Claude Code's `disallowed-tools` field removes tools while the skill is active; permission deny rules and hooks block across all skills.
 
-For destructive skills (anything that runs `Bash` or `Write`), being narrow about tools is a real defense-in-depth measure.
+For destructive skills, the safest setting is often *no* `allowed-tools` at all, plus `disable-model-invocation: true` so the skill only runs when a human types its name.
 
 ### 5.2 Other useful fields
 
-- `version` — semver. Bump when behavior changes.
-- `requires` — other skills this skill depends on or composes with.
-- `inputs` — declared arguments (for clients that support typed inputs).
-- `tags` — for discoverability in skill listings and catalogs.
+Claude Code-only extensions (ignored or rejected elsewhere):
 
-The schema varies slightly between Claude Code, plugin distributions, and other Skills-compatible clients. Read your target client's spec.
+- `disable-model-invocation: true` — only a human can invoke it (`/name`). Use for anything with side effects.
+- `user-invocable: false` — hide it from the `/` menu; only Claude loads it (background knowledge).
+- `when_to_use` — extra trigger text appended to the description.
+- `argument-hint`, `arguments` — autocomplete hint and named `$arg` placeholders.
+- `paths` — globs; auto-load only when working on matching files.
+- `context: fork` + `agent` — run the skill in a sub-agent.
+- `model`, `effort`, `hooks`, `disallowed-tools`, `shell`.
+
+Fields such as `version`, `requires`, `inputs`, or `tags` at the top level are **not** part of the spec or Claude Code: Claude Code silently ignores unknown fields, and claude.ai uploads, the Skills API, and `package_skill.py` **reject** them with an `Unexpected key(s) in SKILL.md frontmatter` error. Keep that data under `metadata`.
 
 ---
 
@@ -163,9 +170,9 @@ The schema varies slightly between Claude Code, plugin distributions, and other 
 
 Users find skills three ways:
 
-### 6.1 `/help` and slash-command listings
+### 6.1 `/skills` and slash-command listings
 
-Most clients list available skills alongside other slash commands (there is no separate `/skill` command — each skill *is* a slash command). The listing shows the name and description. This is why descriptions matter for users, not just for auto-loading.
+Most clients list available skills alongside other slash commands — each skill *is* a slash command. In Claude Code, `/skills` lists them (press `t` to sort by context cost) and `/skill-doctor` shows which ones you never use. The listing shows the name and description. This is why descriptions matter for users, not just for auto-loading.
 
 ### 6.2 Autocomplete
 
@@ -440,11 +447,12 @@ The skill that stalls at Draft is the most common kind. The investment to reach 
 
 Skills are cheap to load (just inject text into the context). The cost shows up in:
 
-- **Context window usage.** A 5000-token skill body burns tokens on every turn while loaded. Keep skills tight; reference external files rather than embedding them.
+- **Always-on listing cost.** Every skill's name and description sit in context on every turn, used or not. In Claude Code the listing is budgeted at ~1% of the context window; overflow drops the least-used skills' descriptions first. Prune skills nobody uses.
+- **Context window usage.** An invoked skill's body stays in the conversation for the rest of the session (and is re-attached after compaction, capped at 5,000 tokens per skill). Keep skills tight; reference external files rather than embedding them.
 - **Tool calls.** If the skill instructs the model to read 20 files upfront, that's 20 tool calls before any real work. Use targeted reads.
 - **Sub-agent dispatches.** Each sub-agent is a fresh context — paid for. Don't dispatch sub-agents for trivial work.
 
-Bias: keep skill bodies under 500 lines. Push reference material to `references/` files the model reads on demand. The skill body is the procedure; the references are the data.
+Bias: keep `SKILL.md` under 500 lines (the spec's recommendation, with the body under ~5,000 tokens). Push reference material to `references/` files the model reads on demand, one level deep from `SKILL.md`. The skill body is the procedure; the references are the data.
 
 ---
 
@@ -458,10 +466,13 @@ Before merging or publishing a skill:
 - [ ] Body is structured as a procedure, not exposition.
 - [ ] Steps are concrete and actionable.
 - [ ] Bundled assets referenced from body (not embedded inline).
-- [ ] `allowed-tools` is set explicitly and narrowly.
+- [ ] `name` matches the folder name and the spec's naming rules.
+- [ ] `allowed-tools` lists only narrow, intentional pre-approvals (or is omitted).
+- [ ] Side-effecting skills set `disable-model-invocation: true` (Claude Code).
+- [ ] Non-spec data lives under `metadata`, not as top-level fields.
 - [ ] Anti-patterns / "do not do" guidance included.
 - [ ] Verification step at end ("how do I know it worked?").
-- [ ] Versioned if distributed via plugin.
+- [ ] Versioned (`metadata.version`, plugin version, or git tags) if distributed.
 - [ ] Tested by someone other than the author.
 - [ ] Listed in the team / project's skill catalog.
 
@@ -478,9 +489,10 @@ If you can't honestly tick most of these, the skill isn't ready.
 
 ### External
 
-- Anthropic Claude Code documentation, Skills section.
-- Skill examples shipped with the Claude Code distribution — read them; the conventions are visible.
-- Plugin registries (Anthropic, community) for inspiration.
+- [Agent Skills specification](https://agentskills.io/specification) and its [best practices](https://agentskills.io/skill-creation/best-practices) — the open standard.
+- [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills) — Claude Code's locations, extensions, and troubleshooting.
+- [anthropics/skills](https://github.com/anthropics/skills) — Anthropic's example skills, including `skill-creator`.
+- Plugin marketplaces (Anthropic's `claude-plugins-official`, community) for inspiration.
 
 ---
 
@@ -490,22 +502,22 @@ If you can't honestly tick most of these, the skill isn't ready.
 A: Conceptually yes — the body can instruct the model to invoke `/other-skill`. In practice, prefer composing skills via shared `references/` files rather than chained invocations, because chained skill loads compound context cost.
 
 **Q: How big can a skill body be?**
-A: Technically as big as the context window allows. Practically: keep it under 500 lines. If it's growing past that, you have a kitchen-sink skill and should split it.
+A: Technically as big as the context window allows. Practically: keep `SKILL.md` under 500 lines. If it's growing past that, you have a kitchen-sink skill and should split it — or move reference material to `references/`. In Claude Code, only the first 5,000 tokens survive a compaction, so put the critical instructions first.
 
 **Q: Do skills work across Claude Code, the API, and other clients?**
-A: The skill format (folder + SKILL.md + assets) is reasonably portable but the loader and metadata schema vary. Claude Code is the reference implementation. Check your client's docs for the exact frontmatter fields supported.
+A: Yes, if you stay within the open standard: folder + `SKILL.md` with only `name`, `description`, `license`, `compatibility`, `metadata`, and `allowed-tools`. claude.ai uploads and the Skills API reject other fields outright. Claude Code accepts the spec fields plus its extensions, and Claude Code-only body features (such as `` !`command` `` dynamic context injection) don't run in claude.ai or the API.
 
 **Q: Should skills do their work directly or always dispatch to sub-agents?**
 A: Direct is fine and often preferable. Dispatch to sub-agents only when you need a fresh context, parallel execution, or a different model.
 
 **Q: Can a skill load conditionally based on the user's input?**
-A: Auto-loading is the model's decision based on the description. You don't get programmatic conditional loading — the description is the condition.
+A: Auto-loading is the model's decision based on the description. Claude Code adds one programmatic condition: `paths:` globs restrict auto-loading to sessions where Claude is working on matching files. Beyond that, the description is the condition.
 
 **Q: How do I test a skill?**
-A: Invoke it explicitly with a representative task. Verify the output. Then disable explicit invocation and verify auto-loading triggers on the right phrases (you'll need to test in a fresh conversation). Repeat for a handful of cases.
+A: Invoke it explicitly with a representative task. Verify the output. Then verify auto-loading triggers on the right phrases in a fresh conversation, and stays quiet on near-misses. For repeatable measurement, use Anthropic's `skill-creator` skill (which runs evals) or, for skills shipped in a Claude Code plugin, `claude plugin eval` with a `tool_used: Skill` grader. The [agentskills.io evaluation guide](https://agentskills.io/skill-creation/evaluating-skills) covers eval-driven iteration.
 
 **Q: My skill works for me but not for my colleague. Why?**
-A: Most common cause: their environment is different (different tools available, different files in expected locations). Second most common: their version of the client uses different metadata field names. Third: the description loads for them on unrelated requests, polluting their context.
+A: Most common cause: their environment is different (different tools available, different files in expected locations). Second: they have a *personal* skill with the same name, which beats your project skill in Claude Code. Third: their client is older or different and doesn't support a field you rely on. Fourth: the description loads for them on unrelated requests, polluting their context.
 
 ---
 

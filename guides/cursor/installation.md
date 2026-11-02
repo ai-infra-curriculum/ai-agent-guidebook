@@ -1,6 +1,6 @@
 # Installing Cursor
 
-How to install Cursor on macOS, Windows, and Linux, import your VS Code setup, sign in, and choose a pricing tier.
+How to install Cursor on macOS, Windows, and Linux, import your VS Code setup, sign in, choose a plan, and get the mobile and web surfaces.
 
 ---
 
@@ -10,7 +10,8 @@ How to install Cursor on macOS, Windows, and Linux, import your VS Code setup, s
 - [Download and Install](#download-and-install)
 - [First Run: Import from VS Code](#first-run-import-from-vs-code)
 - [Sign-In and Account Creation](#sign-in-and-account-creation)
-- [Pricing Tiers](#pricing-tiers)
+- [Plans and Pricing](#plans-and-pricing)
+- [Mobile, Web, and iPad](#mobile-web-and-ipad)
 - [Extensions and the Open VSX Registry](#extensions-and-the-open-vsx-registry)
 - [Updating and Channels](#updating-and-channels)
 - [Common Install Issues](#common-install-issues)
@@ -96,24 +97,40 @@ Subscription, usage, and team settings are managed in your account dashboard at 
 
 ---
 
-## Pricing Tiers
+## Plans and Pricing
 
-Cursor moved to a usage-based model in 2025: every paid plan includes a pool of model usage, and **on-demand (usage-based) billing** lets you continue past the included amount, billed in arrears. The **Auto** model and Cursor's first-party **Composer** model draw from a separate, more generous pool than frontier third-party models.
+On **October 12, 2026**, Cursor became part of **The X Subscription**, a single subscription that bundles Cursor with xAI's Grok products and X Premium. Paid plans share one usage pool for Cursor and Grok models across Agent, CLI, cloud agents, and the Grok apps; the pool **refreshes weekly**. Third-party models (Claude, GPT, Gemini, …) are not in the pool — on Premium and above they bill at API list price from prepaid credit (top-ups), with optional spending caps.
 
-Current plans (verify exact figures at <https://cursor.com/pricing>):
+Current plans for new signups (monthly, excluding tax — verify at <https://cursor.com/pricing>):
 
-| Plan | Price | Includes |
-|------|-------|----------|
-| **Hobby** | Free | Limited Agent requests, limited Tab completions; no credit card required |
-| **Pro** | $20/mo | Extended Agent limits, access to frontier models, MCPs/skills/hooks, cloud agents, Bugbot (on usage-based billing) |
-| **Pro+** | $60/mo | Everything in Pro with a larger included usage allowance |
-| **Ultra** | $200/mo | Everything in Pro with the largest allowance — includes API agent usage plus generous Auto and Composer usage |
-| **Teams** | $40/user/mo | Centralized billing/admin, team rule/skill/plugin marketplace, agentic code review with Bugbot, shared team context, usage analytics, team-wide privacy mode, SAML/OIDC SSO |
-| **Enterprise** | Custom | Everything in Teams plus pooled usage, invoice/PO billing, SCIM, access controls (repo/model/MCP), auto-run/browser/network controls, audit logs, AI code tracking API, priority support |
+| Plan | Price | Included usage | Highlights |
+|------|-------|----------------|------------|
+| **Free** | $0 | Limited | Agent and Chat with limited usage; no third-party models |
+| **Plus** | $8/mo | Base | Cursor's own models (Grok, Composer) only; no Auto, cloud agents, or third-party models |
+| **Premium** | $30/mo | 4x Plus | Adds cloud agents, Automations, Origin code hosting, Bugbot, third-party models at API list price |
+| **Super** | $100/mo | 15x Plus | Everything in Premium plus priority model access at peak times |
+| **Ultra** | $200/mo | 50x Plus | Everything in Super plus earliest access to new products and models |
+| **Teams** | $30, $100, or $200 per seat/mo | Matches the seat's tier | Team marketplace (rules, skills, plugins), centralized billing/admin, SAML/OIDC SSO, usage analytics, team-wide privacy settings |
+| **Enterprise** | Custom | Pooled | Invoice/PO billing, SCIM, spend controls, audit logs, service accounts, repo/model/MCP access controls, priority support |
 
-<!-- needs-research: The exact included-usage dollar amounts per tier (beyond Ultra's stated API agent usage) and the Pro+ allowance multiple are not consistently documented on the public pricing page. Confirm current included amounts at https://cursor.com/pricing before quoting specifics. -->
+Annual billing is available for the individual tiers ($80, $300, $1,000, and $2,000 per year respectively).
 
-Sources: [Pricing](https://cursor.com/pricing), [Models & pricing](https://cursor.com/docs/models-and-pricing), [Clarifying our pricing (June 2025)](https://cursor.com/blog/june-2025-pricing).
+**Existing customers:** Hobby, Start (India), Pro, Pro+, Ultra, and Teams Standard/Premium seats continue for existing customers, who can keep their plan or switch from account billing settings (the switch option was rolled out gradually after the announcement). Legacy plans keep their two monthly pools (Cursor Models and Other Models) and on-demand usage instead of top-ups, and current Cursor plan holders keep their included third-party usage until they switch. The old Cursor Ultra plan is no longer offered to new signups.
+
+> **Note:** The X Subscription changes how third-party model usage is paid for. If your team relies on Claude or GPT models inside Cursor, compare the cost of API-list-price billing against your legacy plan before switching.
+
+Sources: [Pricing](https://cursor.com/pricing), [Pricing docs](https://cursor.com/docs/account/pricing), [Introducing The X Subscription (forum)](https://forum.cursor.com/t/introducing-the-x-subscription/174450).
+
+---
+
+## Mobile, Web, and iPad
+
+Beyond the desktop editor:
+
+- **Web** — <https://cursor.com/agents> lets you start and manage cloud agents from any browser. On Android, install it as a PWA from Chrome.
+- **iOS and iPad** — the Cursor app (all paid plans) launches cloud agents, reviews artifacts and PRs, and can **Remote Control** agents running on your own computer. Remote Control is on by default except for Enterprise orgs, where admins enable it under **Org settings → Security and identity → Remote control**. Your computer must stay on and online; a "Keep this computer awake" option is in desktop settings.
+
+Sources: [Cloud Agents](https://cursor.com/docs/cloud-agent), [Changelog](https://cursor.com/changelog).
 
 ---
 
@@ -164,7 +181,7 @@ Tab, Agent, and indexing require network access to Cursor's backend. Check your 
 
 ## Next Steps
 
-- Learn the four core surfaces in [usage.md](usage.md): Tab, Inline Edit, Agent, and Chat.
+- Learn the core surfaces in [usage.md](usage.md): Tab, Inline Edit, Agent modes, the Agents Window, cloud agents, and the CLI.
 - Set up project conventions in [rules-and-context.md](rules-and-context.md).
 - Wire up external tools in [mcp-servers.md](mcp-servers.md).
 - Read [best-practices.md](best-practices.md) before turning the agent loose on a real repo.
@@ -183,5 +200,5 @@ Tab, Agent, and indexing require network access to Cursor's backend. Check your 
 
 ---
 
-**Last Updated**: 2026-06-16
+**Last Updated**: 2026-10-21
 </content>

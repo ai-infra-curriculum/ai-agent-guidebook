@@ -4,6 +4,8 @@ A practical guide to writing skills that actually work. Covers layout, frontmatt
 
 This document is operational. By the end, you'll have shipped a working skill or have a clear understanding of why your draft isn't working.
 
+Last verified: 2026-10 (against the [Agent Skills specification](https://agentskills.io/specification) and [Claude Code skills docs](https://code.claude.com/docs/en/skills)).
+
 ---
 
 ## 1. Before You Write
@@ -61,11 +63,11 @@ Conventions:
 
 - **`SKILL.md`** is the entry point. Required.
 - **`references/`** holds Markdown the body refers to. Loaded on demand.
-- **`templates/`** holds file templates the skill copies and customizes.
+- **`templates/`** holds file templates the skill copies and customizes. (The spec's own convention for static resources is `assets/`.)
 - **`scripts/`** holds runnable helpers. The skill body invokes them.
 - **`examples/`** holds worked input/output pairs. Optional but valuable.
 
-There's no enforcement of these names. They're just conventions that make skill folders easier to navigate.
+There's no enforcement of these names. The spec recommends `scripts/`, `references/`, and `assets/`; the rest are conventions that make skill folders easier to navigate. Keep references one level deep from `SKILL.md`.
 
 ---
 
@@ -85,33 +87,31 @@ description: |
   Python, or Go project. Triggers: user mentions `npm audit`, `pip-audit`,
   `govulncheck`, "check vulnerabilities", or modifies a dependency lockfile.
   Skip for projects that don't have a lockfile.
-version: 1.0.0
-allowed-tools:
-  - Read
-  - Bash
-  - Grep
-  - Edit
+compatibility: Needs the matching audit CLI (npm, pip-audit, or govulncheck) on PATH
+allowed-tools: Read Bash(npm audit *) Bash(pip-audit *) Bash(govulncheck *)
 metadata:
+  version: "1.0.0"
   category: security
-  tags: [audit, security, dependencies, npm, pip, go]
-  author: platform-team
+  tags: "audit, security, dependencies"
+  owner: platform-team
 ---
 ```
 
-**Required:**
+**Required (spec):**
 
-- `name` — verb-noun, lowercase, hyphenated.
-- `description` — what + when, as discussed in the guide.
+- `name` — lowercase letters, digits, and single hyphens; 1–64 characters; no leading/trailing hyphen; **must match the folder name**. Verb-noun reads best.
+- `description` — what + when, as discussed in the guide; 1–1,024 characters.
 
-**Strongly recommended:**
+**Optional (spec):**
 
-- `allowed-tools` — a **top-level** frontmatter field (not nested under `metadata:`, where it would be inert and unenforced); narrow as possible.
-- `version` — semver; bump on behavior changes.
-- `category` and `tags` — for discoverability.
+- `allowed-tools` — a **top-level** field (nested under `metadata:` it is inert). It **pre-approves** the listed tools; it does not restrict anything. See [Section 6](#6-the-allowed-tools-decision).
+- `compatibility` — environment requirements, ≤500 characters.
+- `license` — a license name or bundled license file.
+- `metadata` — a map of string keys to **string** values; the home for `version`, `category`, tags, owner, and anything else you track.
 
-**Optional:**
+**Optional (Claude Code extensions):** `disable-model-invocation`, `user-invocable`, `when_to_use`, `argument-hint`, `arguments`, `paths`, `context`, `agent`, `background`, `model`, `effort`, `hooks`, `disallowed-tools`, `shell`. These are ignored or rejected by other clients.
 
-- `author`, `requires`, `inputs`, custom fields the client supports.
+**Don't** invent top-level fields (`version`, `requires`, `inputs`, `tags`, `triggers`). Claude Code silently ignores them, so they do nothing; claude.ai uploads and the Skills API reject the whole skill with `Unexpected key(s) in SKILL.md frontmatter`.
 
 ### 3.2 Writing the description
 
@@ -287,7 +287,7 @@ In the body:
 
 ### 5.3 Scripts
 
-Helper programs. Run by the model via Bash.
+Helper programs. Run by the model via Bash. In Claude Code, reference them as `${CLAUDE_SKILL_DIR}/scripts/<name>` so the path resolves to the skill's own folder whatever the working directory is — and so a matching `allowed-tools` rule can pre-approve exactly that script.
 
 ```
 my-skill/
@@ -300,7 +300,12 @@ my-skill/
 In the body:
 
 ```markdown
-4. Parse the audit output using `scripts/parse_npm_audit.py` and store the result.
+4. Parse the audit output with `python3 ${CLAUDE_SKILL_DIR}/scripts/parse_npm_audit.py`
+   and store the result.
+```
+
+```yaml
+allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/parse_npm_audit.py *)
 ```
 
 Scripts should be:
@@ -336,20 +341,25 @@ Examples are particularly powerful for output formatting consistency.
 
 ## 6. The `allowed-tools` Decision
 
-Every skill should set `allowed-tools` (a top-level frontmatter field). This is defense-in-depth, not red tape.
+`allowed-tools` is a **pre-approval list**, not a sandbox. Per the spec it names "tools that are pre-approved to run"; in Claude Code, the listed tools run **without a permission prompt** during the turn that invokes the skill, while every unlisted tool remains available under your normal permission rules. An earlier version of this guide described the field as a restriction — that was wrong, and the difference is security-relevant: adding a tool here *removes* a human checkpoint.
 
-### 6.1 Start narrow
+### 6.1 Start with nothing
 
-Begin with the absolute minimum:
+Begin with **no** `allowed-tools`. The skill still works; you just approve tool calls as they come (or your permission mode handles them). Add an entry only when a specific, low-risk call is annoying to approve every time — and make it as narrow as the pattern syntax allows:
 
 ```yaml
-allowed-tools:
-  - Read
+# Good: exactly the commands the procedure runs
+allowed-tools: Read Bash(npm audit --json) Bash(${CLAUDE_SKILL_DIR}/scripts/verify.sh *)
+
+# Dangerous: pre-approves any shell command, any file write
+allowed-tools: Bash Write
 ```
 
-Add tools only when the procedure provably needs them.
+### 6.2 Restricting is a different field
 
-### 6.2 Why each tool is a risk
+To keep a skill from using a tool at all, Claude Code has `disallowed-tools` (removed from the pool while the skill is active). For hard guarantees across every skill and prompt, use permission **deny** rules or a `PreToolUse` hook. Organizations can make Claude Code ignore skills' `allowed-tools` entirely with the managed `allowManagedPermissionRulesOnly` setting.
+
+### 6.3 Why each tool is a risk to pre-approve
 
 | Tool | Risk |
 |------|------|
@@ -359,11 +369,13 @@ Add tools only when the procedure provably needs them.
 | `WebFetch`, `WebSearch` | Exfiltration channel; supply chain |
 | MCP server tools | Whatever that server can do |
 
-For each tool you add to `allowed-tools`, ask: "If this skill were prompt-injected, what's the worst it could do?" If the answer is "anything," scope the tool more narrowly or push the dangerous step out of this skill into a more careful one.
+For each tool you add to `allowed-tools`, ask: "If this skill were prompt-injected, what's the worst it could do without anyone being asked?" If the answer is "anything," scope the pattern more narrowly or leave the tool off the list so a human sees each call.
 
-### 6.3 Composing with hooks
+Note for reviewers: in Claude Code, a repository skill's `allowed-tools` applies even in a `claude -p` run in a folder you've never trusted. Review checked-in skills like you'd review CI scripts.
 
-Some clients support hooks that gate tool calls regardless of skill metadata. A PreToolUse hook that blocks `Write` to certain paths catches mistakes the skill author didn't anticipate. Hooks and `allowed-tools` are complementary layers.
+### 6.4 Composing with hooks
+
+Hooks gate tool calls regardless of skill metadata. A `PreToolUse` hook that blocks `Write` to certain paths catches mistakes the skill author didn't anticipate. Claude Code skills can also declare their own `hooks` in frontmatter, active from invocation until the session ends — the right place for a rule that must hold every time the skill runs.
 
 ---
 
@@ -399,7 +411,11 @@ If the skill is project- or plugin-scoped, test it in someone else's environment
 
 ### 7.5 Regression test
 
-When you iterate, keep a small set of "this should work" cases and re-test on every change. Manual is fine for small skill libraries; automate when the count exceeds ~10.
+When you iterate, keep a small set of "this should work" cases and re-test on every change. Manual is fine for small skill libraries; automate when the count exceeds ~10. Tools that exist for this:
+
+- Anthropic's **`skill-creator`** skill (in [anthropics/skills](https://github.com/anthropics/skills) and the official plugin marketplace) drafts skills and runs evals on them.
+- For skills shipped in a Claude Code plugin, **`claude plugin eval`** (v2.1.269+) runs a suite of cases, scores them, and by default reruns each case *without* the plugin so you see what the skill contributes. A `tool_used: Skill` grader measures triggering.
+- `claude plugin validate .claude/skills` catches `SKILL.md` frontmatter that doesn't parse; the spec's `skills-ref validate ./my-skill` checks naming and field rules.
 
 ---
 
@@ -441,7 +457,7 @@ When a skill outgrows its initial scope.
 ```
 my-plugin/
 ├── .claude-plugin/
-│   └── plugin.json              # plugin manifest
+│   └── plugin.json              # plugin manifest (optional)
 ├── README.md                    # docs for installers
 ├── skills/
 │   ├── audit-dependencies/
@@ -453,7 +469,7 @@ my-plugin/
 └── hooks/                       # optional bundled hooks
 ```
 
-The manifest at `.claude-plugin/plugin.json` declares the plugin's identity. The `skills/`, `agents/`, and `hooks/` directories are **auto-discovered** by the client loader — you don't enumerate skills in the manifest.
+The manifest at `.claude-plugin/plugin.json` declares the plugin's identity; it's optional (without it, the name comes from the marketplace entry or directory), and `name` is its only required key. The `skills/`, `agents/`, and `hooks/` directories sit at the plugin root (not inside `.claude-plugin/`) and are **auto-discovered** — you don't enumerate skills in the manifest. Plugin skills are invoked as `/<plugin-name>:<skill-name>`. Run `claude plugin validate` before publishing.
 
 ### 9.2 Manifest
 
@@ -474,8 +490,9 @@ The manifest at `.claude-plugin/plugin.json` declares the plugin's identity. The
 
 Plugins are distributed via marketplaces — a marketplace is just a repo with a marketplace manifest listing plugins. Options, from simplest to most controlled:
 
-- **Public marketplace repo.** Users run `/plugin marketplace add org/marketplace-repo`, then `/plugin install platform-team-toolkit@marketplace-name`. Anthropic's and community marketplaces are discoverable.
-- **Private / internal marketplace.** Same mechanism on a private repo. Controlled access, internal versioning.
+- **Public marketplace repo.** Users run `/plugin marketplace add org/marketplace-repo` (GitHub `owner/repo`, any git URL, or a local path; append `#ref` to pin a branch or tag), then `/plugin install platform-team-toolkit@marketplace-name`. Anthropic's official marketplace (`claude-plugins-official`) is added automatically the first time you start an interactive session.
+- **Private / internal marketplace.** Same mechanism on a private repo. Controlled access, internal versioning. Marketplaces can also serve plugins as zip archives with an optional SHA-256 pin, and orgs can allowlist marketplaces through managed settings.
+- **Single skill, no plugin.** The skill folder itself is portable across tools that implement the Agent Skills standard; Claude Code users can also enable skills on their claude.ai account to use them in cloud sessions.
 
 ### 9.4 Documentation for installers
 
@@ -492,7 +509,7 @@ A plugin README should cover:
 
 ## 10. Versioning
 
-Semantic versioning works:
+Record the version where tools can read it: `metadata.version` in `SKILL.md` (a string, per the spec) and/or the plugin's `version` in `plugin.json`. Semantic versioning works:
 
 - **Patch.** Bug fixes; no behavior change; no description change.
 - **Minor.** Additive features; new optional behaviors; backward-compatible.
@@ -544,7 +561,9 @@ A list to scan against your draft.
 - **Description is vague.** Already covered, still worth repeating.
 - **Body is exposition, not procedure.** Reads like a wiki, doesn't execute.
 - **No verification step.** Skill might have succeeded; might not have.
-- **`allowed-tools` is missing or set to "all".** Audit failure.
+- **`allowed-tools` treated as a restriction.** It pre-approves; bare `Bash` or `Write` in it removes the human checkpoint. Audit failure.
+- **Invented top-level fields** (`version`, `requires`, `triggers`). Ignored by Claude Code, rejected by claude.ai uploads.
+- **`name` doesn't match the folder.** Violates the spec; confusing in Claude Code, where `name` sets the command.
 - **Skill assumes the wrong environment.** Hardcoded paths, missing tools.
 - **Skill tries to be general-purpose.** Loaded too often, gives bad answers.
 - **No examples.** Model doesn't know what good output looks like.
@@ -630,18 +649,15 @@ description: |
   `govulncheck`, "check vulnerabilities", "security scan dependencies", or
   modifies a dependency lockfile in a way that needs validation. Skip for
   greenfield projects without dependencies installed yet.
-version: 1.0.0
-allowed-tools:
-  - Read
-  - Bash
-  - Grep
+allowed-tools: Read Bash(npm audit --json) Bash(pnpm audit --json) Bash(govulncheck -json *)
+disallowed-tools: Edit Write
 metadata:
+  version: "1.0.0"
   category: security
-  tags: [audit, security, dependencies, npm, pip, go, yarn, pnpm]
 ---
 ```
 
-Note `Edit` is *not* in `allowed-tools` — this skill reports, it doesn't modify code. Upgrades happen in a separate workflow.
+The audit commands are pre-approved because they're read-only and run on every invocation; anything else (e.g. `pip-audit` piped through `poetry export`) still prompts. `disallowed-tools` (a Claude Code extension) removes `Edit` and `Write` while the skill is active — this skill reports, it doesn't modify code. Upgrades happen in a separate workflow.
 
 ### Step 6: Test
 
@@ -687,12 +703,13 @@ Unhealthy skills should be updated or removed. Stale skills mislead.
 Before merging a new skill:
 
 - [ ] Folder layout follows conventions (`SKILL.md` at root; assets in `references/`, `templates/`, `scripts/`, `examples/`).
-- [ ] Frontmatter has `name`, `description`, `version`, and top-level `allowed-tools`.
+- [ ] Frontmatter has `name` (matching the folder) and `description`; any version/owner data is under `metadata`.
+- [ ] `allowed-tools`, if present, is top-level and lists only narrow pre-approvals.
 - [ ] Description includes what, when, and when-not (if relevant).
 - [ ] Body has Procedure with numbered concrete steps.
 - [ ] Body has Verification section.
 - [ ] Body has Anti-Patterns section if relevant.
-- [ ] `allowed-tools` is narrow.
+- [ ] Side-effecting skills set `disable-model-invocation: true` (Claude Code).
 - [ ] Tested functionally on a representative case.
 - [ ] Tested for correct auto-loading.
 - [ ] Tested for not auto-loading on unrelated requests.
@@ -710,8 +727,9 @@ Before merging a new skill:
 
 ### External
 
-- Claude Code documentation, Skills section.
-- Plugin development docs for your target distribution channel.
+- [Agent Skills specification](https://agentskills.io/specification), [best practices](https://agentskills.io/skill-creation/best-practices), and [using scripts in skills](https://agentskills.io/skill-creation/using-scripts).
+- [Claude Code: Extend Claude with skills](https://code.claude.com/docs/en/skills).
+- [Claude Code: Create plugins](https://code.claude.com/docs/en/plugins/create) and [Test plugins with evals](https://code.claude.com/docs/en/plugin-evals).
 
 ---
 

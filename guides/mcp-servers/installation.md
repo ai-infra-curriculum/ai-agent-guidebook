@@ -2,7 +2,7 @@
 
 How to install Model Context Protocol servers across the major hosts, the three main packaging models (npm, uvx, Docker), where each host stores config, how to manage secrets, and how to verify a server end-to-end with the Inspector.
 
-> **Last updated**: 2026-06-11 · Tracks MCP spec **2025-11-25**.
+> **Last updated**: 2026-10-21 · Tracks MCP spec **2026-07-28**.
 
 ---
 
@@ -29,7 +29,7 @@ How to install Model Context Protocol servers across the major hosts, the three 
 
 A pre-flight checklist that prevents most "it just doesn't work" reports:
 
-1. **Pin runtimes.** Node ≥ 22 (24 is the active LTS; Node 20 hit end-of-life in April 2026), Python ≥ 3.11 (3.14 is current), `uv` ≥ 0.5.0, Docker ≥ 24. MCP SDKs drop support for old runtimes faster than most ecosystems.
+1. **Pin runtimes.** Node ≥ 22 (24 is the active LTS; Node 20 hit end-of-life in April 2026), Python ≥ 3.11 (required by the Python SDK v2), `uv` ≥ 0.5.0, Docker ≥ 24. MCP tooling drops old runtimes fast: the official TypeScript reference servers (v2.0.0, October 2026) require **Node 24**, and Inspector v2 requires Node ≥ 22.19.0.
 2. **Check the server's transport.** stdio servers need to be spawnable as a subprocess; HTTP servers need a reachable URL. Don't paste an HTTP config into a stdio slot.
 3. **Read the server's README.** Required env vars (tokens, connection strings, project IDs), scopes for OAuth tokens, and any "destructive ops require flag X" notes live there.
 4. **Know your host's config path.** Different hosts read different files; see [Per-host installation](#per-host-installation).
@@ -58,7 +58,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 ```json
 {
   "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem@2026.1.14", "/path/to/workspace"]
+  "args": ["-y", "@modelcontextprotocol/server-filesystem@2.0.0", "/path/to/workspace"]
 }
 ```
 
@@ -294,24 +294,21 @@ Note Zed uses `context_servers` rather than `mcpServers` for historical reasons 
 
 ### Custom clients (SDK)
 
-If you're building an in-house host, the SDKs handle all the wire details. Minimal TypeScript client connecting to a local stdio server:
+If you're building an in-house host, the SDKs handle all the wire details — including protocol-version negotiation: v2 clients try 2026-07-28 and fall back to the legacy `initialize` handshake on older servers. Minimal TypeScript (SDK v2) client connecting to a local stdio server:
 
 ```ts
-// package.json: "@modelcontextprotocol/sdk": "^1.29.0"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+// npm install @modelcontextprotocol/client
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-const transport = new StdioClientTransport({
-  command: "npx",
-  args: ["-y", "@modelcontextprotocol/server-filesystem", process.cwd()],
-});
+const client = new Client({ name: "my-host", version: "0.1.0" });
 
-const client = new Client(
-  { name: "my-host", version: "0.1.0" },
-  { capabilities: {} }
+await client.connect(
+  new StdioClientTransport({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", process.cwd()],
+  }),
 );
-
-await client.connect(transport);
 
 const { tools } = await client.listTools();
 console.log("Available tools:", tools.map((t) => t.name));
@@ -325,31 +322,28 @@ console.log(result.content);
 await client.close();
 ```
 
-Python equivalent:
+Python (SDK v2) equivalent — `Client` picks the transport from its argument (a URL string means Streamable HTTP; `StdioServerParameters` launches a subprocess):
 
 ```python
-# pip install "mcp>=1.27.0"
+# pip install "mcp>=2"
 import asyncio
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import Client, StdioServerParameters
 
 async def main():
     params = StdioServerParameters(
         command="uvx",
         args=["mcp-server-git", "--repository", "."],
     )
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            print([t.name for t in tools.tools])
-            result = await session.call_tool("git_status", {})
-            print(result.content)
+    async with Client(params) as client:
+        tools = await client.list_tools()
+        print([t.name for t in tools.tools])
+        result = await client.call_tool("git_status", {"repo_path": "."})
+        print(result.content)
 
 asyncio.run(main())
 ```
 
-For Streamable HTTP servers, swap the transport: `StreamableHTTPClientTransport` (TS) or `streamablehttp_client` (Python).
+For Streamable HTTP servers: `StreamableHTTPClientTransport` (TS, from `@modelcontextprotocol/client`) or `Client("https://…/mcp")` (Python). On v1 SDKs (`@modelcontextprotocol/sdk`, `mcp<2`) the imports differ and Python uses `ClientSession` + `session.initialize()`; see the SDK migration guides.
 
 ---
 
@@ -394,7 +388,7 @@ Some servers accept secrets via a helper command instead of an env var:
 
 ### 3. Hosted MCP servers with OAuth
 
-The cleanest path: no token in your config at all. Hosted MCP servers (GitHub's, Sentry's, Stripe's, Linear's, Notion's, Atlassian's) use OAuth 2.1 — on first connect the host opens a browser, you authorize, and the host stores the resulting token in its keychain. The 2025-06-18 spec revision added Resource Indicators (RFC 8707), so tokens are scoped to a specific MCP server URL and can't be replayed against unrelated APIs.
+The cleanest path: no token in your config at all. Hosted MCP servers (GitHub's, Sentry's, Stripe's, Linear's, Notion's, Atlassian's) use OAuth 2.1 — on first connect the host opens a browser, you authorize, and the host stores the resulting token in its keychain. The 2025-06-18 spec revision added Resource Indicators (RFC 8707), so tokens are scoped to a specific MCP server URL and can't be replayed against unrelated APIs. The 2026-07-28 revision added issuer (`iss`) validation against authorization-server mix-up attacks, binds stored client credentials to the issuing authorization server, and makes Client ID Metadata Documents the preferred client registration path (Dynamic Client Registration is deprecated) — mostly invisible to you as a user, but it explains why some older CLI clients hit `redirect_uri` errors.
 
 ```json
 {
@@ -410,7 +404,7 @@ The cleanest path: no token in your config at all. Hosted MCP servers (GitHub's,
 - **Hard-coded tokens** in a config file that's tracked by git. `git secrets`, `gitleaks`, and `trufflehog` exist for a reason — wire them into pre-commit.
 - **Shared team tokens** instead of per-developer tokens. You lose attribution in the underlying service's audit log.
 - **Over-scoped tokens** (e.g. `repo` when `public_repo` would do, full `admin:org` instead of `read:org`). Scope down to the minimum the agent needs.
-- **Long-lived PATs** when fine-grained, expiring tokens are available. GitHub's fine-grained PATs and Stripe's restricted keys are the right defaults now.
+- **Long-lived PATs** when fine-grained, expiring tokens are available. GitHub's fine-grained PATs are the right default; for Stripe's MCP server use OAuth or an *agent* API key (Stripe stops accepting full secret keys and untagged restricted keys on MCP from December 2026).
 
 ---
 
@@ -430,16 +424,12 @@ npx @modelcontextprotocol/inspector \
 # Run against a Streamable HTTP server (CLI mode)
 npx @modelcontextprotocol/inspector \
   --cli https://api.githubcopilot.com/mcp/ \
-  --transport http
+  --transport http --method tools/list
 ```
 
-The Inspector opens a UI at `http://localhost:6274` (proxy server on 6277). The UI shows five tabs that map directly to the protocol surface:
+Inspector **v2** (the npm `latest` tag since its 2.0 rewrite; v1 is security-fixes-only at `@v1-latest`) runs a single web server on `http://localhost:6274` — the separate proxy on 6277 is gone — plus `--cli` and a new `--tui` mode. It requires Node ≥ 22.19.0, keeps a server catalog in `~/.mcp-inspector/mcp.json`, and starts an extra sandbox listener (default 6275) for its MCP Apps tab; forward that port too if you run the Inspector in Docker or over SSH. Without `--transport`, v2 infers the transport only from an exact URL path suffix, so pass `--transport http` for URLs like `…/mcp/`. A failing CLI tool call now exits non-zero (`5`), which is what you want in CI.
 
-1. **Connect** — capability negotiation. Confirm protocol version and the server's advertised capabilities.
-2. **Resources** — list, read, and subscribe to resources.
-3. **Prompts** — list and invoke prompts with arguments.
-4. **Tools** — list tools, inspect schemas, invoke with sample inputs, view results.
-5. **Notifications & logs** — server-side log messages and progress updates.
+The UI maps directly to the protocol surface: connection and capabilities, resources, prompts, tools (schemas, invocation, results), and notifications/logs.
 
 A standard verification flow for a new server:
 
@@ -462,6 +452,7 @@ If the Inspector can't connect, the host won't either; debug here first.
 | `Connection closed` immediately after launch | Server crashed during init | Run the same command in a terminal. Often a missing env var or unsupported Node version. Tail the host's MCP log. |
 | Tools appear but every call returns "auth failed" | Token not being passed | Verify the env var is set in the *host's* environment (not just your shell). Confirm `${VAR}` substitution actually fired by hardcoding for a moment, then revert. |
 | Server initializes but `tools/list` returns empty | Server advertised tools capability but registers no tools | Almost always a server-side bug; file an issue. As a workaround pin to an earlier working version. |
+| A hosted server's old `/sse` URL returns `410 Gone` or stops working | Vendor retired the legacy HTTP+SSE endpoint (deprecated transport) | Switch to the vendor's Streamable HTTP `/mcp` URL — e.g. Cloudflare `/sse` → `/mcp`, Atlassian `v1/sse` → `v2/mcp`, Linear `/sse` → `/mcp`. |
 | Streamable HTTP returns 401 from a hosted server | OAuth flow never completed or token expired | Remove the server entry, re-add it, walk through the browser auth flow again. Check that your system clock is correct (OAuth is unforgiving about skew). |
 | Server works in Inspector but not in Claude Desktop | Different working directory or env between the two | Hosts usually launch servers from `$HOME` with a minimal env. Either pass everything explicitly in `env` or wrap the command in a small shell script that sets up the environment. |
 | `npx` re-downloads on every launch and it's slow | Cold cache | `npm install -g <pkg>` once, then point the config at the global install: `"command": "node", "args": ["/path/to/global/install/dist/index.js"]`. Or pre-warm the npx cache. |

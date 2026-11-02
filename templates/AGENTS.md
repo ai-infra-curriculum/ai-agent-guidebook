@@ -6,7 +6,7 @@ Design document for this project's multi-agent architecture: agent roles, respon
 
 ## What AGENTS.md Is — and Isn't
 
-`AGENTS.md` is the cross-tool **instructions file standard**. Claude Code, GitHub Copilot, Gemini CLI, OpenAI Codex, Cursor, and other coding agents read it as project memory/context — the same way they read `CLAUDE.md`, `.cursorrules`, or custom instructions. Everything in this template (agent roles, workflows, message formats) is design documentation that informs how the model approaches multi-agent work in your project.
+`AGENTS.md` is the cross-tool **instructions file standard**. OpenAI Codex, GitHub Copilot, Cursor, Gemini CLI / Antigravity, and other coding agents read it as project memory/context — the same way they read `CLAUDE.md`, `.cursor/rules/`, or custom instructions. (Claude Code's primary memory file is `CLAUDE.md`; check the Claude Code memory docs for how it picks up or imports `AGENTS.md`.) Everything in this template (agent roles, workflows, message formats) is design documentation that informs how the model approaches multi-agent work in your project.
 
 **This file does not register, configure, or define dispatchable agents.** In Claude Code, actual subagents live in `.claude/agents/*.md` — one file per agent, with YAML frontmatter:
 
@@ -24,7 +24,7 @@ by severity.
 
 - `name` — the identifier used to invoke the agent
 - `description` — tells Claude *when* to delegate to this agent
-- `tools` — optional allowlist; omit to inherit all tools
+- `tools` — optional allowlist; omit to inherit all tools. Optional `model` accepts `sonnet`, `opus`, `haiku`, `fable`, a full ID such as `claude-opus-5-5`, or `inherit`
 - The markdown body is the subagent's system prompt
 
 You can also create and manage subagents interactively with the `/agents` command. Project-level agents go in `.claude/agents/`; user-level agents in `~/.claude/agents/`.
@@ -966,7 +966,7 @@ Claude Code matches requests against each subagent's `description` and delegates
 
 ## Resources
 
-- [Claude Code Subagents Documentation](https://docs.claude.com/en/docs/claude-code/sub-agents)
+- [Claude Code Subagents Documentation](https://code.claude.com/docs/en/sub-agents)
 - [Multi-Agent Architecture Guide](../guides/agents-subagents/architecture.md)
 - [Orchestration Patterns](../guides/agents-subagents/orchestration.md)
 - [Agent Communication](../guides/agents-subagents/communication.md)
@@ -996,6 +996,6 @@ Claude Code matches requests against each subagent's `description` and delegates
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21
 
 **Related**: [CLAUDE.md](CLAUDE.md) for project configuration

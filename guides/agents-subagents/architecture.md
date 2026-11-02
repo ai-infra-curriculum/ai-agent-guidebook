@@ -66,7 +66,7 @@ flowchart TD
     Orchestrator --> Response([Response])
 ```
 
-A coordinator agent plans, delegates to specialist sub-agents, and aggregates their outputs. Each worker runs in its own context. This is the dominant pattern in production systems today (Claude Code's Task tool, LangGraph supervisor, CrewAI's hierarchical process, AutoGen GroupChat with a manager).
+A coordinator agent plans, delegates to specialist sub-agents, and aggregates their outputs. Each worker runs in its own context. This is the dominant pattern in production systems today (Claude Code's Agent tool — formerly called Task — LangGraph supervisor, CrewAI's hierarchical process, AutoGen GroupChat with a manager).
 
 **Use when:**
 - Tasks decompose cleanly into specialist roles.
@@ -323,7 +323,7 @@ Once agents make consequential tool calls (database writes, API calls with side 
 - Block or modify it based on policy.
 - Record a tamper-evident audit trail.
 
-This is the "guard" layer. Veriswarm.ai is one option here: a trust-infrastructure platform built around four primitives — Gate (real-time trust scoring), Guard (tool-call interception with policy enforcement), Passport (portable JWT credentials so the same agent can prove its identity across frameworks), and Vault (a hash-chained audit ledger). It exposes 65+ tools over MCP, ships a LangChain adapter and a guard proxy, and works across LangChain, CrewAI, AutoGen, and the Claude Code Agent SDK. Free tier exists for evaluation; enterprise tier adds SLAs and self-hosted deployment. If you're not using Veriswarm, you still need to solve the same four problems — typically with a homegrown combination of a policy engine (OPA), an API gateway (Envoy, Kong), and an append-only log. The architectural question is whether you build it or buy it; the requirement doesn't go away.
+This is the "guard" layer. Veriswarm.ai is one option here: a trust-infrastructure platform built around four primitives — Gate (real-time trust scoring), Guard (tool-call interception with policy enforcement), Passport (portable JWT credentials so the same agent can prove its identity across frameworks), and Vault (a hash-chained audit ledger). It exposes 65+ tools over MCP, ships a LangChain adapter and a guard proxy, and works across LangChain, CrewAI, AutoGen, and the Claude Agent SDK. Free tier exists for evaluation; enterprise tier adds SLAs and self-hosted deployment. If you're not using Veriswarm, you still need to solve the same four problems — typically with a homegrown combination of a policy engine (OPA), an API gateway (Envoy, Kong), and an append-only log. The architectural question is whether you build it or buy it; the requirement doesn't go away.
 
 ### 5.4 Cost Control
 
@@ -448,12 +448,12 @@ Example: a large platform where the top orchestrator routes by domain (finance, 
 
 How the canonical topologies map onto popular frameworks:
 
-| Topology | LangGraph | CrewAI | AutoGen | Claude Code Agent SDK |
+| Topology | LangGraph | CrewAI | AutoGen | Claude Agent SDK |
 |----------|-----------|--------|---------|----------------------|
 | Single-agent | Single node | Single Agent + Task | Single ConversableAgent | Single agent definition |
-| Hierarchical | Supervisor pattern | Hierarchical Process | GroupChat with manager | Orchestrator + sub-agents via Task tool |
+| Hierarchical | Supervisor pattern | Hierarchical Process | GroupChat with manager | Orchestrator + subagents via the Agent tool (formerly Task) |
 | Flat team | Custom graph with peer edges | Sequential Process with feedback | GroupChat with auto/round-robin speaker | Multiple agents sharing a thread |
-| Swarm | Parallel node fan-out | N/A (not a native fit) | Multiple agents with a dispatcher | Multiple parallel Task invocations |
+| Swarm | Parallel node fan-out | N/A (not a native fit) | Multiple agents with a dispatcher | Multiple parallel Agent-tool calls (background subagents) |
 
 None of these frameworks force you into one topology. They differ in how much they help you with state management, observability, and recovery. Evaluate on those axes, not on the topology vocabulary.
 

@@ -16,6 +16,8 @@ For each skill below:
 
 Skill names follow the `verb-noun` convention. Adapt names to your team's conventions if they differ.
 
+**Check what already ships first.** As of October 2026, Claude Code bundles skills and commands that cover several entries below — `/code-review` (alias `/review`), `/simplify`, `/security-review`, `/debug`, `/batch`, `/verify`, `/run`, `/loop`, `/doctor`, `/fewer-permission-prompts`, `/update-config`, `/dataviz`, and `/claude-api` — plus the `/deep-research` workflow. Run `/skills` to see what's in your session. A project skill with the same name *replaces* the bundled one, so name yours distinctly unless that's what you want. Anthropic's official plugin marketplace (`claude-plugins-official`) and the [anthropics/skills](https://github.com/anthropics/skills) repo are the first places to look for maintained versions.
+
 ---
 
 ## Category 1: Code Quality
@@ -28,7 +30,7 @@ Skills that make code review, refactoring, and testing faster and more consisten
 
 **Invoke when:** Before opening a PR; before requesting human review; when reviewing someone else's PR yourself.
 
-**Source:** Common in `pr-review-toolkit` plugins; see Anthropic's example plugins.
+**Source:** Bundled as `/code-review` in Claude Code (runs as a background agent with its own context). For more, the `code-review` and `pr-review-toolkit` plugins in `claude-plugins-official`.
 
 ---
 
@@ -58,7 +60,7 @@ Skills that make code review, refactoring, and testing faster and more consisten
 
 **Invoke when:** Implementing a new feature where you want true TDD discipline.
 
-**Source:** Available in the `tdd-workflows` plugin.
+**Source:** Write your own, or look for community TDD skills and plugins; vet them before adopting.
 
 ---
 
@@ -77,6 +79,8 @@ Skills that make code review, refactoring, and testing faster and more consisten
 **Does:** Reviews recently changed code and proposes simplifications: removing dead branches, replacing custom code with stdlib functions, collapsing redundant conditionals.
 
 **Invoke when:** After getting a feature working but before merging; during a tech-debt pass.
+
+**Source:** Bundled as `/simplify` in Claude Code (parallel review agents that apply fixes); also the `code-simplifier` plugin.
 
 ---
 
@@ -142,7 +146,7 @@ Skills that smooth the daily git / PR / commit cycle.
 
 **Invoke when:** Done with a chunk of work and ready to commit.
 
-**Source:** Ships in many commit-helper plugins.
+**Source:** The `commit-commands` plugin in `claude-plugins-official` (`/commit`, `/commit-push-pr`). Mark your own version `disable-model-invocation: true` so it only runs when you type it.
 
 ---
 
@@ -167,6 +171,8 @@ Skills that smooth the daily git / PR / commit cycle.
 **Does:** Reviews the project for newly-introduced patterns (new directories, new tools, new conventions) and updates `CLAUDE.md` to keep agent context current.
 
 **Invoke when:** Quarterly; after big restructurings.
+
+**Source:** The `claude-md-management` plugin; `/doctor` also audits CLAUDE.md for duplicated or derivable content.
 
 ---
 
@@ -352,6 +358,8 @@ Skills focused on safety and compliance.
 
 **Invoke when:** PR touches auth, payments, user data, or external inputs.
 
+**Source:** Built-in `/security-review` command (reviews your branch's diff); the `claude-security` plugin runs a deeper multi-agent scan.
+
 ---
 
 ### 7.2 `audit-dependencies`
@@ -408,11 +416,13 @@ Meta-skills: skills for building things with AI.
 
 ---
 
-### 8.3 `skill-create`
+### 8.3 `skill-creator`
 
-**Does:** Walks the user through creating a new skill following the conventions in [creating.md](creating.md). Generates the folder structure, frontmatter, and body skeleton.
+**Does:** Walks the user through creating a new skill, generates the folder structure, frontmatter, and body, and runs evals to measure whether it triggers and performs.
 
-**Invoke when:** Writing a new skill from scratch.
+**Invoke when:** Writing a new skill from scratch or tuning a description.
+
+**Source:** Anthropic's `skill-creator`, in [anthropics/skills](https://github.com/anthropics/skills) and as a plugin in `claude-plugins-official`.
 
 ---
 
@@ -421,6 +431,8 @@ Meta-skills: skills for building things with AI.
 **Does:** Creates an MCP server skeleton in the user's preferred language with sample tools, schemas, and a runnable entry point.
 
 **Invoke when:** Building a new MCP integration.
+
+**Source:** `mcp-builder` in [anthropics/skills](https://github.com/anthropics/skills); the `mcp-server-dev` plugin.
 
 ---
 
@@ -449,6 +461,8 @@ Skills that accelerate incident response.
 **Does:** Guides a structured debug session: state the symptom, form a hypothesis, design a minimal test, run, observe, iterate.
 
 **Invoke when:** Stuck on a bug after the obvious checks failed.
+
+**Note:** Claude Code's bundled `/debug` is different — it turns on debug logging and troubleshoots *Claude Code itself*.
 
 ---
 
@@ -500,15 +514,16 @@ Skills that move knowledge from heads to invocable workflows.
 
 This catalog draws on a few common types of source:
 
-- **Anthropic-shipped skills.** Distributed with Claude Code. Browse with `/help`.
-- **Plugin marketplaces.** Both Anthropic's and community-run. Searchable.
-- **Open-source repos.** Many teams publish their internal skill collections; search GitHub for `claude-skills` or `.claude/skills`.
+- **Anthropic-shipped skills.** Bundled with Claude Code; browse with `/skills`. Example and document skills (docx, pdf, pptx, xlsx, skill-creator, mcp-builder, and more) at [anthropics/skills](https://github.com/anthropics/skills).
+- **Plugin marketplaces.** Anthropic's `claude-plugins-official` and community-run marketplaces. Searchable from `/plugin`.
+- **Open-source repos.** Many teams publish their internal skill collections; search GitHub for `SKILL.md` or `.claude/skills`. The format is the open [Agent Skills](https://agentskills.io) standard, so skills written for other compatible tools often work too.
 - **Your team's collection.** The skills you write yourself, in `.claude/skills/` and `~/.claude/skills/`.
 
 When adopting a skill from outside:
 
 - **Read the body.** Don't trust the description.
-- **Check `allowed-tools`.** Is the scope appropriate?
+- **Check `allowed-tools`.** It *pre-approves* tools without a prompt — bare `Bash` or `Write` there is a red flag. Is every entry narrow and justified?
+- **Check for hooks and injected commands.** Claude Code skills can register `hooks` and run `` !`command` `` blocks at invocation.
 - **Test in your environment.** Does it assume tools or paths you don't have?
 - **Track the version.** If the upstream changes, you want to know.
 
@@ -533,6 +548,7 @@ A skill that nobody uses is overhead. Periodically:
 - Remove skills that haven't been invoked in 6 months.
 - Consolidate skills with overlapping descriptions.
 - Promote skills that the team uses constantly into the plugin level.
+- In Claude Code, `/skill-doctor` reports each skill's context cost and how often it's used — every listed skill costs context on every turn.
 
 The right size for a project's `.claude/skills/` folder is probably 10-30 entries. Smaller is fine. Bigger usually means duplication.
 
@@ -559,4 +575,4 @@ Don't add a skill that's specific to one codebase — that's a project-level ski
 
 ---
 
-**Status:** Living catalog. Last reviewed: 2026-05.
+**Status:** Living catalog. Last verified: 2026-10 (sources against the `claude-plugins-official` marketplace manifest, `anthropics/skills`, and the Claude Code commands reference).

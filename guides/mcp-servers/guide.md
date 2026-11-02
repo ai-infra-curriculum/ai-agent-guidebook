@@ -2,9 +2,9 @@
 
 A practitioner's introduction to MCP — what it is, the problem it solves, how it works, and where it fits in the broader agent ecosystem.
 
-> **Spec reference**: This guide tracks the MCP specification revision **2025-11-25** (latest), with notes on earlier revisions where features were introduced. Official spec: <https://spec.modelcontextprotocol.io/>.
+> **Spec reference**: This guide tracks the MCP specification revision **2026-07-28** (current since 2026-07-28), with notes on earlier revisions where features were introduced or changed. Official spec: <https://modelcontextprotocol.io/specification/latest>.
 
-> **Last updated**: 2026-06-11
+> **Last updated**: 2026-10-21
 
 ---
 
@@ -18,14 +18,14 @@ A practitioner's introduction to MCP — what it is, the problem it solves, how 
 - [MCP vs. other integration models](#mcp-vs-other-integration-models)
 - [Where MCP fits in the agent stack](#where-mcp-fits-in-the-agent-stack)
 - [What MCP is not](#what-mcp-is-not)
-- [Adoption snapshot (mid-2026)](#adoption-snapshot-mid-2026)
+- [Adoption snapshot (late 2026)](#adoption-snapshot-late-2026)
 - [Further reading](#further-reading)
 
 ---
 
 ## What is MCP?
 
-The **Model Context Protocol (MCP)** is an open JSON-RPC 2.0 based protocol that standardizes how an LLM application (the **host**) connects to external **tools**, **data sources**, and **prompt libraries**. It was introduced by Anthropic in late 2024 and quickly adopted across the major coding assistants and agent frameworks.
+The **Model Context Protocol (MCP)** is an open JSON-RPC 2.0 based protocol that standardizes how an LLM application (the **host**) connects to external **tools**, **data sources**, and **prompt libraries**. It was introduced by Anthropic in late 2024, quickly adopted across the major coding assistants and agent frameworks, and in December 2025 donated to the **Agentic AI Foundation (AAIF)**, a directed fund under the Linux Foundation.
 
 In one sentence: **MCP is to AI assistants what the Language Server Protocol (LSP) is to code editors.** Instead of every editor implementing a custom integration for every language, LSP gave editors a single protocol; instead of every AI assistant implementing custom integrations for every tool or data source, MCP gives assistants a single protocol.
 
@@ -34,10 +34,11 @@ A minimal mental model:
 ```
 +----------------+        JSON-RPC 2.0         +----------------+
 |                | <-------------------------> |                |
-|   MCP Host     |     (stdio or HTTP/SSE)     |   MCP Server   |
+|   MCP Host     |  (stdio or Streamable HTTP) |   MCP Server   |
 |  (e.g. Claude) |                             |  (your tools)  |
-|                |  initialize, list_tools,    |                |
-|                |  call_tool, read_resource…  |                |
+|                |  server/discover,           |                |
+|                |  tools/list, tools/call,    |                |
+|                |  resources/read…            |                |
 +----------------+                             +----------------+
 ```
 
@@ -93,11 +94,11 @@ A host can manage **many clients** at once — typically one per connected serve
 
 ### Client
 
-A library inside the host that speaks MCP to exactly one server. The client handles protocol negotiation, capability discovery, message framing, and lifecycle. From the host's perspective, a client is the local proxy for a remote (or local subprocess) server.
+A library inside the host that speaks MCP to exactly one server. The client handles protocol-version negotiation, capability discovery, message framing, and (on older revisions) the connection lifecycle. From the host's perspective, a client is the local proxy for a remote (or local subprocess) server.
 
 ### Server
 
-A separate process that exposes some capability — file access, database queries, browser automation, ticket creation, anything. Each server speaks MCP to its single connected client. Servers are usually small, focused, and stateless across requests (state lives in the underlying system the server fronts).
+A separate process that exposes some capability — file access, database queries, browser automation, ticket creation, anything. Each server speaks MCP to its single connected client. Servers are usually small, focused, and stateless across requests (state lives in the underlying system the server fronts). As of 2026-07-28 the *protocol itself* is stateless too — there is no handshake or session, so any request can land on any server instance.
 
 ### Transports
 
@@ -106,7 +107,7 @@ MCP is transport-agnostic but the spec defines two transports natively:
 | Transport | When to use | How it works |
 |---|---|---|
 | **stdio** | Local servers, subprocess model | Host spawns the server as a child process and exchanges JSON-RPC over stdin/stdout. Stderr is reserved for logs. |
-| **Streamable HTTP** | Remote / hosted servers | Single HTTP endpoint that accepts POST (client → server) and uses Server-Sent Events (SSE) for streaming (server → client). Replaced the older split HTTP+SSE transport in the 2025-03-26 spec revision. |
+| **Streamable HTTP** | Remote / hosted servers | Single HTTP endpoint. The client POSTs each request; the server answers with JSON or an SSE stream scoped to that request. On 2026-07-28 there is no session ID and no GET stream — change notifications use an opt-in `subscriptions/listen` POST stream, and requests carry `Mcp-Method` / `Mcp-Name` headers for routing. Replaced the older split HTTP+SSE transport in 2025-03-26 (that transport is now formally deprecated). |
 
 stdio is dominant for local developer tooling. Streamable HTTP is dominant for hosted multi-tenant servers (think: GitHub's hosted MCP, Sentry's hosted MCP, Stripe's hosted MCP).
 
@@ -115,14 +116,14 @@ stdio is dominant for local developer tooling. Streamable HTTP is dominant for h
 |   Host    |  ───────────────────│   Server  |    (local subprocess)
 +-----------+                     +-----------+
 
-+-----------+   POST + SSE  /mcp  +-----------+
++-----------+   POST  /mcp        +-----------+
 |   Host    |  ───────────────────│   Server  |    (remote, multi-tenant)
 +-----------+                     +-----------+
 ```
 
 ### Protocol layer
 
-The wire format is **JSON-RPC 2.0**. Each message is either a *request* (expects a response), a *response* (correlates to a request via `id`), or a *notification* (fire-and-forget). MCP layers a typed message catalog on top: `initialize`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, plus notifications like `notifications/tools/list_changed` and `notifications/progress`.
+The wire format is **JSON-RPC 2.0**. Each message is either a *request* (expects a response), a *response* (correlates to a request via `id`), or a *notification* (fire-and-forget). MCP layers a typed message catalog on top: `server/discover`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, `subscriptions/listen`, plus notifications like `notifications/tools/list_changed` and `notifications/progress`. On 2026-07-28 every request also carries its protocol version and client capabilities in `params._meta` (`io.modelcontextprotocol/protocolVersion`, `io.modelcontextprotocol/clientCapabilities`), and every result carries a `resultType`. Servers on 2025-11-25 and earlier use the `initialize` handshake instead.
 
 ---
 
@@ -150,7 +151,7 @@ A **tool** is a callable function the model decides to invoke. Tools have a name
 }
 ```
 
-Calling a tool returns content — text, images, or embedded resources. Tools may have side effects; the host should treat every tool call as a sensitive action and apply allowlists, prompts, and audit logging accordingly. The spec's **2025-06-18** revision added structured tool output (`structuredContent` + `outputSchema`), which lets servers return typed JSON that downstream tools can consume without re-parsing.
+Calling a tool returns content — text, images, or embedded resources. Tools may have side effects; the host should treat every tool call as a sensitive action and apply allowlists, prompts, and audit logging accordingly. The spec's **2025-06-18** revision added structured tool output (`structuredContent` + `outputSchema`), which lets servers return typed JSON that downstream tools can consume without re-parsing; 2026-07-28 loosened tool schemas to allow any JSON Schema 2020-12 keyword. Tools can also carry behavior hints (`readOnlyHint`, `destructiveHint`, …) and, with the **MCP Apps** extension, point at an interactive UI resource the host renders in a sandboxed iframe.
 
 ### Resources — application-controlled data
 
@@ -164,7 +165,7 @@ A **resource** is a piece of data the server can expose by URI. Examples: a file
 }
 ```
 
-Hosts typically surface resources as `@mentions`, attachment pickers, or auto-context (e.g. attach the resource the user is currently viewing). Resources can be **subscribed** so the server pushes updates when the underlying data changes.
+Hosts typically surface resources as `@mentions`, attachment pickers, or auto-context (e.g. attach the resource the user is currently viewing). Clients can **subscribe** to resource updates (on 2026-07-28, via the `resourceSubscriptions` option of `subscriptions/listen`), and list/read results carry `ttlMs` / `cacheScope` cache hints.
 
 ### Prompts — user-controlled templates
 
@@ -180,7 +181,7 @@ A **prompt** is a parameterized template the *user* explicitly invokes — typic
 }
 ```
 
-In Claude Code, server prompts surface as `/<server>:<prompt>` slash commands. In Cursor and Cline they appear in the command palette. Prompts are how a server vendor ships expert workflows alongside the raw tool surface.
+In Claude Code, server prompts are listed as `/<server>:<prompt> (MCP)` slash commands (typing `/mcp__<server>__<prompt>` also works). In Cursor and Cline they appear in the command palette. Prompts are how a server vendor ships expert workflows alongside the raw tool surface.
 
 ### Control-model summary
 
@@ -196,64 +197,43 @@ This separation matters for safety and UX. You don't want the model auto-reading
 
 ## Lifecycle of an MCP session
 
-Every MCP session follows the same four-phase shape.
+The 2026-07-28 revision changed this section more than any other: MCP went from a stateful, handshake-based protocol to a **stateless request/response** protocol. Both shapes still exist in the wild, so it helps to know each.
 
-### 1. Initialization
+### 2026-07-28: stateless, self-describing requests
 
-Host launches (stdio) or connects to (HTTP) the server, then sends an `initialize` request advertising:
-
-- The protocol version it speaks.
-- Its **client capabilities** (sampling? roots? elicitation?).
-- Client info (name, version).
-
-The server responds with:
-
-- The protocol version it agrees to.
-- Its **server capabilities** (tools? resources? prompts? logging? completion?).
-- Server info.
-
-The client confirms with a `notifications/initialized` notification. Capability negotiation here is what lets the protocol evolve without breaking old clients — neither side calls a method the other didn't advertise.
+There is no handshake and no session. Every request names its protocol version and the client's capabilities in `_meta` (and, on Streamable HTTP, the `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` headers). The server accepts or rejects each request independently; if it doesn't speak the requested version it returns `UnsupportedProtocolVersionError` listing the versions it does support.
 
 ```
-Host                             Server
- │   initialize(version, caps)    │
- ├───────────────────────────────>│
- │                                │
- │   initialized response         │
- │<───────────────────────────────┤
- │                                │
- │   notifications/initialized    │
- ├───────────────────────────────>│
+Host                                          Server
+ │   server/discover   (optional)              │
+ ├────────────────────────────────────────────>│
+ │   supportedVersions, capabilities, identity │
+ │<────────────────────────────────────────────┤
+ │                                             │
+ │   tools/call  _meta: {protocolVersion,      │
+ │                       clientCapabilities}   │
+ ├────────────────────────────────────────────>│
+ │   result  (resultType: "complete")          │
+ │<────────────────────────────────────────────┤
 ```
 
-### 2. Discovery
+1. **Discovery (optional)**. Servers MUST implement `server/discover`, which returns supported versions, capabilities (including any `extensions`), and server identity. Clients MAY call it up front, or just send requests and handle a version error.
+2. **Listing**. `tools/list`, `resources/list` (+ `resources/templates/list`), and `prompts/list` — paginated via opaque `cursor` tokens, and cacheable via `ttlMs` / `cacheScope`. Lists no longer vary per connection.
+3. **Operation**. `tools/call`, `resources/read`, `prompts/get`. A server that needs something mid-call (a user confirmation, a missing parameter) returns `resultType: "input_required"` with `inputRequests`; the client gathers the answers and retries the call with `inputResponses` — the **Multi Round-Trip Requests** pattern that replaced server-initiated requests.
+4. **Notifications**. Progress (`notifications/progress`) flows on the response stream of the request it relates to. Change notifications (`tools/list_changed`, `resources/updated`, …) flow only on a `subscriptions/listen` stream the client opened and opted into.
 
-The host queries what's available:
+State that must span calls is carried explicitly — a server mints a handle (a cart ID, a job ID) and the model passes it back as an ordinary tool argument.
 
-- `tools/list` → list of tools the model can call.
-- `resources/list` (and optionally `resources/templates/list`) → list of attachable data.
-- `prompts/list` → list of user-invokable templates.
+### 2025-11-25 and earlier: initialize handshake + session
 
-Each is paginated via opaque `cursor` tokens.
+Older servers (and clients) use a four-phase session:
 
-### 3. Operation
+1. **Initialization** — the client sends `initialize` (protocol version, client capabilities, client info), the server replies with its version, capabilities, and info, and the client confirms with `notifications/initialized`. On Streamable HTTP the server issues an `Mcp-Session-Id`.
+2. **Discovery** — `tools/list`, `resources/list`, `prompts/list`.
+3. **Operation** — calls, plus server-initiated requests (`sampling/createMessage`, `elicitation/create`, `roots/list`) and notifications on an open stream.
+4. **Shutdown** — for stdio, the host closes stdin, waits, then terminates; for HTTP, the session ends or times out.
 
-The active phase. The host:
-
-- Calls tools (`tools/call`) when the model emits a tool use.
-- Reads resources (`resources/read`) when the user attaches one.
-- Fetches prompts (`prompts/get`) when the user runs a slash command.
-
-The server may push:
-
-- `notifications/tools/list_changed` — refetch tools.
-- `notifications/resources/updated` — re-read a subscribed resource.
-- `notifications/progress` — long-running operation feedback.
-- `notifications/message` — server-side log lines.
-
-### 4. Shutdown
-
-Closing the transport terminates the session. For stdio, the host sends EOF on stdin, gives the server a grace period, then SIGTERMs if needed. For HTTP, the host closes the SSE stream.
+Interop is built in: a 2026-07-28 client falls back to `initialize` when it reaches an older server, and the v2 SDKs serve both eras from one endpoint. Either way, capability negotiation is what lets the protocol evolve without breaking old clients — neither side uses a feature the other didn't declare.
 
 ---
 
@@ -323,7 +303,7 @@ This means MCP composes with, rather than replaces:
 - **Orchestration frameworks** (LangGraph, Inngest, Temporal): the framework runs the loop; MCP supplies the tools.
 - **Memory systems** (Mem0, Letta, Zep): memory is its own concern; MCP can expose memory read/write as tools or resources but doesn't define the memory model.
 - **Observability** (LangSmith, Langfuse, Arize Phoenix, OpenTelemetry): tracing wraps the host's tool calls; MCP doesn't mandate a trace format but tool invocations are a natural span boundary.
-- **Governance & trust** (policy engines, audit ledgers, identity providers): the host enforces policy *around* MCP calls; MCP itself does not define an authorization model beyond the OAuth 2.1 + Resource Indicators flow added in the 2025-06-18 revision for HTTP transports.
+- **Governance & trust** (policy engines, audit ledgers, identity providers): the host enforces policy *around* MCP calls; MCP itself does not define an authorization model beyond the OAuth 2.1-based flow for HTTP transports (Resource Indicators since 2025-06-18; issuer validation, issuer-bound credentials, and Client ID Metadata Documents preferred over Dynamic Client Registration as of 2026-07-28), plus optional auth extensions such as Enterprise-Managed Authorization.
 
 ---
 
@@ -334,12 +314,12 @@ A few common misconceptions worth flattening up front.
 - **MCP is not an agent framework.** It does not implement planning, loops, reflection, or memory. It is a tool/data integration protocol.
 - **MCP is not a sandbox.** A tool call runs whatever code the server runs. Sandboxing is the host's and the server author's responsibility.
 - **MCP is not an authentication system.** The transport layer carries auth (OAuth 2.1 for HTTP, environment for stdio). MCP doesn't define users, roles, or scopes beyond capability negotiation.
-- **MCP is not bound to Anthropic.** It is an open spec with a community-elected governance model. Production deployments run on OpenAI, Google, Mistral, Llama, and local models alike.
-- **MCP is not "tools over HTTP."** That phrasing misses resources, prompts, notifications, sampling, and the lifecycle. The protocol's value is the full surface, not just function dispatch.
+- **MCP is not bound to Anthropic.** Since December 2025 it is a project of the Agentic AI Foundation under the Linux Foundation (co-founded by Anthropic, Block, and OpenAI). Technical direction stays with the MCP maintainers via the public SEP process. Production deployments run on OpenAI, Google, Mistral, Llama, and local models alike.
+- **MCP is not "tools over HTTP."** That phrasing misses resources, prompts, notifications, elicitation, extensions, and the negotiation model. The protocol's value is the full surface, not just function dispatch.
 
 ---
 
-## Adoption snapshot (mid-2026)
+## Adoption snapshot (late 2026)
 
 A non-exhaustive list of where MCP shows up:
 
@@ -347,18 +327,28 @@ A non-exhaustive list of where MCP shows up:
 
 **Framework clients**: OpenAI Agents SDK, LangChain / LangGraph (`langchain-mcp-adapters`), CrewAI (`crewai-tools[mcp]`), AutoGen (`autogen-ext[mcp]`), LlamaIndex (`llama-index-tools-mcp`), Pydantic AI, AWS Bedrock AgentCore, Microsoft Semantic Kernel, Microsoft Agent Framework.
 
-**Hosted MCP servers** (you connect via Streamable HTTP, no install): GitHub, GitLab, Sentry, Stripe, Linear, Notion, Atlassian (Jira + Confluence), Cloudflare, Vercel, Neon, Supabase, PlanetScale, Figma, Canva, Plaid.
+**Hosted MCP servers** (you connect via Streamable HTTP, no install): GitHub, GitLab, Sentry, Stripe, Linear, Notion, Atlassian (Jira + Confluence), Cloudflare, Vercel, Neon, Supabase, PlanetScale, Figma, Canva, Plaid, Slack, Google Cloud (managed servers for BigQuery, Cloud SQL, GKE, and more). See [`catalog.md`](./catalog.md) for verified endpoints.
 
-**Spec governance**: managed under the `modelcontextprotocol` GitHub org with a public spec process (SEP — Specification Enhancement Proposals), regular revisions (2024-11-05 → 2025-03-26 → 2025-06-18 → 2025-11-25), and a multi-vendor steering committee.
+**Scale**: at the 2026-07-28 release the maintainers reported close to half a billion monthly downloads across the Tier 1 SDKs, with the TypeScript and Python SDKs each past 1 billion total downloads.
+
+**Spec governance**: MCP was donated to the [Agentic AI Foundation](https://blog.modelcontextprotocol.io/posts/2025-12-09-mcp-joins-agentic-ai-foundation/) (AAIF, a Linux Foundation directed fund) on 2025-12-09, alongside goose (Block) and AGENTS.md (OpenAI). The AAIF Governing Board handles budget, membership, and new projects; MCP keeps full technical autonomy. The protocol is run by Lead and Core Maintainers with Working Groups, a contributor ladder, and a public SEP (Specification Enhancement Proposal) process, under the `modelcontextprotocol` GitHub org. Revisions so far: 2024-11-05 → 2025-03-26 → 2025-06-18 → 2025-11-25 → **2026-07-28**. A feature lifecycle policy (adopted with 2026-07-28) keeps deprecated features for at least twelve months before removal (ninety days under a narrow expedited-removal exception).
+
+**SDKs**: Tier 1 (100% conformance) — TypeScript, Python, Go, C#. Other official SDKs: Rust, Java, Kotlin, Swift, Ruby (1.0 in July 2026), PHP. See the [SDK tiers page](https://modelcontextprotocol.io/community/sdk-tiers).
+
+**Discovery**: the official [MCP Registry](https://registry.modelcontextprotocol.io) (preview since September 2025; v0.1 API frozen since October 2025) indexes `server.json` metadata that points at npm / PyPI / NuGet / OCI packages or remote URLs. See [`building.md`](./building.md#the-official-mcp-registry).
 
 ---
 
 ## Further reading
 
-- **Spec**: <https://spec.modelcontextprotocol.io/>
+- **Spec**: <https://modelcontextprotocol.io/specification/latest> · [2026-07-28 changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+- **Blog** (release notes, roadmap): <https://blog.modelcontextprotocol.io/>
+- **Security best practices**: <https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices>
+- **Extensions** (MCP Apps, Tasks, auth): <https://modelcontextprotocol.io/docs/extensions/overview>
+- **Registry**: <https://registry.modelcontextprotocol.io>
 - **Reference implementation servers**: <https://github.com/modelcontextprotocol/servers>
-- **TypeScript SDK**: <https://github.com/modelcontextprotocol/typescript-sdk>
-- **Python SDK**: <https://github.com/modelcontextprotocol/python-sdk>
+- **TypeScript SDK**: <https://github.com/modelcontextprotocol/typescript-sdk> · docs <https://ts.sdk.modelcontextprotocol.io/v2/>
+- **Python SDK**: <https://github.com/modelcontextprotocol/python-sdk> · docs <https://py.sdk.modelcontextprotocol.io/>
 - **Inspector** (debug tool): <https://github.com/modelcontextprotocol/inspector>
 - **Awesome MCP**: <https://github.com/punkpeye/awesome-mcp-servers>
 - **Catalog (this guide)**: [`catalog.md`](./catalog.md)
@@ -368,4 +358,4 @@ Next, see:
 - [`installation.md`](./installation.md) — installing servers across hosts.
 - [`configuration.md`](./configuration.md) — config file shapes and patterns.
 - [`building.md`](./building.md) — building your own server in TypeScript or Python.
-- [`advanced.md`](./advanced.md) — sampling, notifications, security, federation.
+- [`advanced.md`](./advanced.md) — the stateless core, elicitation, extensions, security, federation.

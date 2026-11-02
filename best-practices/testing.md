@@ -2,7 +2,7 @@
 
 Testing AI-generated code and the AI workflows themselves. Property-based, differential, golden-file, evals, regression, CI.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21.
 
 ---
 
@@ -209,8 +209,8 @@ Where `similar` is:
 ### Handling non-determinism
 
 LLMs are non-deterministic by default. Mitigations:
-- Set `temperature=0` for tests.
-- Pin a dated model snapshot (`claude-sonnet-4-6-20251022`), not the rolling alias (`claude-sonnet-4-6`) — aliases move to new snapshots over time. (There is no `-latest` suffix; the alias is just the bare model name.)
+- Set `temperature=0` for tests where the model accepts it (reasoning-mode models may restrict sampling parameters; check the provider's docs).
+- Pin an exact model ID. On Anthropic, every model ID from the 4.6 generation on is dateless *and* a pinned snapshot (`claude-sonnet-5-5` will not silently change); for older models, aliases resolve to dated IDs, so pin the dated one. On other providers, prefer snapshot IDs over moving aliases.
 - Use seed parameter where supported (OpenAI).
 - Run N samples and assert against the consensus.
 - For non-text output (JSON), validate schema and key fields, not the full byte string.
@@ -262,9 +262,9 @@ prompts:
   - file://prompts/summarize-v1.md
   - file://prompts/summarize-v2.md
 providers:
-  - anthropic:claude-sonnet-4-6
-  - anthropic:claude-opus-4-8
-  - openai:gpt-5.5
+  - anthropic:claude-sonnet-5-5
+  - anthropic:claude-opus-5-5
+  - openai:gpt-6.1-sol
 tests:
   - vars:
       diff: file://fixtures/pr-1234.diff
@@ -345,12 +345,12 @@ Every time you change a prompt or model:
 3. Compare to previous version.
 
 ```text
-v1.3 (claude-sonnet-4-6, prompt-rev-12)
+v1.3 (claude-sonnet-5-5, prompt-rev-12)
   accuracy: 0.87
   latency_p95: 3.2s
   cost_per_call: $0.012
 
-v1.4 (claude-sonnet-4-6, prompt-rev-13)
+v1.4 (claude-sonnet-5-5, prompt-rev-13)
   accuracy: 0.91  up
   latency_p95: 4.8s  down
   cost_per_call: $0.018  down
@@ -414,7 +414,7 @@ If CI takes longer than 10 minutes for typical PRs, developers will route around
 - Parallelize across runners.
 - Cache test fixtures, embedding corpora, model weights.
 - Use eval subsets for PRs, full eval nightly.
-- Use cheaper models for evaluator LLMs (Haiku 4.5 judging Sonnet output is fine).
+- Use cheaper models for evaluator LLMs (Haiku 5.5 judging Sonnet output is fine — validate the judge against human labels first).
 
 ### Cost budget
 

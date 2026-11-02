@@ -1,7 +1,11 @@
 # Skill Template
 
-A complete starting scaffold for a Claude Skill. Copy this directory, rename
-it, customize the three files, and you have a working skill.
+A complete starting scaffold for a Claude Skill in the open
+[Agent Skills](https://agentskills.io/specification) format. Copy this
+directory, rename it, customize the three files, and you have a working skill.
+
+Last verified: 2026-10 (against agentskills.io and
+[code.claude.com/docs/en/skills](https://code.claude.com/docs/en/skills)).
 
 This template is intentionally small — one helper script, one skill definition,
 one README. Real skills are often this size; resist the urge to grow it before
@@ -25,24 +29,30 @@ Three files. That's the entire scaffold.
 
 ## How A Skill Is Loaded
 
-When Claude Code (or another agent runtime that supports Skills) starts up, it
-walks a skill search path — typically:
+Claude Code discovers skills in these locations (other Agent Skills clients
+use their own paths):
 
-1. Project-level: `<repo>/.claude/skills/<skill-name>/SKILL.md`
-2. User-level:    `~/.claude/skills/<skill-name>/SKILL.md`
-3. Plugin-level:  installed-plugin paths (varies by plugin manager)
+1. Personal:  `~/.claude/skills/<skill-name>/SKILL.md`
+2. Project:   `<repo>/.claude/skills/<skill-name>/SKILL.md` (and nested
+   `.claude/skills/` directories in a monorepo)
+3. Plugin:    `<plugin>/skills/<skill-name>/SKILL.md`, invoked as
+   `/<plugin>:<skill-name>`
+4. Enterprise: the managed settings directory
 
-For each `SKILL.md` it finds, the runtime parses the YAML frontmatter for
-metadata (`name`, `description`, `triggers`, `requires`, etc.) and reads the
-Markdown body as the skill's instructions.
+Loading is progressive:
 
-When the user types `/<name>` or the runtime auto-discovers a match via the
-`triggers` list, the body of `SKILL.md` is loaded into context and the model
-follows the steps inside.
+1. At startup, only each skill's `name` and `description` go into context.
+2. When the user types `/<name>` — or Claude decides the description matches
+   the request — the full body of `SKILL.md` is loaded and stays in the
+   conversation.
+3. Files in `scripts/`, `references/`, or `assets/` load only when the body
+   tells the model to read or run them.
 
-The helper script in `scripts/` is just a regular file — the skill body
-references it by relative path. Anything reachable via the filesystem MCP can
-be invoked the same way.
+There is no `triggers` list: the `description` (plus Claude Code's optional
+`when_to_use` and `paths`) is the only routing signal. The helper script in
+`scripts/` is a regular file; in Claude Code, reference it as
+`${CLAUDE_SKILL_DIR}/scripts/example.sh` so it resolves no matter what the
+working directory is.
 
 ---
 
@@ -55,18 +65,22 @@ cp -r templates/skill-template ~/.claude/skills/my-skill
 # (or the project-local equivalent: cp -r ... .claude/skills/my-skill)
 ```
 
-Rename the directory to match the `name` field in your `SKILL.md`. The runtime
-matches them when resolving `/my-skill` invocations.
+Rename the directory to match the `name` field in your `SKILL.md`. The spec
+requires them to match, and in Claude Code `name` is the slash command.
 
 ### Step 2: Edit SKILL.md
 
 Open `SKILL.md` and replace, in order:
 
 1. **Frontmatter**:
-   - `name`: kebab-case identifier. Must match the directory name.
-   - `description`: one sentence. ≤120 chars. Lead with a verb.
-   - `triggers`: ≤5 phrases. Too many causes false positives.
-   - `requires`: list MCP servers or external CLIs.
+   - `name`: lowercase, hyphenated, ≤64 chars. Must match the directory name.
+   - `description`: what it does **and when to use it**, with concrete trigger
+     phrases and a "skip when…" clause. ≤1,024 chars. Lead with the use case —
+     Claude Code truncates long descriptions in its skill listing.
+   - `allowed-tools`: only narrow pre-approvals, or delete the line. It grants
+     prompt-free use; it doesn't restrict anything.
+   - `compatibility`: external CLIs or services the skill needs (or delete).
+   - `metadata`: version, owner, tags — as **string** values.
 2. **Body sections**: walk through every `> Replace this paragraph` marker.
 3. **Anti-Patterns and Failure Modes**: do not skip these. They are the
    sections that save the most time for the next reader.
@@ -80,8 +94,8 @@ either:
   `python -m my_project.codegen`, `terraform fmt`), in which case the helper
   script becomes a thin adapter.
 - Skip the helper entirely. Many skills are pure prose ("here are the steps;
-  use the filesystem MCP to apply them"). For those, delete `scripts/` and
-  drop the references from `SKILL.md`.
+  apply them with your normal file tools"). For those, delete `scripts/` and
+  drop the references from `SKILL.md` and `allowed-tools`.
 
 Whatever shape the helper takes, keep its interface stable. The skill body
 documents the helper's flags and exit codes; if you change them, update the
@@ -95,12 +109,17 @@ Two quick checks before declaring done:
 # 1. The skill's helper script (if any) runs and respects --dry-run.
 bash scripts/example.sh --dry-run --target /tmp --name Sample
 
-# 2. The frontmatter parses as YAML.
-python3 -c "import yaml,sys; print(list(yaml.safe_load_all(open('SKILL.md')))[0])"
+# 2. The frontmatter parses (Claude Code v2.1.233+), run on the skills dir:
+claude plugin validate ~/.claude/skills    # or .claude/skills for project skills
+
+# 3. Optional: check spec conformance with the reference validator
+#    (https://github.com/agentskills/agentskills/tree/main/skills-ref)
+skills-ref validate ./my-skill
 ```
 
-If both succeed, the skill is loadable. The runtime will surface a clearer
-error if anything else is wrong on first invocation.
+Note: in Claude Code, a skill whose YAML doesn't parse still loads — with no
+metadata, so `/name` works but auto-invocation never matches. Don't take
+"it ran when I typed it" as proof the frontmatter is valid.
 
 ---
 
@@ -124,23 +143,33 @@ mkdir -p .claude/skills
 cp -r my-skill .claude/skills/
 ```
 
-Project-level takes precedence over user-level if names collide.
+If the same name exists at both levels, Claude Code runs the **personal**
+(user-level) one — personal beats project. Give team skills distinct names.
 
 ### Plugin-distributed
 
 If you are shipping the skill inside a Claude Code plugin, put it under the
-plugin's `skills/` directory. The plugin manager will surface it under the
-plugin's namespace (`plugin-name:my-skill`).
+plugin's `skills/` directory. It is invoked as `/plugin-name:my-skill` (the bare
+`/my-skill` also works when nothing else claims the name).
+
+### claude.ai and the Skills API
+
+You can upload the same folder to claude.ai or the Skills API, but those paths
+accept only the six spec fields (`name`, `description`, `license`,
+`compatibility`, `metadata`, `allowed-tools`) and fail with a hard error on
+anything else. Remove the Claude Code-only keys in this template
+(`disable-model-invocation`, `argument-hint`, `arguments`) before uploading.
 
 ### Verifying it loaded
 
-After installation, start a fresh Claude Code session in the relevant project
-and type `/help` (or your runtime's equivalent). Your skill should appear in
-the list. If it doesn't:
+Skill directories are watched, so a skill you add appears in the current
+session (run `/reload-skills` if you created the top-level `skills/` folder
+mid-session). Type `/skills` and look for it. If it isn't there:
 
-1. Check the frontmatter parses (see Step 4 above).
-2. Confirm the directory name matches the `name` field.
-3. Look in the runtime's startup log for a parse error.
+1. Check the file is named `SKILL.md` and sits in its own folder.
+2. Confirm the directory name matches the `name` field, and that the name has
+   no invisible or direction-changing characters.
+3. Run `claude --debug` and search the log at `~/.claude/debug/` for errors.
 
 ---
 
@@ -154,12 +183,13 @@ play well with each other.
 2. **Outputs are explicit.** The skill body should describe what the user
    *gets* — a list of created files, a status report, a structured object —
    not just side effects.
-3. **No I/O outside `requires`.** If the skill needs Slack, list `slack` in
-   `requires`. A skill that secretly posts to Slack without declaring it
-   surprises everyone the first time someone runs it in a sandboxed CI.
-4. **Composable, not chained.** Don't have one skill invoke another. Let the
-   calling agent compose them in its plan. Skill-calls-skill is hard to
-   reason about and impossible to test independently.
+3. **Declare external dependencies.** If the skill needs Slack or a CLI, say
+   so in `compatibility` and in the body's Prerequisites, and fail fast when
+   it's missing. A skill that secretly posts to Slack surprises everyone the
+   first time someone runs it in a sandboxed CI.
+4. **Composable, not chained.** Prefer letting the calling agent compose
+   skills in its plan over having one skill invoke another. Skill-calls-skill
+   compounds context cost and is hard to test independently.
 5. **Idempotent where possible.** Running the skill twice on the same inputs
    should produce the same outputs (or refuse with a clear error). Surprising
    side effects from re-runs erode trust.
@@ -179,28 +209,33 @@ Common ways skills are written badly. Avoid all of these.
   anything about authentication, suggest using JWT." Too broad. The skill
   fires constantly and degrades trust.
 - **Anti-pattern 3: Hidden dependencies.** Skill body says "now run the
-  formatter," requiring Prettier to be installed. List it in `requires` or
-  check for it in the helper script.
+  formatter," requiring Prettier to be installed. Note it in `compatibility`
+  and check for it in the helper script.
 - **Anti-pattern 4: Skill that wraps a single tool call.** If your skill is
   "call `gh_create_pr` with these defaults," that's not a skill, it's an
   alias. Add real logic — composition, validation, branching — or don't ship
   the skill.
 - **Anti-pattern 5: Skipping the example block.** The `## Example` section in
-  `SKILL.md` is what the model uses to learn the skill's shape. Without it,
-  the runtime invokes the skill with the wrong arguments roughly half the
-  time.
+  `SKILL.md` isn't parsed specially, but the model imitates examples closely.
+  Without one, output format drifts between invocations.
+- **Anti-pattern 6: Treating `allowed-tools` as a sandbox.** It pre-approves
+  the listed tools. Listing bare `Bash` lets any shell command run unprompted
+  during the invoking turn.
+- **Anti-pattern 7: Inventing frontmatter keys.** `version`, `triggers`,
+  `requires`, `tags` at the top level do nothing in Claude Code and break
+  claude.ai uploads. Use `metadata`.
 
 ---
 
 ## Versioning
 
-Bump the `version` field in the frontmatter on any change that downstream
-callers can observe. Use semver:
+Bump `metadata.version` in the frontmatter (a quoted string) on any change that
+downstream callers can observe. Use semver:
 
 | Change | Bump |
 |---|---|
 | Wording, internal refactor | patch (`0.1.0` → `0.1.1`) |
-| New optional input, new output file, new tag | minor (`0.1.x` → `0.2.0`) |
+| New optional input, new output file | minor (`0.1.x` → `0.2.0`) |
 | Renamed input, removed output, reordered steps, changed exit codes | major (`0.x.y` → `1.0.0`) |
 
 Skills with no callers (it's all just one team) can be looser; skills shared
@@ -214,8 +249,10 @@ across teams should be strict.
 - [`templates/CLAUDE.md`](../CLAUDE.md) — project-level configuration template.
 - [`examples/code-review/AGENTS.md`](../../examples/code-review/AGENTS.md) —
   example of agents that invoke skills.
-- [Skill creator skill](https://docs.anthropic.com/claude/skills) — meta-skill
-  that scaffolds new skills for you.
+- [`skill-creator`](https://github.com/anthropics/skills) — Anthropic's
+  meta-skill that scaffolds new skills and runs evals on them.
+- [Agent Skills specification](https://agentskills.io/specification).
+- [Claude Code skills docs](https://code.claude.com/docs/en/skills).
 
 ---
 
@@ -226,8 +263,12 @@ changes, you may want to merge the changes in. Tracked changes worth knowing
 about:
 
 - `0.1.0` (2026-05-24): initial template — single helper script, three sections.
+- `0.2.0` (2026-10-21): frontmatter rebuilt on the Agent Skills spec; removed
+  non-standard keys (`invokable`, `triggers`, `requires`, `tags`,
+  `last_updated`, top-level `version`); corrected `allowed-tools` semantics;
+  added `${CLAUDE_SKILL_DIR}` and argument placeholders.
 
 ---
 
-**Template version**: 0.1.0
-**Last updated**: 2026-05-24
+**Template version**: 0.2.0
+**Last updated**: 2026-10-21

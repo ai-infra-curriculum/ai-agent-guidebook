@@ -13,13 +13,14 @@ Complete guide to the standalone **GitHub Copilot CLI** — an agentic terminal 
 - [Authentication](#authentication)
 - [Interactive Usage](#interactive-usage)
 - [Slash Commands](#slash-commands)
-- [Permissions and Approvals](#permissions-and-approvals)
+- [Permissions, Approvals, and Sandboxing](#permissions-approvals-and-sandboxing)
 - [Model Selection](#model-selection)
 - [MCP Servers](#mcp-servers)
 - [Custom Instructions](#custom-instructions)
 - [Custom Agents](#custom-agents)
+- [Skills, Hooks, and Plugins](#skills-hooks-and-plugins)
 - [Programmatic (Non-Interactive) Mode](#programmatic-non-interactive-mode)
-- [Sessions and Context Management](#sessions-and-context-management)
+- [Sessions, Remote Steering, and Delegation](#sessions-remote-steering-and-delegation)
 - [Usage and Billing](#usage-and-billing)
 - [Migrating from gh-copilot](#migrating-from-gh-copilot)
 - [Troubleshooting](#troubleshooting)
@@ -29,30 +30,33 @@ Complete guide to the standalone **GitHub Copilot CLI** — an agentic terminal 
 
 ## Overview
 
-GitHub Copilot CLI brings Copilot's coding agent to your terminal. Unlike the old `gh copilot` extension — which only suggested and explained shell commands — the new CLI can plan and execute multi-step tasks: it reads and edits files, runs shell commands and tests (with your approval), and iterates until the task is done. It sits in the same product family as Claude Code, Codex CLI, and Gemini CLI.
+GitHub Copilot CLI brings the same agentic harness behind Copilot cloud agent to your terminal. Unlike the old `gh copilot` extension — which only suggested and explained shell commands — the CLI can plan and execute multi-step tasks: it reads and edits files, runs shell commands and tests (with your approval), and iterates until the task is done. It sits in the same product family as Claude Code, Codex CLI, and Gemini CLI.
+
+The CLI also powers the desktop **GitHub Copilot app** (GA June 17, 2026): `copilot app` (or `/app` inside a session) opens the current directory or session in the app. On Business and Enterprise plans, the app is only available when an admin has enabled Copilot CLI in policy settings.
 
 ### Key Features
 
 - ✅ **Agentic workflow** — plans and executes complex tasks, not just one-shot answers
-- ✅ **File edits** — reads, creates, and modifies files in your project
-- ✅ **Shell execution with approval** — runs commands only after you approve each tool
-- ✅ **MCP support** — GitHub's MCP server ships pre-configured; add your own
-- ✅ **Model selection** — switch models per session with `/model`
-- ✅ **Custom instructions** — honors `.github/copilot-instructions.md` and `AGENTS.md`
-- ✅ **Plan mode** — collaborate on an implementation plan before any code is written
+- ✅ **Three modes** — standard, plan, and autopilot (cycle with `Shift+Tab`)
+- ✅ **Shell execution with approval** — tool use is gated by approvals, allow/deny rules, and an optional local sandbox
+- ✅ **MCP support** — GitHub's MCP server ships built in; add your own
+- ✅ **Model selection** — `/model` or `--model`, including **Auto** routing, BYOK providers, and local models
+- ✅ **Custom instructions** — reads `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md`
+- ✅ **Custom agents, skills, hooks, and plugins**
 - ✅ **Headless mode** — run prompts non-interactively for scripts and CI
+- ✅ **Remote steering and delegation** — monitor a session from GitHub.com/GitHub Mobile, or hand work to cloud agent
 
 ### Requirements
 
-- An active GitHub Copilot subscription (any plan, including Copilot Free)
-- On Windows: PowerShell v6+
-- For organization/enterprise accounts: an administrator must allow Copilot CLI access
+- A GitHub Copilot plan (any plan, including Copilot Free); the CLI can also run against your own model provider (BYOK)
+- Linux, macOS, or Windows (PowerShell v6+ on Windows)
+- For organization/enterprise accounts: an administrator must not have disabled Copilot CLI by policy
 
 ---
 
 ## Installation
 
-Four supported install methods:
+Four supported install methods (each also has a prerelease channel):
 
 **npm (all platforms):**
 
@@ -78,13 +82,15 @@ winget install GitHub.Copilot
 curl -fsSL https://gh.io/copilot-install | bash
 ```
 
-Then launch it:
+Then launch it from your project folder:
 
 ```bash
 copilot
 ```
 
-On first launch in a folder, the CLI asks you to confirm that you trust the files in that directory — for the session only, remembered for future sessions, or exit. You can add more trusted directories later with `/add-dir`.
+Keep it current with `copilot update` (or `/update` in a session) — the CLI ships releases several times a week. `copilot version` shows the installed version.
+
+On first launch in a folder, the CLI asks you to confirm that you trust the files in that directory. Avoid launching it from your home directory. You can grant access to more directories later with `/add-dir`.
 
 ---
 
@@ -92,19 +98,23 @@ On first launch in a folder, the CLI asks you to confirm that you trust the file
 
 **Interactive login (recommended):**
 
-```text
-/login
+```bash
+copilot login          # outside a session (browser or device-code flow)
 ```
 
-Run this inside the CLI and follow the on-screen device-code flow.
+```text
+/login                 # inside a session
+```
+
+`copilot login --host HOST` targets a different GitHub host (for example, data-residency tenants).
 
 **Token-based (CI, scripts):**
 
-Set `GH_TOKEN` or `GITHUB_TOKEN` to a personal access token. Fine-grained PATs need the **Copilot Requests** permission.
+Set `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` (checked in that order) to a fine-grained personal access token with the **Copilot Requests** permission.
 
 ```bash
-export GH_TOKEN="<your-token>"
-copilot --prompt "summarize the failing tests"
+export COPILOT_GITHUB_TOKEN="<your-token>"
+copilot -p "summarize the failing tests"
 ```
 
 ---
@@ -119,105 +129,141 @@ Type a request in plain language; Copilot plans the work, asks to use tools as n
 
 ### Handy Input Tricks
 
-- **`@` file references** — pull a specific file into context:
+- **`@` file references** — pull a specific file into context: `Explain @config/ci/ci-required-checks.yml`
+- **`#` issue/PR references** — include an issue or pull request by number
+- **`!` shell passthrough** — run a shell command directly, without invoking the model: `!git status`
+- **`?`** on an empty prompt — quick help
 
-  ```text
-  Explain @config/ci/ci-required-checks.yml
-  ```
+### Modes: Standard, Plan, Autopilot
 
-- **`!` shell passthrough** — run a shell command directly, without invoking the model:
+Press **Shift+Tab** to cycle between modes:
 
-  ```text
-  !git status
-  ```
+- **Standard** — ask/execute; Copilot proposes tool calls and you approve them.
+- **Plan** — Copilot asks clarifying questions and builds an implementation plan before touching files (`/plan` or `--plan`).
+- **Autopilot** — Copilot keeps working until it judges the task complete (`/autopilot [objective]` or `--autopilot`). Cap spend with `--max-ai-credits N`.
 
-- **`?`** — show help inside the interactive prompt.
-
-### Plan Mode
-
-Press **Shift+Tab** to cycle into plan mode. Copilot collaborates with you on an implementation plan before touching any files — useful for larger tasks where you want to steer the approach first.
-
-### Other Keyboard Shortcuts
+### Useful Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Esc` | Stop the current operation / reject a tool request |
-| `Shift+Tab` | Toggle plan mode |
+| `Esc` | Cancel; press twice to interrupt the running turn |
+| `Shift+Tab` | Cycle standard / plan / autopilot |
 | `Ctrl+T` | Show or hide model reasoning |
+| `Ctrl+G` | Edit the prompt in `$EDITOR` |
+| `Ctrl+Enter` / `Ctrl+Q` | Queue a message while the agent is busy |
+| `Ctrl+X` then `b` | Move the running task to the background |
+| `Ctrl+C` twice | Exit |
 
 ---
 
 ## Slash Commands
 
-Run these from the interactive prompt. (Verify the current set with `?` or `copilot help` — the CLI evolves quickly.)
+A selection of the most useful commands. The CLI evolves quickly — run `/help` or see the [command reference](https://docs.github.com/en/copilot/reference/cli-command-reference) for the full, current list.
 
 | Command | What it does |
 |---------|--------------|
-| `/login` | Authenticate with GitHub |
-| `/model` | Pick the model for the session |
-| `/mcp add` | Add an MCP server |
-| `/agent` | Select a built-in or custom agent |
-| `/add-dir <path>` | Trust an additional directory |
+| `/login`, `/logout` | Sign in or out |
+| `/model` | Pick a model or Auto routing |
+| `/plan [prompt]` | Create an implementation plan before coding |
+| `/autopilot [objective]` | Keep working toward an objective until done |
+| `/fleet [prompt]` | Run parts of a task with parallel subagents |
+| `/agent` | Browse and select agents |
+| `/review [prompt]` | Run the code-review agent on your changes |
+| `/research TOPIC` | Run a deep research investigation |
+| `/delegate [prompt]` | Hand the work to Copilot cloud agent as a pull request |
+| `/remote [on\|off]` | Enable or end remote steering from GitHub.com / GitHub Mobile |
+| `/init` | Set up custom instructions for the repository |
+| `/instructions` | View and toggle loaded instruction files |
+| `/env` | Show loaded instructions, MCP servers, skills, agents, hooks, and plugins |
+| `/mcp` | Manage MCP servers |
+| `/skills`, `/plugin` | Manage skills and plugins |
+| `/permissions` | Show or switch permission modes; `reset` clears approvals |
+| `/sandbox` | Manage filesystem and network sandbox restrictions |
+| `/add-dir <path>` | Allow file access to another directory |
 | `/cwd <path>` (or `/cd`) | Change working directory without restarting |
-| `/usage` | Session statistics, including GitHub AI Credits used |
-| `/context` | Visual overview of current token usage |
-| `/compact` | Manually compress conversation history |
-| `/resume` | Pick a previous session to resume |
-| `/every` / `/after` | Schedule recurring or delayed prompts |
-| `/sandbox enable` | Enable local sandboxing for tool execution |
+| `/context`, `/compact` | Show token usage; summarize history to free context |
+| `/usage`, `/limits` | Session usage metrics; set a per-session AI Credit cap |
+| `/resume`, `/sessions` | Switch to or manage sessions |
+| `/undo` (or `/rewind`) | Roll back to an earlier turn |
+| `/share` | Share or export the session (link, Markdown, HTML, gist) |
+| `/diff` | Review working-tree changes (experimental) |
+| `/every`, `/after` | Schedule recurring or delayed prompts (experimental mode only) |
 | `/feedback` | Submit feedback or bug reports |
+
+Experimental features are toggled with `/experimental on` or the `--experimental` flag.
 
 ---
 
-## Permissions and Approvals
+## Permissions, Approvals, and Sandboxing
 
-By default, Copilot CLI asks before using any tool that could modify files or execute programs (`touch`, `chmod`, `node`, `sed`, package managers, and so on). Each request offers three choices:
+By default, Copilot CLI asks before using any tool that could modify files or execute programs. You can approve once, approve for the session, or reject and tell Copilot what to do differently. Note that approving a tool for the session lets Copilot use it broadly — including variants of the command you approved.
 
-1. **Yes** — allow this single use; ask again next time.
-2. **Yes, for the rest of the session** — allow this tool repeatedly without asking again.
-3. **No (Esc)** — reject, and tell Copilot what to do differently.
+**Fine-grained rules (preferred):**
+
+```bash
+# Allow git and file writes without prompting; never allow rm or git push
+copilot --allow-tool='shell(git)' --allow-tool='write' --deny-tool='shell(rm)' --deny-tool='shell(git push)'
+```
+
+Deny rules always win over allow rules, even with allow-all enabled. URLs have the matching `--allow-url` / `--deny-url` flags.
 
 **Bypassing approvals:**
 
 ```bash
-copilot --allow-all   # or --yolo
+copilot --allow-all   # or --yolo; /allow-all or /yolo inside a session
 ```
 
-⚠️ **Use with extreme caution.** `--allow-all` lets the agent run any command without confirmation. Reserve it for throwaway environments and containers — never your main workstation or anything with production credentials. See `copilot help permissions` for finer-grained control.
+⚠️ **Use with extreme caution.** With all tools allowed, Copilot has the same access to your machine as you do. Reserve it for throwaway environments and containers — never your main workstation or anything with production credentials. Admins can disable allow-all modes via managed settings.
+
+**Local sandboxing (GA October 7, 2026):** `/sandbox enable` runs the tools and commands Copilot starts inside a sandbox with limited access to files, network, and credentials, based on policies you or your organization set. It works on Windows, macOS, and Linux and is also used by the Copilot app and VS Code Agent Host sessions. Organizations can require it through enterprise-managed settings. `copilot --cloud` (public preview) runs a session in an isolated cloud environment instead.
+
+See `copilot help permissions` and `copilot help sandbox` for details.
 
 ---
 
 ## Model Selection
 
-Switch models with `/model`. The available list depends on your Copilot plan and changes frequently — current options include Claude and GPT-class models (see the [supported models reference](https://docs.github.com/en/copilot/reference/ai-models/supported-models)).
+Switch models with `/model` (or `--model=MODEL` at launch). Choose **Auto** (`--model auto`) to let Copilot route each request; on paid plans, Auto gets a 10% discount on model costs. The available list depends on your plan and admin policy and changes frequently — see the [supported models reference](https://docs.github.com/en/copilot/reference/ai-models/supported-models).
 
-Heavier models consume AI Credits faster (billing is token-metered per model). Check burn with `/usage`.
+- `--effort=LEVEL` (`low` to `max`) sets reasoning effort on models that support it.
+- The 1M-token context window option is available in Copilot CLI and VS Code only.
+- Larger context windows and higher reasoning levels consume AI Credits faster. Check burn with `/usage`.
+
+### Bring Your Own Model (BYOK) and Local Models
+
+The CLI can use your own provider instead of (or alongside) GitHub-hosted models. Models must support tool calling and streaming.
+
+```bash
+export COPILOT_PROVIDER_TYPE=anthropic        # openai (default), azure, or anthropic
+export COPILOT_PROVIDER_BASE_URL="<provider-api-base-url>"
+export COPILOT_PROVIDER_API_KEY="<your-key>"
+export COPILOT_MODEL="<model-id>"
+copilot
+```
+
+Since CLI 1.0.94, `/model` also discovers models from a running local **Ollama** instance and lets you add one for the session. Choosing a local model does **not** make the CLI offline — set `COPILOT_OFFLINE=true` for offline mode. See `copilot help providers`.
 
 ---
 
 ## MCP Servers
 
-The CLI ships with **GitHub's MCP server pre-configured**, so it can work with issues, PRs, and repositories on GitHub.com out of the box.
+The CLI ships with **GitHub's MCP server built in**, so it can work with issues, PRs, and repositories on GitHub.com out of the box.
 
-Add your own servers:
+Add your own servers interactively with `/mcp`, or manage them from the shell with `copilot mcp`. Configuration is stored in `~/.copilot/mcp-config.json` (the directory moves if you set `COPILOT_HOME`). For a one-off session, pass `--additional-mcp-config` with JSON or a file path.
 
-```text
-/mcp add
-```
-
-Configuration is stored in `mcp-config.json` under `~/.copilot` (override the location with the `COPILOT_HOME` environment variable). Press `Ctrl+S` to save server details when prompted.
-
-MCP is the supported extension mechanism for Copilot across all surfaces — the same servers you configure for VS Code or the coding agent generally work here too.
+MCP is the supported extension mechanism for Copilot across all surfaces — the same servers you configure for VS Code or cloud agent generally work here too. Note that the CLI does not currently enforce the organization-level "MCP servers in Copilot" and "MCP Registry URL" policies.
 
 ---
 
 ## Custom Instructions
 
-Copilot CLI automatically picks up repository instruction files and applies them to every prompt in that repository:
+Copilot CLI combines every instruction file it finds (they no longer fall back by priority):
 
-- `.github/copilot-instructions.md` — repository-wide instructions
-- `.github/instructions/**/*.instructions.md` — path-specific instructions
-- `AGENTS.md` — cross-tool agent instructions (also read by other agentic tools)
+- From the Git root and working directory: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.github/instructions/**/*.instructions.md`, and `.claude/rules/**/*.md`
+- From your home directory: `~/.copilot/copilot-instructions.md` and `~/.copilot/instructions/**/*.instructions.md`
+- Extra directories listed in `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`
+
+Path-specific `.instructions.md` files apply automatically to matching files. Bootstrap a repository with `copilot init` (or `/init`), inspect what's loaded with `/instructions` or `copilot instruction list`, and skip everything with `--no-custom-instructions`.
 
 Use these to encode build commands, test conventions, style rules, and "never touch X" constraints once, instead of repeating them per prompt.
 
@@ -225,17 +271,28 @@ Use these to encode build commands, test conventions, style rules, and "never to
 
 ## Custom Agents
 
-The CLI includes built-in agents (Explore, Task, General purpose, Code review, Research, and an automatic Rubber duck) and supports custom agents defined as Markdown files in:
+The CLI includes built-in agents (such as `explore`, `task`, `general-purpose`, `code-review`, `research`, `rubber-duck`, and `security-review`) and supports custom agents defined as Markdown files with YAML frontmatter (`.agent.md`). Search locations, highest priority first:
 
-- `~/.copilot/agents` — user-level, available in every project
-- `.github/agents` — repository-level
-- a `.github-private` repository's `/agents` folder — organization/enterprise-level
+- `~/.copilot/agents/` — user-level, available in every project
+- `.github/agents/` and `.claude/agents/` — repository-level
+- agents bundled in installed plugins
+- organization/enterprise agents from the `agents/` folder of a `.github-private` repository
 
 Invoke them with `/agent`, by mentioning them in a prompt, or from the command line:
 
 ```bash
 copilot --agent=code-review --prompt "review the diff on this branch"
 ```
+
+Use `/subagents` to set default and per-agent models for subagents.
+
+---
+
+## Skills, Hooks, and Plugins
+
+- **Skills** — folders of instructions, scripts, and resources (`SKILL.md`) loaded on demand. Personal skills live in `~/.copilot/skills/` or `~/.agents/skills/`; project skills in `.github/skills/`. Manage with `/skills` or `copilot skill`.
+- **Hooks** — shell commands (or HTTP calls) run at lifecycle events such as `sessionStart`, `preToolUse`, `postToolUse`, and `agentStop`. Repository hooks go in `.github/hooks/*.json`; user hooks in `~/.copilot/hooks/*.json`. See the [hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
+- **Plugins** — installable bundles of agents, skills, hooks, and MCP servers, distributed through marketplaces. Manage with `/plugin` or `copilot plugin install`.
 
 ---
 
@@ -244,40 +301,47 @@ copilot --agent=code-review --prompt "review the diff on this branch"
 Pass a prompt directly for scripting and CI:
 
 ```bash
-copilot --prompt "list the TODO comments in src/ and group them by file"
+copilot -p "list the TODO comments in src/ and group them by file"
 ```
 
 Useful companions:
 
 ```bash
-# Resume the most recent session
-copilot --continue
+# Output only the agent's response (no usage stats)
+copilot -p "summarize CHANGELOG.md" -s
 
-# Pick an older session to resume
+# Machine-readable JSONL output
+copilot -p "list failing tests" --output-format=json
+
+# Resume the most recent session in this directory / pick an older one
+copilot --continue
 copilot --resume
 
-# Run in a cloud-backed sandbox session
-copilot --cloud
+# Run a dynamic workflow you've already created (public preview), no chat prompt
+copilot workflow run WORKFLOW-NAME --args '{"since":"v2.3.0"}'
 ```
 
-For unattended runs you will usually need `--allow-all` (see the warning above) and token auth via `GH_TOKEN`. Keep unattended invocations inside disposable containers or CI runners.
+For unattended runs, prefer explicit `--allow-tool` / `--deny-tool` rules over `--allow-all`, and use token auth via `COPILOT_GITHUB_TOKEN`. Keep unattended invocations inside disposable containers or CI runners.
 
 ---
 
-## Sessions and Context Management
+## Sessions, Remote Steering, and Delegation
 
-- Sessions persist locally; resume with `--continue` / `--resume` or `/resume`.
-- `/context` shows token usage; `/compact` compresses history on demand.
-- The CLI auto-compresses conversation history in the background at roughly 95% of the token limit, so long sessions degrade gracefully instead of failing.
+- Sessions persist locally; resume with `--continue` / `--resume` or `/resume`, and name them with `-n NAME` or `/rename`.
+- `/context` shows token usage; `/compact` compresses history on demand, and the CLI also compacts automatically as you approach the context limit.
+- `/new worktree` (or `/worktree`) starts a session in a fresh Git worktree, so parallel sessions don't collide.
+- **Remote steering:** start with `--remote` or run `/remote on` to monitor and steer the session from GitHub.com or GitHub Mobile. The session still runs on your machine, which must stay online.
+- **Delegation:** `/delegate` hands the task to [Copilot cloud agent](workspace-guide.md), which continues in the cloud and opens a pull request.
+- **Dynamic workflows** (public preview, experimental mode in the CLI): programs that mix scripted steps with agent work, runnable in the CLI, the Copilot app, and the Copilot SDK.
 
 ---
 
 ## Usage and Billing
 
-As of **June 1, 2026**, Copilot uses **GitHub AI Credits** (usage-based, token-metered billing — 1 credit = $0.01) instead of the older premium-request system. Each CLI interaction consumes credits based on the model and tokens used.
+Since **June 1, 2026**, Copilot bills model usage in **GitHub AI Credits** (1 credit = $0.01) instead of the older premium-request system. Each CLI interaction consumes credits based on the model and tokens processed; larger context windows and higher reasoning cost more.
 
-- `/usage` shows AI Credits consumed in the current session.
-- Plan-level credit allowances and account-wide usage are covered in the [main Copilot README](README.md#pricing).
+- `/usage` shows usage for the current session; `/limits` (or `--max-ai-credits`) caps a session or autopilot run.
+- Plan-level credit allowances are covered in the [main Copilot README](README.md#pricing).
 
 ---
 
@@ -286,11 +350,11 @@ As of **June 1, 2026**, Copilot uses **GitHub AI Credits** (usage-based, token-m
 | Old (`gh copilot`, dead since Oct 25, 2025) | New (`copilot`) |
 |---------------------------------------------|-----------------|
 | `gh extension install github/gh-copilot` | `npm install -g @github/copilot` (or brew/winget/script) |
-| `gh copilot suggest "find large files"` | `copilot --prompt "find files over 100MB in this directory"` — or just ask interactively |
-| `gh copilot explain "tar -xzvf x.tar.gz"` | `copilot --prompt "explain: tar -xzvf x.tar.gz"` |
+| `gh copilot suggest "find large files"` | `copilot -p "find files over 100MB in this directory"` — or just ask interactively |
+| `gh copilot explain "tar -xzvf x.tar.gz"` | `copilot -p "explain: tar -xzvf x.tar.gz"` |
 | Suggestion only — you copy/paste commands | Agentic — Copilot can run the command itself after approval |
 | No file access | Reads and edits files in trusted directories |
-| Authenticated through `gh` | `/login` or `GH_TOKEN` |
+| Authenticated through `gh` | `copilot login`, `/login`, or a token env var |
 
 Cleanup:
 
@@ -311,13 +375,18 @@ Note for enterprise admins: when the old extension was retired, the "Copilot in 
 
 ### Authentication Errors
 
-- Run `/login` again inside the CLI.
-- For token auth, confirm the PAT has the **Copilot Requests** permission and is exported as `GH_TOKEN` or `GITHUB_TOKEN`.
+- Run `copilot login` (or `/login` inside the CLI) again.
+- For token auth, confirm the PAT has the **Copilot Requests** permission and is exported as `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`.
 - Organization users: an admin may have disabled Copilot CLI access by policy.
 
 ### Copilot Won't Touch Files in a Directory
 
 - The directory isn't trusted. Use `/add-dir /path/to/dir`, or restart the CLI from that directory and accept the trust prompt.
+
+### Something Odd Is Loaded (or Missing)
+
+- `/env` lists every instruction file, MCP server, skill, agent, hook, and plugin in effect.
+- `/diagnose` analyzes the session log for errors.
 
 ### Help Commands
 
@@ -326,6 +395,8 @@ copilot help              # general help
 copilot help config       # settings.json options
 copilot help environment  # environment variables
 copilot help permissions  # tool-permission model
+copilot help providers    # BYOK and local model providers
+copilot help sandbox      # sandbox policies
 copilot help logging      # log levels
 ```
 
@@ -334,7 +405,8 @@ copilot help logging      # log levels
 ## Resources
 
 - **Repository and releases**: https://github.com/github/copilot-cli
-- **Official docs**: https://docs.github.com/copilot/how-tos/use-copilot-agents/use-copilot-cli
+- **Official docs**: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli
+- **Command reference**: https://docs.github.com/en/copilot/reference/cli-command-reference
 - **Copilot settings**: https://github.com/settings/copilot
 - **GitHub status**: https://www.githubstatus.com/
 
@@ -345,9 +417,9 @@ copilot help logging      # log levels
 - [GitHub Copilot Overview](README.md)
 - [Copilot IDE Guide](ide-guide.md)
 - [Copilot Chat Guide](chat-guide.md)
-- [Copilot Coding Agent Guide](workspace-guide.md)
+- [Copilot Cloud Agent Guide](workspace-guide.md)
 - [Comparison with Other Tools](../../comparisons/feature-matrix.md)
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

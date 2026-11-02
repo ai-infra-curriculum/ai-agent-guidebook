@@ -29,11 +29,12 @@ The `gemini` command is a Node.js-based agent that gives you:
 - Hierarchical project context via `GEMINI.md` files
 - MCP server support, extensions, and custom slash commands
 - JSON output modes for scripting (`--output-format json` / `stream-json`)
-- Session checkpointing and resuming
+- Agent Skills, subagents, hooks, and a policy engine
+- Automatic session saving and resuming
 
-It works with three authentication methods: **Login with Google** (OAuth, free tier), a **Gemini API key** from Google AI Studio, and **Vertex AI** for Google Cloud projects.
+It works with three authentication methods: **Sign in with Google** (OAuth, for Gemini Code Assist Standard/Enterprise licenses), a **Gemini API key** from Google AI Studio, and **Vertex AI** for Google Cloud projects.
 
-> ⚠️ **Consumer-tier transition**: Google has announced that the "Login with Google" consumer tiers (free Code Assist for individuals, Google AI Pro/Ultra) stop being served on **June 18, 2026**, as Gemini CLI transitions to Antigravity CLI. Paid API keys and Code Assist Standard/Enterprise licenses are unaffected. See the [main README](README.md#important-consumer-tier-transition).
+> ⚠️ **Consumer tiers retired**: since **June 18, 2026**, Gemini CLI no longer serves free Gemini Code Assist for individuals or Google AI Pro/Ultra personal accounts — those users were moved to [Antigravity CLI](../antigravity/cli.md). Paid API keys, Vertex AI, and Code Assist Standard/Enterprise licenses are unaffected. See the [main README](README.md#important-consumer-tiers-moved-to-antigravity-cli).
 
 ---
 
@@ -55,7 +56,7 @@ For Vertex AI authentication you additionally need:
 - A Google Cloud project with the Vertex AI API enabled
 - The `gcloud` CLI (for Application Default Credentials) or a service-account key
 
-For Login with Google or an AI Studio API key, no Cloud project is required.
+For an AI Studio API key, no Cloud project is required. Sign in with Google on an organization (Code Assist) license requires `GOOGLE_CLOUD_PROJECT`.
 
 ---
 
@@ -84,6 +85,8 @@ npm install -g @google/gemini-cli@latest    # stable (default)
 npm install -g @google/gemini-cli@preview   # weekly preview
 npm install -g @google/gemini-cli@nightly   # nightly builds
 ```
+
+Per the repository README, previews publish every Tuesday at 23:59 UTC, stable releases (last week's preview plus fixes) every Tuesday at 20:00 UTC, and nightlies daily at 00:00 UTC.
 
 ---
 
@@ -119,31 +122,22 @@ In restricted environments (no system Node), you can create a Node environment w
 
 Gemini CLI supports three authentication methods. You can switch between them at any time with the `/auth` command inside the REPL. Credentials are cached under `~/.gemini/`.
 
-### Option A: Login with Google (OAuth) — default
+### Option A: Sign in with Google (OAuth)
 
-The easiest path. Just run the CLI:
-
-```bash
-gemini
-```
-
-On first run it opens a browser window for Google sign-in. With a personal Google account this grants a free Gemini Code Assist license for individuals:
-
-- **60 requests per minute**
-- **1,000 requests per day**
-
-at no cost. (Note the June 18, 2026 consumer-tier cutoff above.)
-
-If you have a Gemini Code Assist **Standard or Enterprise** license through Google Cloud, also set your project:
+For users with a Gemini Code Assist **Standard or Enterprise** license (company, school, or Google Workspace accounts). Set your Google Cloud project, then run the CLI:
 
 ```bash
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 gemini
 ```
 
+On first run, choose **Sign in with Google**; the CLI opens a browser window and caches the credentials locally. Gemini CLI's quota page lists 1,500 model requests/user/day for Standard and 2,000 for Enterprise.
+
+> Personal accounts — free Gemini Code Assist for individuals and Google AI Pro/Ultra — stopped being served on June 18, 2026. Use Option B/C, or [Antigravity CLI](../antigravity/cli.md).
+
 ### Option B: Gemini API key (Google AI Studio)
 
-For higher or controllable limits, usage-based billing, and scripting/CI:
+For usage-based billing and scripting/CI (Google's transition announcement guarantees continued access through **paid** API keys):
 
 1. Create a key at <https://aistudio.google.com/app/apikey>.
 2. Export it:
@@ -185,15 +179,24 @@ export GOOGLE_CLOUD_LOCATION="us-central1"
 
 The service account needs the `Vertex AI User` role (`roles/aiplatform.user`). On GKE/Cloud Run, prefer Workload Identity over key files.
 
+Vertex AI also accepts a Google Cloud API key instead of ADC:
+
+```bash
+export GOOGLE_API_KEY="your-cloud-api-key"
+export GOOGLE_GENAI_USE_VERTEXAI=true
+gemini
+```
+
 ### Choosing a method
 
-| Aspect | Login with Google | API key (AI Studio) | Vertex AI |
-|--------|-------------------|---------------------|-----------|
-| Setup time | Seconds | 1 minute | 10–30 minutes |
-| Free tier | Yes (60 RPM / 1,000 RPD) | Yes (limited) | No |
+| Aspect | Sign in with Google | API key (AI Studio) | Vertex AI |
+|--------|---------------------|---------------------|-----------|
+| Who it's for | Code Assist Standard/Enterprise seats | Anyone with a paid API key | Google Cloud projects |
+| Setup time | Minutes (needs `GOOGLE_CLOUD_PROJECT`) | 1 minute | 10–30 minutes |
+| Billing | Fixed-price seat | Pay-as-you-go | Google Cloud billing |
 | Works headless / in CI | Awkward | Yes | Yes |
 | Region pinning / audit logs | No | No | Yes |
-| Best for | Personal interactive use | Scripts, CI, higher limits | Production, enterprise |
+| Best for | Org-licensed interactive use | Scripts, CI | Production, enterprise |
 
 ---
 
@@ -272,7 +275,7 @@ The CLI also respects `.gitignore` by default.
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account JSON key |
 | `GEMINI_SANDBOX` | Enable/choose the tool-execution sandbox |
 | `GEMINI_SYSTEM_MD` | Path to a custom system prompt file |
-| `GEMINI_CLI_TRUST_WORKSPACE` | `true` to bypass folder-trust prompts in headless environments |
+| `GEMINI_CLI_TRUST_WORKSPACE` | `true` to bypass folder-trust prompts in headless environments (per-session alternative: `--skip-trust`) |
 
 ---
 
@@ -280,7 +283,7 @@ The CLI also respects `.gitignore` by default.
 
 ```bash
 gemini --version
-# → prints the installed version (e.g. 0.46.0)
+# → prints the installed version (e.g. 0.65.0)
 
 gemini -p "hello"
 # → a short response from the model (verifies auth + connectivity)
@@ -415,9 +418,13 @@ If your proxy uses a self-signed CA, add it to Node's trust store:
 export NODE_EXTRA_CA_CERTS="/etc/ssl/certs/corp-ca.pem"
 ```
 
-### Immediate 429s on the free tier
+### Sign-in works but requests fail for a personal account
 
-You've hit the 60 requests/min or 1,000 requests/day caps, or your account's quota was consumed by other tooling. Switch to an API key or Vertex AI for independent quota.
+Free Code Assist for individuals and Google AI Pro/Ultra accounts are no longer served by Gemini CLI (since June 18, 2026). Switch to an API key or Vertex AI, or move to [Antigravity CLI](../antigravity/cli.md).
+
+### Immediate 429s
+
+You've hit your API tier's rate limit, your Code Assist seat's daily request cap, or your Vertex AI quota. Check `/stats model`, add backoff, or raise your tier/quota.
 
 ---
 
@@ -429,4 +436,4 @@ You've hit the 60 requests/min or 1,000 requests/day caps, or your account's quo
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

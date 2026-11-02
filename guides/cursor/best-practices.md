@@ -82,30 +82,32 @@ One coherent task per agent run. "Refactor auth, also add the new billing endpoi
 ## Rules That Pull Their Weight
 
 - **Encode conventions once** in `.cursor/rules/*.mdc` (or `AGENTS.md`) instead of repeating them in every prompt. See [rules-and-context.md](rules-and-context.md).
-- **Scope rules** with `globs` (Auto Attached) and `description` (Agent Requested) rather than making everything `alwaysApply: true` — `Always` rules ride in *every* prompt and inflate context cost.
-- **Keep each rule focused and under ~500 lines**; split big ones into composable files.
+- **Scope rules** with `globs` (*Apply to Specific Files*) and `description` (*Apply Intelligently*) rather than making everything `alwaysApply: true` — *Always Apply* rules ride in *every* prompt and inflate context cost.
+- **Keep each rule focused and under 500 lines**; split big ones into composable files.
 - **Don't restate what the model knows.** A rule that explains how `git` works is wasted budget; a rule that documents *your* error-handling convention is gold.
 - **Put build/test/lint commands in `AGENTS.md`** so the agent can verify its own work.
+- **Package repeatable workflows as skills** (`.cursor/skills/<name>/SKILL.md`) instead of pasting the same multi-step prompt — and commit them so the team shares them.
+- **Remember Bugbot doesn't read `.mdc` rules.** Put review-specific guidance in `.cursor/BUGBOT.md`.
 
 ---
 
 ## Managing Context Deliberately
 
-- **Let Agent gather context** for open-ended tasks — in Cursor 2.0 it self-searches, so you can often skip `@`-mentions.
+- **Let Agent gather context** for open-ended tasks — since Cursor 2.0 it self-searches, so you can often skip `@`-mentions.
 - **Use `@`-mentions to *constrain*** when you know exactly which files matter (`@Files`, `@Folders`), to bring in a diff (`@Git`), or to reference prior work (`@Past Chats`).
 - **Tune the index** with `.cursorignore` (hide sensitive files entirely) and `.cursorindexingignore` (keep generated/vendored files out of search). A clean index makes semantic search faster and more relevant.
-- **Start a fresh conversation** for a new task rather than letting one thread accumulate unrelated context.
+- **Start a fresh conversation** for a new task rather than letting one thread accumulate unrelated context. For a quick tangent, use a side chat (`/side` or `/btw`) instead of derailing the main thread.
 
 ---
 
 ## Model Selection
 
-- **Default to Auto** for everyday work — it picks a model at fixed token rates and adapts as models change.
-- **Pick a frontier model explicitly** (Claude, GPT/Codex, Gemini) for hard, multi-step reasoning, and consider **Max Mode** when the task needs a large context and many tool calls.
-- **Cursor's Composer** model is tuned for fast interactive agentic coding; it's a strong default for in-editor iteration.
-- **Bring your own API key** (Anthropic, Google, Azure OpenAI, AWS Bedrock) in Settings → Models if you want to bill model usage to your own account — but note Tab completion always uses Cursor's built-in model regardless.
+- **Start with Auto or a Cursor model** (Composer 2.5, Grok) for everyday work — on the current plans these draw from your included weekly pool.
+- **Pick a frontier third-party model explicitly** (Claude, GPT, Gemini) for hard, multi-step reasoning — but know that on the new X Subscription plans these bill at API list price from prepaid credit, so set a spending cap.
+- **Teams/Enterprise:** Cursor Router's **Balance** and **Intelligence** Auto modes route each request to a suitable model; admins can restrict modes and maintain model allow/block lists.
+- **Bring your own API key** (OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock) for chat models if you want usage billed to your own provider account — Tab still uses Cursor's built-in model, and Cursor's zero-data-retention policy doesn't cover your own keys.
 
-Source: [Available models](https://cursor.com/help/models-and-usage/available-models), [Bring your own API key](https://cursor.com/help/models-and-usage/api-keys).
+Sources: [Models](https://cursor.com/docs/models), [API keys](https://cursor.com/docs/settings/api-keys).
 
 ---
 
@@ -124,7 +126,7 @@ For every agent change:
 - [ ] **Tests** — meaningful, exercising behavior, not just re-asserting the implementation.
 - [ ] **No placeholders** — grep the diff for `TODO`, `placeholder`, `mock`, `example`.
 
-Use **checkpoints** to roll back a bad result instead of hand-untangling it. Consider running **Bugbot** on the PR as a first-pass review — but treat it as a supplement to human review, not a replacement.
+Use **checkpoints** to roll back a bad result instead of hand-untangling it. Run `/review` before pushing (Bugbot plus Security Review where available) as a first-pass review — but treat it as a supplement to human review, not a replacement.
 
 ---
 
@@ -146,9 +148,9 @@ Stuffing five unrelated tasks into a single agent run produces a sprawling diff 
 
 Rules marked Always ride in every prompt. Over-using them bloats context, slows responses, and dilutes the rules that actually matter. Scope with globs.
 
-### Unattended auto-run in a real environment
+### Run Everything in a real environment
 
-Letting Agent execute arbitrary terminal commands without approval in a repo with production credentials or destructive tooling is how you get a `rm -rf` you didn't ask for. Keep command approval on outside disposable sandboxes.
+The **Run Everything** run mode executes every tool call automatically — no sandbox and no classifier. Letting the agent do that in a repo with production credentials or destructive tooling is how you get a `rm -rf` you didn't ask for. Keep it for disposable sandboxes and cloud VMs.
 
 ### Trusting the agent's "tests pass"
 
@@ -178,9 +180,22 @@ Sources: [Data use & privacy](https://cursor.com/data-use), [Security](https://c
 
 ### Constrain the agent's blast radius
 
-- Keep **command approval** on; review what Agent wants to run.
+Cursor's **Run Mode** (Settings → Agents → Approvals & Execution) decides when commands run, when Cursor asks, and when commands enter the sandbox:
+
+| Run Mode | Behavior |
+|----------|----------|
+| **Auto-review** | Allowlisted calls run immediately; other shell commands run in the sandbox when possible; calls that can't be sandboxed go to a classifier |
+| **Allowlist** | Actions in your allowlist run without approval; sandboxing optional for shell commands |
+| **Run Everything** | Every tool call runs automatically — no sandbox, no classifier |
+
+- Auto-review applies to shell, MCP, and Fetch tool calls. Cursor is explicit that **"Auto-review is not a security boundary"** — the classifier can make mistakes.
+- The **sandbox** (macOS Seatbelt; Linux Landlock + seccomp) blocks unauthorized file and network access. Network is blocked by default and opened per your network mode (`sandbox.json Only`, `sandbox.json + Defaults`, or `Allow All`) and `sandbox.json`.
+- Tune Auto-review with `permissions.json` (`~/.cursor/permissions.json` or `<project>/.cursor/permissions.json`, merged) using `autoRun.allow_instructions` and `autoRun.block_instructions`. A team-level dashboard configuration overrides both files.
+- Add a `beforeShellExecution` or `beforeMCPExecution` [hook](rules-and-context.md#hooks) with `failClosed: true` for policies that must hold regardless of run mode.
 - Give **MCP servers least-privilege credentials** (read-only DB replicas, scoped tokens). See [mcp-servers.md](mcp-servers.md#security).
-- On Team/Enterprise, use admin controls (repo/model/MCP access, auto-run/network controls, audit logs) to set guardrails centrally.
+- On Team/Enterprise, use admin controls (repo/model/MCP access, Auto-review configuration, audit logs) to set guardrails centrally.
+
+Source: [Run modes](https://cursor.com/docs/agent/run-modes).
 
 ### Governance across multiple tools
 
@@ -205,11 +220,12 @@ If your org uses several AI assistants (Cursor here, Claude Code or Copilot else
 - [Cursor Usage](usage.md)
 - [Cursor Rules and Context](rules-and-context.md)
 - [Cursor MCP Servers](mcp-servers.md)
+- [OpenAI Codex Guide](../codex/README.md)
 - [GitHub Copilot Best Practices](../github-copilot/best-practices.md)
 - [Prompting Best Practices](../../best-practices/prompting.md)
 - [Security Best Practices](../../best-practices/security.md)
 
 ---
 
-**Last Updated**: 2026-06-16
+**Last Updated**: 2026-10-21
 </content>

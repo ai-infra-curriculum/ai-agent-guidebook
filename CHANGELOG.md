@@ -22,6 +22,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-10-21
+
+### Changed — October 2026 currency refresh (every claim re-verified against vendor docs, changelogs, and package registries)
+
+#### Landscape shifts since June
+- **Gemini CLI → Antigravity CLI:** consumer accounts (free Code Assist, Google AI Pro/Ultra) lost Gemini CLI on 2026-06-18; Gemini CLI guides now target Code Assist Standard/Enterprise and paid API keys. Antigravity guides rewritten for Antigravity 2.0, plus a new `guides/antigravity/cli.md` (`agy`)
+- **Cursor** plans now sold through The X Subscription (Free / Plus / Premium / Super / Ultra); guides updated for Cursor 3.x (Agents Window, cloud agents, Bugbot, skills, hooks)
+- **GitHub Copilot:** coding agent renamed cloud agent; new Copilot app, Max plan, AI-credit allowances, third-party Claude/Codex agents, local sandboxing; Edit mode and chat participants removed/deprecated in VS Code
+- **VS Code:** agent sessions run on selectable harnesses (Copilot default, Local, Claude, Codex, Cloud)
+
+#### Models & pricing (as of October 2026)
+- Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5; OpenAI GPT-6 Astra / GPT-6.1 Sol / GPT-6 Luna; Gemini 4 Argon / 3.8 Flash — prices and long-context rules re-sourced from official pricing pages
+- Unsourced latency/throughput tables and third-party price tables removed from `comparisons/`
+
+#### Claude Code & Skills
+- `Task` tool → `Agent`; background sub-agents, nesting, auto mode, `/fast`, effort levels, ~30 hook events and 5 handler types, `#` memory shortcut removed, AGENTS.md fallback
+- **Security fix:** skills `allowed-tools` documented as *pre-approving* tools (it was described as restricting them); template frontmatter rebuilt on the agentskills.io spec
+- New `guides/claude-code/background-and-scheduled-work.md`
+
+#### MCP
+- Spec revision **2026-07-28** (stateless core, `server/discover`, multi round-trip requests; Sampling/Roots/Logging and HTTP+SSE deprecated); governance under the Agentic AI Foundation
+- v2 TypeScript/Python SDK examples; MCP Registry and `.mcpb` bundles
+- Catalog split into `catalog.md` + `catalog-specialized.md`; dead/archived servers removed; archived `@modelcontextprotocol/server-github` replaced with GitHub's hosted server everywhere
+
+### Added
+- **OpenAI Codex guide** (`guides/codex/`): CLI, `codex exec`, sandbox/approvals, `config.toml`, MCP, GitHub Action, SDKs
+- Codex added to the feature matrix, use cases, and cost analysis
+
+### Fixed
+- CI markdown lint now covers every `.md` file (globs previously matched no files); repo lints clean
+- Root README: removed dead `gh extension install github/gh-copilot` instructions; repo tree lists all guides
+- **Security:** Kubernetes MCP examples are read-only by default again — new `templates/k8s-mcp.toml` (`read_only = true`, `disable_destructive = true`), since the server dropped its `--read-only` flag and defaults to full access
+
+---
+
 ## [1.2.0] - 2026-06-11
 
 ### Fixed — full accuracy audit against official documentation and package registries

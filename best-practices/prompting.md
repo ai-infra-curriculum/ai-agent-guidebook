@@ -231,6 +231,7 @@ created in the last 30 days with more than 100 API requests"
 # Should support international domains
 # Return tuple of (is_valid, error_message)
 def validate_email(email: str) -> tuple[bool, str]:
+    ...  # the assistant completes the body from the comments above
 ```
 
 **Descriptive variable names:**
@@ -556,4 +557,4 @@ Explain your changes."
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21

@@ -1,6 +1,8 @@
 # Advanced Claude Code Usage
 
-Power-user features: checkpoints, background tasks, scheduled wakeups, dynamic loops, deferred tools, plan mode, fast mode, context compaction, thinking budgets, and output styles. Most of these are off the well-trodden path. Each unlocks a workflow the defaults can't.
+Power-user features: checkpoints, background tasks and Monitor, `/loop`, output styles, deferred tools, plan mode, fast mode, effort levels, context compaction, session branching, and worktrees. Most of these are off the well-trodden path. Each unlocks a workflow the defaults can't.
+
+Last verified: 2026-10 (against code.claude.com/docs, Claude Code v2.1.306). For background sessions, dynamic workflows, agent teams, `/goal`, and cloud scheduling, see [background-and-scheduled-work.md](background-and-scheduled-work.md).
 
 ---
 
@@ -14,7 +16,7 @@ Power-user features: checkpoints, background tasks, scheduled wakeups, dynamic l
 - [Plan Mode and ExitPlanMode](#plan-mode-and-exitplanmode)
 - [/fast Mode](#fast-mode)
 - [Context Auto-Compaction](#context-auto-compaction)
-- [Thinking Budgets: MAX_THINKING_TOKENS and alwaysThinkingEnabled](#thinking-budgets-max_thinking_tokens-and-alwaysthinkingenabled)
+- [Effort Levels and Thinking](#effort-levels-and-thinking)
 - [Session Resume and Branching](#session-resume-and-branching)
 - [Worktrees for Power Users](#worktrees-for-power-users)
 - [Custom Output Formats](#custom-output-formats)
@@ -26,19 +28,22 @@ Power-user features: checkpoints, background tasks, scheduled wakeups, dynamic l
 
 Checkpointing is automatic. Claude Code captures the state of your code before each edit, and every user prompt creates a new checkpoint. That safety net lets you pursue ambitious, wide-scale changes knowing you can return to a prior state.
 
-To roll back, run `/rewind` (or press `Esc` twice with an empty prompt) to open the rewind menu. Pick the prompt you want to return to, then choose:
+To roll back, run `/rewind` (aliases `/checkpoint`, `/undo`), or press `Esc` twice with an empty prompt, to open the rewind menu. Pick the prompt you want to return to, then choose:
 
 - **Restore code and conversation** — revert both to that point.
 - **Restore conversation** — rewind the chat, keep current code.
 - **Restore code** — revert file changes, keep the conversation.
 - **Summarize from here / up to here** — compress part of the conversation into a summary to free context, without touching files.
 
-Two important limits:
+`/rewind` can also bring back a conversation from before you ran `/clear`.
+
+Important limits:
 
 - **Bash-driven file changes are not tracked.** `rm`, `mv`, `cp`, and script outputs cannot be undone through rewind — only edits made through Claude's file-editing tools.
-- **Not a replacement for git.** Checkpoints are session-level "local undo"; keep using version control for permanent history. For risky filesystem-level experiments, pair with `git stash`.
+- **Background agents' edits may not be restored.** Edits from a skill that runs as a background fork happen outside your session's checkpoints; use git to revert them.
+- **Not a replacement for git.** Checkpoints are session-level "local undo"; keep using version control for permanent history.
 
-Checkpoints persist across sessions (so `claude --resume` can still rewind) and are cleaned up with session data after 30 days by default.
+Checkpoints persist across sessions (so `claude --resume` can still rewind). File snapshots are deleted in the retention sweep, by default about 30 days after the session last saved one.
 
 **When to lean on rewind:**
 
@@ -50,11 +55,11 @@ Checkpoints persist across sessions (so `claude --resume` can still rewind) and 
 
 ## Background Tasks and Monitor
 
-The Bash tool's `run_in_background: true` spawns a process and returns immediately with a `shell_id`. The process keeps running independently of the assistant turn.
+The Bash tool's `run_in_background: true` starts a command as a background task and returns immediately with a task ID and the path of its output file. The process keeps running while Claude does other work; Claude reads progress from the output file with `Read`. (The separate `TaskOutput` tool was removed in v2.1.277.)
 
 ```
 Bash(command="pnpm build", run_in_background=true)
-# Returns: { shell_id: "01HF...", pid: 12345 }
+# Returns a task ID and an output file path
 ```
 
 Useful for:
@@ -63,106 +68,82 @@ Useful for:
 - Test suites kicked off at the start of a task.
 - File watchers, log tails, dev servers.
 
-To inspect, read incremental output, or wait for completion, use the `Monitor` tool:
+Manage background work yourself with `/tasks` (alias `/bashes`): list, open, and stop tasks and sub-agents. Press `Ctrl+B` to send a running foreground command or sub-agent to the background. A foreground command that hits its timeout is moved to the background instead of being killed (unless it starts with `sleep`).
 
-```
-Monitor(shell_id="01HF...")
-```
+**Monitor** is a separate tool for *reacting* to output. Claude writes a small script (or opens a WebSocket), Monitor runs it in the background, and every output line arrives as an event Claude can respond to mid-conversation — tail a log and flag errors, poll a CI job until it changes state, watch a directory.
 
-`Monitor` streams stdout/stderr in chunks. Each chunk arrives as a notification; the model can react in real time. If you don't want incremental output and just want to wait, use the Bash tool's regular blocking mode instead — `run_in_background` is for cases where you genuinely want concurrency.
+- Every watch has a deadline: 5 minutes by default, at most 30 minutes (at most 10 in a single-prompt `-p` run). At the deadline Claude gets one notice and can restart the watch.
+- Monitor commands follow your Bash permission rules.
+- Not available on Bedrock, Google Cloud's Agent Platform, or Foundry, or when `DISABLE_TELEMETRY` / `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set; on Windows it requires Git Bash.
 
-Kill a background process:
+Lifetime and limits:
 
-```
-Bash(command="kill <pid>")
-```
-
-A common pattern:
-
-```
-# Start a long test run in background
-{shell_id} = Bash(command="pnpm test --watch", run_in_background=true)
-
-# Do other work
-Read(...)
-Edit(...)
-
-# Periodically check what tests are doing
-Monitor(shell_id=...)
-```
-
-Background tasks are tied to the session. They die when the session ends. For tasks that need to outlive a session, use the system's normal job control (`nohup`, `tmux`, systemd) — Claude Code does not manage long-lived daemons.
+- A command started by the main conversation (or a background sub-agent) keeps running after Claude's final response, until it exits, is stopped, or hits a time limit. A command a *foreground* sub-agent started stops when that sub-agent's run ends.
+- Interactive local sessions have no time limit on background commands. Unattended sessions (`-p`, Agent SDK, CI, cloud) cap them: 30 minutes by default, 2 hours max (10 minutes by default in a `-p` run whose prompt is passed as text). Raise with `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS`.
+- Exiting Claude Code stops background commands. For processes that must outlive the session, use your normal job control (`nohup`, `tmux`, systemd) — or run the whole session in the background with `/background` or `claude --bg`.
+- MCP tool calls in the main conversation that run longer than two minutes move to the background automatically (`CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` tunes or disables this).
+- `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` turns all of this off.
 
 ---
 
 ## Scheduled Wakeup and /loop
 
-`/loop` runs a prompt or slash command at an interval:
+`/loop` is a bundled skill that re-runs a prompt while the session stays open:
 
 ```
-/loop 5m /check-deploy-status
-/loop 30s "summarize new emails"
+/loop 5m check if the deployment finished and tell me what happened
+/loop check whether CI passed and address any review comments
+/loop 20m /review-pr 1234
 ```
 
-The model wakes up every interval, runs the prompt, then sleeps. Useful for monitoring tasks where the work is small but periodic.
+| You provide | What happens |
+|-------------|--------------|
+| Interval and prompt | Runs on a fixed schedule (converted to cron; minimum one minute) |
+| Prompt only | Claude picks the next interval after each iteration, between one minute and one hour |
+| Nothing | Runs the built-in maintenance prompt, or your `loop.md` if you have one |
 
-To self-pace (model decides when to wake again):
+The `ScheduleWakeup` tool powers self-paced loops: Claude calls it at the end of each iteration to choose when the next one runs, and calls it with `stop: true` to end the loop once the work is done. In sessions where Monitor is available, Claude may use Monitor instead of polling.
 
-```
-/loop /babysit-prs
-```
+**Stopping a loop:**
 
-The `ScheduleWakeup` tool is what powers self-paced loops. The model calls it at the end of a turn with a desired delay:
+- Self-paced loop: press `Esc` while it's waiting for the next iteration.
+- Fixed-interval loop: ask Claude to cancel it (it uses `CronList` / `CronDelete`), or let it expire — recurring session tasks delete themselves after seven days.
+- Closing the session also stops it; session tasks are restored on `--resume` if unexpired.
 
-```
-ScheduleWakeup(delay_minutes=10, reason="Recheck CI status")
-```
-
-Ten minutes later, the model wakes up with the original loop prompt plus the stated reason. It can choose to wake itself sooner, or never (by not calling ScheduleWakeup at the end of the turn — the loop dies).
+There is no `/loop-cancel` command.
 
 **When to use /loop:**
 
-- Polling-style monitoring: CI runs, deploy status, log tails, slow background jobs.
-- Recurring tasks: "every morning, summarize new GitHub issues."
-- Self-paced research: "keep digging until you find the root cause."
+- Polling-style monitoring: CI runs, deploy status, slow background jobs.
+- Short-lived recurring checks during a working session.
 
-**Cancel a loop:**
+For work that must run without your machine or an open session, use a cloud scheduled task (`/schedule`) instead — see [background-and-scheduled-work.md](background-and-scheduled-work.md#scheduling-loop-desktop-and-cloud).
 
-```
-/loop-cancel
-```
-
-Or just close the session. Loops are session-bound.
-
-A scheduled loop runs unattended. Anything destructive belongs behind explicit permission, not in a loop body.
+A scheduled loop runs unattended. Anything destructive belongs behind explicit permission, not in a loop body. Note that a scheduled fire won't run skills marked `disable-model-invocation: true`, built-in commands, or MCP prompts — those arrive as plain text.
 
 ---
 
 ## Output Styles
 
-`outputStyle` in `settings.json` controls how the assistant communicates:
+`outputStyle` in `settings.json` changes how Claude communicates, by adding instructions to the system prompt:
 
 ```json
 {
-  "outputStyle": "Explanatory"
+  "outputStyle": "Concise"
 }
 ```
 
-Built-in options:
+Built-in styles:
 
 | Style | Behavior |
 |-------|----------|
-| `default` | Standard software-engineering focus; concise, tool-driven |
-| `Explanatory` | Adds educational "insights" about implementation choices as it works |
-| `Learning` | Collaborative learn-by-doing mode; asks you to write small pieces yourself |
+| `default` | Claude Code's standard software-engineering instructions, no additions |
+| `Proactive` | Starts work immediately and makes reasonable assumptions on routine decisions instead of asking |
+| `Concise` | Leads with the result; skips preamble, narration, and recaps (errors, security warnings, and destructive-action confirmations stay complete) |
+| `Explanatory` | Adds short `Insight` blocks explaining the choices behind the code |
+| `Learning` | Explains choices and leaves small pieces of code for you to write |
 
-You can also define custom output styles (Markdown files with frontmatter under `~/.claude/output-styles/` or `.claude/output-styles/`) that replace parts of the system prompt.
-
-Switch per-session:
-
-```
-/output-style explanatory
-```
+Switch per session with `/output-style concise`, or pick under **Output style** in `/config`. Run `/clear` or start a new session for a style change to take effect in replies. Custom styles are Markdown files with frontmatter in `~/.claude/output-styles/` or `.claude/output-styles/`; plugins can ship them too.
 
 ---
 
@@ -170,34 +151,34 @@ Switch per-session:
 
 Covered in detail in [mcp-servers.md](mcp-servers.md#deferred-tools-and-toolsearch). Recap:
 
-With many MCP servers configured, eagerly loading every tool's full schema into context burns 30-80k tokens before the user types anything. Deferred mode (MCP tool search) loads only names; full schemas are fetched on demand. It is enabled by default and controlled with the `ENABLE_TOOL_SEARCH` environment variable (`true` / `auto` / `false`):
+With many MCP servers configured, eagerly loading every tool's full schema into context burns tens of thousands of tokens before you type anything. MCP tool search loads only names; full schemas are fetched on demand. It is on by default (including behind a custom `ANTHROPIC_BASE_URL` gateway as of v2.1.304) and controlled with `ENABLE_TOOL_SEARCH`:
 
 ```bash
-ENABLE_TOOL_SEARCH=auto claude   # load upfront if schemas fit in 10% of the window
+ENABLE_TOOL_SEARCH=auto claude     # defer only once definitions exceed 10% of the window
+ENABLE_TOOL_SEARCH=auto:5 claude   # custom threshold (5%)
+ENABLE_TOOL_SEARCH=false claude    # load everything upfront
 ```
 
-The model uses `ToolSearch` to load schemas it actually needs:
+The model uses `ToolSearch` to load the schemas it actually needs:
 
 ```
 ToolSearch(query="select:mcp__github__create_pr")
 ToolSearch(query="postgres query", max_results=5)
 ```
 
-Once a schema is loaded, the tool is callable for the rest of the session. There's no per-call lookup overhead — only the first reference incurs a round trip.
+Once a schema is loaded, the tool is callable for the rest of the session. Tradeoffs:
 
-Tradeoffs:
+- Saves a lot of context when servers are many.
+- Adds a round trip on the first call to each unseen tool.
+- Works on Claude Haiku 4.5, Sonnet 4, Opus 4, and later models; on older models, and on some Agent Platform and Foundry configurations, Claude Code loads tools upfront regardless.
 
-- Saves context when servers are many. Saves a lot.
-- Adds a turn of latency on the first call to each unseen tool.
-- Requires a model that supports `tool_reference` blocks (Haiku models don't; tool search is disabled by default on Vertex AI and non-first-party proxies).
-
-Keep the default unless your tool count is tiny or you are on an unsupported backend — then use `auto` or `false`.
+Keep the default unless your tool count is tiny. Set `"alwaysLoad": true` on a server whose tools should always be visible without a search step.
 
 ---
 
 ## Plan Mode and ExitPlanMode
 
-Plan mode is a read-only state. The agent can read files, search, run non-mutating Bash, but cannot Write, Edit, or run mutating commands. Cycle into it from any session with `Shift+Tab`, or start in it:
+Plan mode lets Claude investigate and propose before it edits. It can read and search; when auto mode is available, classifier-approved commands can also run, but edits are blocked until you approve a plan. Enter it with `Shift+Tab`, with `/plan [description]`, or at launch:
 
 ```bash
 claude --permission-mode plan
@@ -221,61 +202,48 @@ The `ExitPlanMode` tool is how the agent transitions from planning to execution:
 ExitPlanMode(plan="...full plan text...")
 ```
 
-The plan is surfaced to the user for explicit approval. Approval flips the agent into normal write mode and proceeds. Rejection keeps the agent in plan mode to refine.
+The plan is surfaced to you for explicit approval. Approval leaves plan mode and proceeds; rejection keeps the agent in plan mode to refine. Accepting a plan also gives an unnamed session a title based on the plan, and the plan is re-injected from disk after compaction, so later turns can still refer to "the plan we approved."
 
-This is a structural commit point. The plan becomes part of the conversation record; later turns can refer back to "the plan we approved" and the agent honors it.
+The `opusplan` model setting uses Opus while in plan mode and Sonnet for execution.
 
-**Anti-pattern:** approving an ExitPlanMode with a vague plan ("I'll refactor the auth module") and then losing track of what was actually agreed. Make the plan concrete: file names, function names, success criteria.
+**Anti-pattern:** approving a vague plan ("I'll refactor the auth module") and then losing track of what was actually agreed. Make the plan concrete: file names, function names, success criteria.
 
 ---
 
 ## /fast Mode
 
-`/fast` toggles a session into a low-thinking, low-tool-overhead mode for short tasks:
+Fast mode is a **higher-speed configuration of Claude Opus** — up to 2.5x faster output at a higher price per token. It is not a different model and not a "cheap mode": quality and capabilities are the same as the underlying Opus model.
 
 ```
-/fast
+/fast          # opens a toggle; Space to flip, Enter to confirm
 ```
 
-Effects:
+Or persist it with `"fastMode": true` in your user settings.
 
-- Switches to Haiku 4.5 if the session was on a heavier model.
-- Disables extended thinking.
-- Bypasses some auto-formatting and slow hooks where safe.
-- Reduces the amount of preamble in responses.
+- Supported on Opus 5.5 (the fast-mode default since v2.1.280), Opus 5, and Opus 4.8. Not available on Sonnet, Haiku, or Fable. Turning it on from an unsupported model switches you to Opus.
+- Pricing per million input/output tokens: **$8 / $40 on Opus 5.5**, $10 / $50 on Opus 5 and Opus 4.8 (versus $4 / $20 for standard Opus 5.5).
+- On subscription plans (Pro/Max/Team/Enterprise) fast mode bills to usage credits only — it isn't included in plan limits — and Team/Enterprise orgs need an Owner to enable it.
+- A `↯` icon next to the prompt shows it's on. For the best cache efficiency, enable it at the start of a session rather than mid-conversation.
 
-Useful for "just do this one quick thing" interjections in the middle of a longer session. To exit:
-
-```
-/fast off
-```
-
-Or just rely on `/model` to swap back manually.
-
-`/fast` is not a substitute for picking the right model upfront. For sessions that should be cheap end to end, set `model: claude-haiku-4-5` in settings and skip `/fast` entirely.
+Use it when latency matters more than cost — live debugging, rapid iteration. For sessions that should be cheap end to end, pick a smaller model instead (`/model haiku` or `/model sonnet`).
 
 ---
 
 ## Context Auto-Compaction
 
-When context usage crosses a threshold (default 75% of the window), Claude Code auto-compacts: it summarizes older turns and drops the originals. The summary stays; the verbose history goes.
+When a conversation approaches the model's context limit, Claude Code auto-compacts: it summarizes the history and continues from the summary. By default the threshold is the model's full context window (1M tokens on current models), except that cloud sessions compact slightly earlier and Sonnet 4.6 / Opus 4.6 without extended context compact at 200K.
 
-What's preserved:
+What happens to each kind of content (per the official [context window](https://code.claude.com/docs/en/context-window#what-survives-compaction) docs):
 
-- The system prompt.
-- All active skills and agent definitions.
-- The most recent N turns verbatim.
-- A condensed summary of everything before that.
+- **Re-injected from disk:** system prompt and output style, project-root `CLAUDE.md` and unscoped rules, auto memory, the plan from plan mode, current skill descriptions.
+- **Re-attached with caps:** invoked skill bodies (first 5,000 tokens each, 25,000 total, oldest dropped first); up to five recently modified files Claude had read or edited.
+- **Reloaded on demand:** nested `CLAUDE.md` files and path-scoped rules, once Claude touches a matching file again.
+- **Summarized:** everything else, including exact wording of older messages and earlier tool outputs. The originals remain in the session transcript on disk.
+- **Unaffected:** background commands and sub-agents keep running.
 
-What's lost:
+Tune the threshold with `/autocompact 500k` (saved per model), `autoCompactWindow` in settings, `--autocompact` for one launch, or `CLAUDE_CODE_AUTO_COMPACT_WINDOW` in scripts (100K–1M). Turn auto-compaction off from `/config`.
 
-- Exact wording of older messages.
-- Specific tool outputs from earlier turns.
-- Conversation nuance.
-
-The agent receives a compaction notification and tries to preserve key facts during the summary. It is good enough for most workflows but imperfect for tasks that require recalling a 3-hour-old error message verbatim. (The originals remain in the session transcript on disk.)
-
-Auto-compaction can be toggled via `/config`. For targeted compression, `/rewind` offers "Summarize from here" / "Summarize up to here", which compact only one side of a chosen message.
+**Idle compaction** (v2.1.299+): in the terminal, a conversation over 200K tokens that sits idle for roughly an hour is compacted shortly before its prompt cache expires, so your next message doesn't pay to re-send the full uncached history. Disable with `"idleCompaction": false`.
 
 Manual compaction:
 
@@ -284,63 +252,36 @@ Manual compaction:
 /compact focus on the database migration work   # optional instructions
 ```
 
-Forces compaction immediately. Useful right before a context-heavy operation (e.g. spawning a sub-agent that will return a large payload).
+Useful right before a context-heavy operation. For targeted compression, `/rewind` offers "Summarize from here" / "Summarize up to here."
 
-**When to disable auto-compaction:**
-
-- Sessions where exact history matters (legal review, audit, deep debugging).
-- Sessions where you'd rather hit a context error and decide manually how to recover.
-
-**When to compact aggressively:**
-
-- Long sessions that have wandered through unrelated topics.
-- Right before a high-value reasoning step where you want all available context for the new question, not the chat history.
-
-If compaction loses something critical, `/rewind` to a pre-compaction prompt, or pull details back from the on-disk transcript.
+**When to disable auto-compaction:** sessions where exact history matters (audit, deep debugging), or where you'd rather hit a context error and decide manually. If compaction loses something critical, `/rewind` to a pre-compaction prompt, or pull details back from the on-disk transcript.
 
 ---
 
-## Thinking Budgets: MAX_THINKING_TOKENS and alwaysThinkingEnabled
+## Effort Levels and Thinking
 
-Extended thinking (the model's private chain-of-thought) is on by default for Opus and Sonnet. It dramatically improves complex reasoning but consumes tokens and adds latency.
+Current Claude models use **adaptive thinking**: the model decides whether and how much to reason on each step, steered by an **effort level**. Effort, not a token budget, is the main knob.
 
-`settings.json`:
+| Model | Effort levels | Default effort in Claude Code | Can thinking be turned off? |
+|-------|---------------|-------------------------------|-----------------------------|
+| Fable 5.1 / Fable 5 | `low`, `medium`, `high`, `xhigh`, `max` | `high` | No |
+| Opus 5.5, Sonnet 5.5, Haiku 5.5 | `low` … `max` | `medium` | No |
+| Opus 5, Sonnet 5, Opus 4.8 | `low` … `max` | `high` | Yes |
+| Opus 4.6, Sonnet 4.6 | `low`, `medium`, `high`, `max` | `high` | Yes |
 
-```json
-{
-  "alwaysThinkingEnabled": true,
-  "env": { "MAX_THINKING_TOKENS": "16000" }
-}
-```
+Set effort with `/effort <level>` (or the left/right arrows in the `/model` picker), `claude --effort <level>`, `CLAUDE_CODE_EFFORT_LEVEL`, or per model under `modelSettings` in settings. `Enter` saves the level as your default for that model; `s` applies it to this session only; `max` always applies to the current session only. Include `ultrathink` in a prompt to request deeper reasoning for one turn without changing the session level.
 
-Or environment:
+Lower effort is faster and cheaper for routine work; raise it for the one turn that needs it.
 
-```bash
-export MAX_THINKING_TOKENS=10000
-```
+Thinking toggles still exist for models that allow it: `Option+T` (macOS) / `Alt+T` (Windows/Linux) toggles for the session, and `alwaysThinkingEnabled` in settings sets the default. They have no effect on Opus 5.5, Sonnet 5.5, Haiku 5.5, or the Fable models, which always think. `MAX_THINKING_TOKENS` sets a fixed budget only on older models (on Opus 4.6 / Sonnet 4.6 it applies with `CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1`); prefer effort levels.
 
-Default budget is 31,999 tokens. Effective ranges:
-
-| Budget | When |
-|--------|------|
-| 0 (off) | Trivial tasks; Haiku worker fleets; pure tool-call workflows |
-| 4,000 | Quick edits, simple debugging |
-| 16,000 | Default for most coding sessions |
-| 32,000+ | Architecture decisions, deep analysis, plan generation |
-
-Toggle in-session: Option+T (macOS) / Alt+T (Linux/WSL).
-
-See the thinking output as it streams: Ctrl+O.
-
-Thinking tokens cost the same as output tokens. A session with 32k budget per turn can get expensive fast. Lower it for routine work; raise it for the one turn that needs it (asking the model to "think harder" in the prompt nudges a single turn).
-
-Newer models also support an `effortLevel` setting (`low` through `max`) that trades depth for speed and cost.
+Press `Ctrl+O` to see thinking and tool detail in the transcript view.
 
 ---
 
 ## Session Resume and Branching
 
-Every session transcript is saved under `~/.claude/projects/<munged-project-path>/`. Resume:
+Every session transcript is saved under `~/.claude/projects/<project-directory>/`. Resume:
 
 ```bash
 claude --resume <session-id-or-name>
@@ -349,21 +290,24 @@ claude --resume
 
 # or just continue the most recent session in this directory
 claude --continue
+
+# or find sessions linked to a pull request
+claude --from-pr 1234
 ```
 
-Name sessions for easier resumption: `claude -n "auth-refactor"`, then `claude --resume auth-refactor`. The session restores with full state: history, checkpoints, working directory. Useful when:
+Name sessions for easier resumption: `claude -n auth-refactor` at startup or `/rename auth-refactor` mid-session, then `claude --resume auth-refactor`. A resumed session keeps the model it was using. Useful when:
 
 - A session crashed or you restarted your terminal.
 - You want to pick up tomorrow on the same task.
-- You want to fork an old session as a starting point.
+- You want to try an alternative from an old starting point.
 
-To fork rather than resume:
+To branch rather than resume:
 
 ```bash
 claude --resume <id> --fork-session
 ```
 
-The new session has the same starting state but a new ID. Edits to the fork don't affect the original. Use for "let me try this alternative approach without losing the current one."
+Or, inside a session, `/branch [name]` creates a branch of the conversation at this point and switches you into it. Either way you get a new session ID; changes to the branch don't affect the original. `/cd <path>` moves the current session to another working directory without restarting.
 
 ---
 
@@ -371,11 +315,11 @@ The new session has the same starting state but a new ID. Edits to the fork don'
 
 Beyond simple sub-agent isolation (see [agents.md](agents.md#worktree-isolation)), worktrees enable a few power patterns:
 
-**Parallel feature branches with shared context.** Open one session per worktree, all sharing the same `.git`. Each session has its own working directory but agents in any session can read the others through their absolute paths.
+**Parallel feature branches.** `claude --worktree feature-a` and `claude --worktree feature-b` in two terminals give each session its own checkout under `<repo>/.claude/worktrees/`, all sharing the same `.git`. Pass a PR or GitLab MR URL to `--worktree` to branch from it.
 
-**A/B implementation comparison.** Spawn two general-purpose agents, each in its own worktree, each implementing the same feature differently. Compare diffs side by side. Pick or merge.
+**A/B implementation comparison.** Spawn two general-purpose agents with `isolation: worktree`, each implementing the same feature differently. Compare diffs side by side. Pick or merge.
 
-**Long-running background agent.** A worktree dedicated to "the agent that keeps the test suite passing" — runs autonomously, fixes flaky tests, opens PRs.
+**Long-running background agent.** A background session (`claude --bg ...`) that changes code works in its own worktree and commits and pushes before it finishes.
 
 Cleanup:
 
@@ -394,22 +338,24 @@ Old worktrees pile up. Audit weekly.
 For scripting and piping, force a stable output format:
 
 ```bash
-claude --output-format json --print "list the top 3 issues in src/api/"
+claude -p "list the top 3 issues in src/api/" --output-format json
 ```
 
 Modes:
 
 - `text` — default, human-readable.
-- `json` — structured response with full tool history, costs, message timestamps.
+- `json` — structured result including cost, usage, and the session ID.
 - `stream-json` — newline-delimited JSON events as they happen. For real-time consumption.
 
-JSON output is the right primitive when wiring Claude Code into a larger system — CI checks, dashboards, automation. `--print` (`-p`) is already non-interactive:
+JSON output is the right primitive when wiring Claude Code into a larger system — CI checks, dashboards, automation:
 
 ```bash
-claude --print --output-format json \
+claude -p --output-format json \
   "Summarize CHANGELOG.md since v2.0" \
   | jq -r '.result'
 ```
+
+For validated structured output, add `--json-schema '<schema>'`. Useful companions for unattended runs: `--max-turns`, `--max-budget-usd`, `--permission-mode dontAsk` with an explicit `--allowedTools` list, and `--bare` to skip auto-discovery of hooks, skills, plugins, and MCP servers.
 
 ---
 
@@ -419,31 +365,38 @@ Settings (`settings.json`):
 
 | Knob | Purpose | Default |
 |------|---------|---------|
-| `model` | Which model | account default (Sonnet 4.6 for most) |
-| `effortLevel` | Reasoning effort (`low`…`max`) on supported models | model-dependent |
-| `alwaysThinkingEnabled` | Extended thinking on by default | true |
-| `permissions.defaultMode` | Tool-call gating (`default`, `acceptEdits`, `plan`, `bypassPermissions`, …) | `default` |
-| `outputStyle` | Response style (`default`, `Explanatory`, `Learning`, custom) | `default` |
+| `model` | Which model | Account default: Opus 5.5 on Pro, Max, Team, Enterprise, the Anthropic API, Bedrock, Agent Platform, and Claude Platform on AWS (v2.1.280+); Sonnet 4.5 on Foundry |
+| `effortLevel` / `modelSettings` | Reasoning effort, globally or per model | Model-dependent (see above) |
+| `fastMode` | Opus fast mode | `false` |
+| `alwaysThinkingEnabled` | Thinking default on models that allow turning it off | on |
+| `permissions.defaultMode` | Starting permission mode (`default`/`manual`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions`) | `auto` for interactive terminal and VS Code sessions (v2.1.283+) |
+| `outputStyle` | Response style | `default` |
+| `autoCompactWindow` / `idleCompaction` | Compaction threshold / idle compaction | Model's context window / on |
 | `autoUpdatesChannel` | `latest` or `stable` release channel | `latest` |
 
 Environment variables (settable in the `env` block of `settings.json`):
 
 | Variable | Purpose |
 |----------|---------|
-| `MAX_THINKING_TOKENS` | Extended-thinking token cap |
-| `ENABLE_TOOL_SEARCH` | Defer MCP tool schemas (`true`/`auto`/`false`) |
-| `MCP_TIMEOUT` | MCP server startup timeout (ms) |
-| `MCP_TOOL_TIMEOUT` | MCP tool execution timeout (ms) |
+| `ANTHROPIC_DEFAULT_MODEL` | Model new sessions start on when nothing else selects one |
+| `CLAUDE_CODE_EFFORT_LEVEL` | Force an effort level |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | Default model for sub-agents |
+| `ENABLE_TOOL_SEARCH` | Defer MCP tool schemas (`true`/`auto`/`auto:N`/`false`) |
+| `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` | MCP server startup / tool execution timeouts (ms) |
 | `BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS` | Bash tool timeouts |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Compaction threshold in tokens |
 | `DISABLE_AUTOUPDATER` | Stop background updates |
 
-Most users tune three: `model`, `permissions.defaultMode`, `outputStyle`. Beyond that, change one at a time and measure.
+Most users tune three: `model`, `permissions.defaultMode`, `outputStyle`. Beyond that, change one at a time and measure. `/doctor` now audits setup and context cost (unused skills, MCP servers, slow hooks) and proposes fixes.
 
 ---
 
 ## Related
 
-- [Agents](agents.md) — fan-out patterns, background sub-agents, worktree isolation.
+- [Agents](agents.md) — fan-out patterns, background and nested sub-agents, worktree isolation.
+- [Background and scheduled work](background-and-scheduled-work.md) — agent view, workflows, `/goal`, cloud scheduled tasks.
 - [MCP Servers](mcp-servers.md) — deferred tools detail.
 - [Hooks](hooks.md) — gating Stop, blocking PreToolUse.
 - [Troubleshooting](troubleshooting.md) — when these features misbehave.
+
+**Sources:** [Checkpointing](https://code.claude.com/docs/en/checkpointing) · [Tools reference](https://code.claude.com/docs/en/tools-reference) · [Scheduled tasks](https://code.claude.com/docs/en/scheduled-tasks) · [Output styles](https://code.claude.com/docs/en/output-styles) · [Fast mode](https://code.claude.com/docs/en/fast-mode) · [Model configuration](https://code.claude.com/docs/en/model-config) · [Context window](https://code.claude.com/docs/en/context-window) · [Sessions](https://code.claude.com/docs/en/sessions) · [CLI reference](https://code.claude.com/docs/en/cli-reference)

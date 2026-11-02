@@ -1,3 +1,15 @@
+<!--
+TEMPLATE NOTES (this HTML comment is stripped before Claude sees the file, so it costs no context):
+- This template is a menu, not a target. Claude Code loads CLAUDE.md in full every session; the official
+  guidance is to keep each CLAUDE.md under ~200 lines. Delete every section Claude could infer from the code.
+- Move "sometimes relevant" material to skills (.claude/skills/) or path-scoped rules
+  (.claude/rules/*.md with `paths:` frontmatter) instead of keeping it here.
+- If this repo also has an AGENTS.md for other coding agents, Claude Code reads only CLAUDE.md when both
+  exist. Put shared instructions in AGENTS.md and start this file with the line:  @AGENTS.md
+- Run /init to generate a draft from the codebase, and /doctor later to find duplicated or derivable content.
+Last verified against Claude Code docs: 2026-10.
+-->
+
 # Project Name
 
 Brief description of the project and its goals.
@@ -32,8 +44,10 @@ project-root/
 ├── docs/                  # Documentation
 ├── scripts/               # Automation scripts
 ├── .claude/               # Claude Code configuration
+│   ├── settings.json     # Shared permissions, hooks, env (committed)
 │   ├── agents/           # Custom sub-agent definitions
 │   ├── skills/           # Custom skills
+│   ├── rules/            # Path-scoped instruction files
 │   └── hooks/            # Event hook scripts
 ├── .mcp.json             # Project-scoped MCP servers
 ├── CLAUDE.md             # This file
@@ -107,19 +121,17 @@ npm run deploy  # or kubectl apply -f k8s/
 
 ### MCP Servers Required
 
-**Essential:**
-- `@modelcontextprotocol/server-github` - Repository management
-- `@modelcontextprotocol/server-filesystem` - File operations
-- `@modelcontextprotocol/server-memory` - State persistence
+List only servers this project actually needs; each one adds tools (and context) to every session. Examples — verify current package names in the [MCP catalog](../guides/mcp-servers/catalog.md) before adopting:
 
-**Recommended:**
-- `@modelcontextprotocol/server-postgres` - Database access (if using PostgreSQL)
-- `@mojoatomic/quality-guard-mcp` - Code quality checks
-- `@MarcusJellinghaus/mcp-code-checker` - Testing integration
+**Common:**
+- GitHub's official MCP server (hosted at `https://api.githubcopilot.com/mcp/`) - Issues, PRs, repository operations
+- `postgres-mcp` ("Postgres MCP Pro", via `uvx`) - Database access (if using PostgreSQL)
 
 **Optional:**
-- `@containers/kubernetes-mcp-server` - K8s management (if using Kubernetes)
-- Docker MCP - Container operations
+- `@modelcontextprotocol/server-memory` - Knowledge-graph memory (Claude Code also has built-in auto memory)
+- `kubernetes-mcp-server` - K8s management (if using Kubernetes)
+
+Claude Code's built-in tools already read, edit, and search files in the project, so a filesystem server is only needed for paths outside it.
 
 ### MCP Configuration
 
@@ -129,28 +141,18 @@ npm run deploy  # or kubectl apply -f k8s/
 {
   "mcpServers": {
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_TOKEN}"
       }
     },
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/path/to/this/project"
-      ]
-    },
-    "memory": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory",
-        "--memory-path",
-        "/path/to/this/project/.claude/memory"
-      ]
+    "postgres": {
+      "command": "uvx",
+      "args": ["postgres-mcp", "--access-mode=restricted"],
+      "env": {
+        "DATABASE_URI": "${DATABASE_URL}"
+      }
     }
   }
 }
@@ -177,11 +179,11 @@ PROJECT_ROOT=/path/to/project
 
 ### Skills Configuration
 
-**Available Skills:**
+**Available Skills** (invoke with `/skill-name` or by describing the task):
 
 1. **code-validator** - Automated code quality checks
    ```
-   "Run the code-validator skill"
+   /code-validator
    ```
 
 2. **test-generator** - Generate test suites
@@ -194,7 +196,7 @@ PROJECT_ROOT=/path/to/project
    "Run documentation-writer on the services directory"
    ```
 
-**Custom Skills**: See `.claude/skills/` directory
+**Custom Skills**: See `.claude/skills/` directory. Claude Code also bundles skills such as `/code-review`, `/simplify`, and `/verify`.
 
 ---
 
@@ -202,7 +204,7 @@ PROJECT_ROOT=/path/to/project
 
 ### Available Agents
 
-Sub-agents are defined as Markdown files with YAML frontmatter in `.claude/agents/` (managed via the `/agents` command). [AGENTS.md](AGENTS.md) carries shared instructions read by agent tools.
+Sub-agents are defined as Markdown files with YAML frontmatter in `.claude/agents/` (ask Claude to create one, or write the file). [AGENTS.md](AGENTS.md) carries shared instructions read by agent tools.
 
 **Quick Reference:**
 
@@ -579,6 +581,7 @@ npm audit  # or pip-audit
 - Environment variables set
 - `permissions.deny` rules in `.claude/settings.json` not blocking needed files
 - Project structure matches CLAUDE.md
+- Run `/doctor` for a setup checkup, or `claude --safe-mode` to rule out customizations
 
 ---
 
@@ -590,14 +593,14 @@ npm audit  # or pip-audit
 - [Architecture Guide](docs/architecture.md)
 
 ### External Resources
-- [Technology Stack Docs](#)
-- [Best Practices](#)
-- [Security Guidelines](#)
+- Technology Stack Docs: `<add link>`
+- Best Practices: `<add link>`
+- Security Guidelines: `<add link>`
 
 ### Team Resources
-- [Team Wiki](#)
-- [Runbooks](#)
-- [On-Call Guide](#)
+- Team Wiki: `<add link>`
+- Runbooks: `<add link>`
+- On-Call Guide: `<add link>`
 
 ---
 
@@ -656,6 +659,9 @@ npm audit  # or pip-audit
 
 ## Changelog
 
+### Version 1.0.2 (2026-10-21)
+- Replaced archived/nonexistent MCP packages (`@modelcontextprotocol/server-github`, `server-postgres`, the fabricated `--memory-path` flag, unpublished QA servers); added the AGENTS.md import pattern and size guidance; removed `/agents` management reference (that UI was removed in v2.1.198)
+
 ### Version 1.0.1 (2026-06-11)
 - Updated Claude Code integration details (MCP config in `.mcp.json`, agents in `.claude/agents/`, `permissions.deny` for file exclusions)
 
@@ -666,7 +672,7 @@ npm audit  # or pip-audit
 
 ---
 
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-10-21
 
 **Claude Code Compatible**: ✅ Yes
 

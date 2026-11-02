@@ -2,7 +2,7 @@
 
 The first hour. Install one tool, authenticate, run hello-world, hit one MCP server, write one skill.
 
-Last updated 2026-06-11.
+Last updated 2026-10-21. Prices are as of October 2026.
 
 ---
 
@@ -26,7 +26,7 @@ Last updated 2026-06-11.
 A working developer environment:
 
 - Git installed and configured
-- Node.js 20+ (for Claude Code, most MCP servers)
+- Node.js 22+ (only if you install Claude Code via npm; also used by most MCP servers — the native Claude Code installer needs no Node.js)
 - Python 3.11+ (for some MCP servers, evaluation tools)
 - A terminal you're comfortable in
 - A code editor (VS Code, JetBrains, Vim, or any other)
@@ -47,6 +47,8 @@ This walkthrough covers three paths. Pick one based on the [getting-started](get
 - **Path B: Cursor** — IDE-first, integrated agent mode
 - **Path C: GitHub Copilot** — IDE-first, inline completions + chat + coding agent
 
+OpenAI Codex follows the same shape as Path A (terminal agent, `AGENTS.md` for rules) — see the [Codex Guide](codex/README.md).
+
 The setup steps differ. The principles (auth, project rules, MCP, skills) are similar.
 
 ---
@@ -56,14 +58,17 @@ The setup steps differ. The principles (auth, project rules, MCP, skills) are si
 ### Path A: Claude Code
 
 ```bash
-# Install globally via npm
-npm install -g @anthropic-ai/claude-code
+# Native installer (recommended) — macOS, Linux, WSL
+curl -fsSL https://claude.ai/install.sh | bash
+# Windows PowerShell: irm https://claude.ai/install.ps1 | iex
+# Homebrew: brew install --cask claude-code
+# npm (Node.js 22+): npm install -g @anthropic-ai/claude-code
 
 # Verify
 claude --version
 ```
 
-You should see something like `claude 1.x.x`.
+You should see a version number such as `2.1.x (Claude Code)`. Native installs auto-update; Homebrew/WinGet/npm installs are updated manually. `claude doctor` prints installation diagnostics.
 
 ### Path B: Cursor
 
@@ -96,13 +101,13 @@ In Vim/Neovim: install via your plugin manager — see [github.com/github/copilo
 
 Two options:
 
-**Option 1: Claude Pro / Max subscription.**
+**Option 1: Claude subscription (Pro, Max, Team, or Enterprise).**
 
 ```bash
 claude
 ```
 
-Then type `/login` inside the session. Opens a browser, log in with your Anthropic account. Subscription usage tracked there.
+Follow the browser prompts to log in (or type `/login` inside a session). The free Claude plan does not include Claude Code.
 
 **Option 2: API key.**
 
@@ -112,20 +117,16 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 Add to your shell profile (`~/.zshrc` or `~/.bashrc`) to persist.
 
-Get your API key from [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+Get your API key from the [Claude Console](https://platform.claude.com/). Claude Code can also run against Amazon Bedrock, Google Cloud, or Microsoft Foundry.
 
 ### Path B: Cursor
 
 1. Launch Cursor.
 2. On first launch, you'll be prompted to sign in.
 3. Sign in with email, GitHub, or Google.
-4. Free tier works immediately. For Pro features, upgrade in Settings → Account.
+4. Free tier works immediately. Paid plans (as of October 2026: Plus $8, Premium $30, Super $100, Ultra $200, Teams $30+/user) are managed in your account settings.
 
-For Bring-Your-Own-Key (use your own Anthropic / OpenAI / Google API keys):
-
-1. Settings → Models.
-2. Toggle "Use my API key" for the provider.
-3. Paste the key.
+Note: Cursor bills third-party models (Claude, GPT, Gemini) separately by usage on top of the plan price. Check Cursor's models/pricing docs for current bring-your-own-key options before relying on them.
 
 ### Path C: GitHub Copilot
 
@@ -136,7 +137,7 @@ For Bring-Your-Own-Key (use your own Anthropic / OpenAI / Google API keys):
 
 If you don't have one yet:
 - Go to [github.com/settings/copilot](https://github.com/settings/copilot).
-- Subscribe to Pro ($10/mo) or use Copilot Free if eligible.
+- Subscribe to Pro ($10/mo), Pro+ ($39/mo), or Max ($100/mo), or use Copilot Free (2,000 completions + 50 chat requests/month). As of October 2026 paid usage is metered in GitHub AI Credits (1 credit = $0.01).
 
 ---
 
@@ -179,7 +180,7 @@ Create hello.py and hello.sh that both print "hello from cursor"
 ```
 
 4. Cursor proposes changes. Accept.
-5. Open the integrated terminal (`Ctrl + ` `): `python hello.py` and `bash hello.sh`.
+5. Open the integrated terminal (Ctrl + backtick): `python hello.py` and `bash hello.sh`.
 
 ### Path C: GitHub Copilot
 
@@ -188,7 +189,8 @@ Create hello.py and hello.sh that both print "hello from cursor"
 
 ```python
 # print hello from copilot
-def 
+def hello():
+    ...  # pause here; Copilot suggests the body
 ```
 
 3. Copilot suggests the function body. Accept with Tab.
@@ -202,7 +204,7 @@ For chat: `Cmd/Ctrl + I` opens inline chat, or click the Copilot Chat icon in th
 
 MCP (Model Context Protocol) servers are tools your AI tool can call. We'll connect the simplest one: a filesystem server.
 
-This step applies to Claude Code primarily; Cursor supports MCP similarly; GitHub Copilot also supports MCP in agent mode (generally available) and in the Copilot coding agent, configured per-repo or in VS Code settings.
+This step applies to Claude Code primarily; Cursor, OpenAI Codex, and GitHub Copilot (agent mode, Copilot CLI, and the cloud agent) also support MCP servers, each with its own config location.
 
 ### Path A: Claude Code
 
@@ -235,14 +237,14 @@ The model should call the filesystem MCP server's `list_directory` tool.
 
 ### Path B: Cursor (MCP support)
 
-Cursor has supported MCP since ~0.45 (early 2025) via Settings → MCP Servers. Same config format. Restart Cursor after editing.
+Cursor manages MCP servers alongside rules, skills, and plugins in its customization settings, using the same `mcpServers` JSON shape. Restart Cursor after editing.
 
 ### Add a more useful MCP server
 
 Once you've verified MCP works, swap to one of these:
 
-- **GitHub MCP** (`@modelcontextprotocol/server-github`) — read issues, PRs, repos
-- **Postgres MCP** (`@modelcontextprotocol/server-postgres`) — query databases
+- **GitHub MCP** (GitHub's hosted server at `https://api.githubcopilot.com/mcp/`) — read issues, PRs, repos
+- **Postgres MCP** (e.g. Postgres MCP Pro; the old `@modelcontextprotocol/server-postgres` is archived) — query databases
 - **Slack MCP** — read messages, post replies
 - **Sequential Thinking MCP** — structured reasoning helper
 - **Memory MCP** — persistent memory across sessions
@@ -253,7 +255,7 @@ See the [MCP Servers guide](mcp-servers/) for a longer list and config patterns.
 
 ## Write One Skill / Prompt Snippet
 
-A "skill" is a reusable prompt template. Claude Code has a formal skill system; for other tools, the equivalent is a saved prompt or a `.cursorrules` snippet.
+A "skill" is a reusable prompt template. Claude Code has a formal skill system; for other tools, the equivalent is that tool's skills feature (Copilot, Codex, and Cursor all document skills) or a saved prompt / rules snippet.
 
 ### Path A: Claude Code skill
 
@@ -290,7 +292,7 @@ The skill loads and Claude follows the instructions. (Claude also invokes skills
 
 ### Path B: Cursor (project rules)
 
-Create `.cursorrules` in your project root:
+Create `.cursor/rules/conventions.mdc` (the legacy `.cursorrules` root file still appears in older projects):
 
 ```text
 # Project conventions
@@ -330,7 +332,7 @@ The single highest-leverage configuration: rules that tell the AI about your pro
 
 ### Universal: top-level project document
 
-Create `AGENTS.md` (recognized by Cursor, Cody, and increasingly others) or per-tool variants:
+Create `AGENTS.md` (read by OpenAI Codex, GitHub Copilot, Cursor, and other agents) or per-tool variants:
 
 - `CLAUDE.md` — Claude Code
 - `.cursorrules` (legacy) or `.cursor/rules/` (current) — Cursor
@@ -398,11 +400,13 @@ You're ready for [first-steps.md](first-steps.md) — the first week.
 ### Claude Code
 
 **"command not found: claude"**
-- npm global bin not in PATH. Check `npm config get prefix` and add `$(npm config get prefix)/bin` to PATH.
+- Native install: the launcher lives at `~/.local/bin/claude`; add `~/.local/bin` to PATH and open a new terminal.
+- npm install: check `npm config get prefix` and add `$(npm config get prefix)/bin` to PATH.
+- Run `claude doctor` for installation diagnostics.
 
 **"Invalid API key"**
 - Check `echo $ANTHROPIC_API_KEY` returns the right key.
-- Verify it's active at [console.anthropic.com](https://console.anthropic.com).
+- Verify it's active in the [Claude Console](https://platform.claude.com/).
 - For subscription users, run `claude` and type `/login` instead.
 
 **MCP server not loading**
@@ -420,8 +424,8 @@ You're ready for [first-steps.md](first-steps.md) — the first week.
 - Try toggling models in Settings → Models.
 
 **Slow completions**
-- Check Settings → Models — the "fast" tier might be exhausted, falling back to slow.
-- Free plan limits: 50 slow / mo (or limited daily). Upgrade or wait for reset.
+- Check your usage in account settings — plan usage refreshes weekly as of October 2026.
+- Free-plan usage is limited; upgrade or wait for the refresh.
 
 **Indexing taking forever**
 - Add `.cursorignore` with `node_modules`, `dist`, `build`, lockfiles.
@@ -439,7 +443,7 @@ You're ready for [first-steps.md](first-steps.md) — the first week.
 - Tab key may be bound to indentation; try `Cmd/Ctrl + →` instead.
 
 **Chat says "I can't help with that"**
-- Some chat features need specific subscriptions (Pro Plus / Enterprise).
+- Some features need specific plans (for example, delegating to third-party agents needs Pro+ or Max).
 - Try simpler chat phrasing; explicit "explain this code" works in all tiers.
 
 ### General
@@ -462,6 +466,7 @@ You're ready for [first-steps.md](first-steps.md) — the first week.
 - [First Steps](first-steps.md)
 - [Claude Code Guide](claude-code/)
 - [GitHub Copilot Guide](github-copilot/)
+- [OpenAI Codex Guide](codex/README.md)
 - [MCP Servers Guide](mcp-servers/)
 - [Skills Guide](skills/)
 - [Context Management](../best-practices/context-management.md)

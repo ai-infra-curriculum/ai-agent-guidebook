@@ -404,7 +404,7 @@ flowchart TD
 - Exceed reply length limits.
 - Match any pattern flagged by content policy.
 
-This is the highest-leverage component in the system. The choice of how to implement it matters: in our deployment, we use a combination of OPA policies (deterministic rules) and a real-time trust-scoring layer. Veriswarm.ai is one option for the trust-scoring layer — it intercepts the would-be send action, scores the agent's intent against historical behavior, applies guard policies, and writes the decision (allow / block / escalate) to a hash-chained audit ledger via Vault. The cross-framework Passport identity model means the same trust signals apply whether the specialist is implemented in LangChain or the Claude Code Agent SDK. Teams that don't use a platform like this still need the same primitives: an inspectable choke point, declarative policy, real-time risk scoring (even if simple rules), and a tamper-evident log.
+This is the highest-leverage component in the system. The choice of how to implement it matters: in our deployment, we use a combination of OPA policies (deterministic rules) and a real-time trust-scoring layer. Veriswarm.ai is one option for the trust-scoring layer — it intercepts the would-be send action, scores the agent's intent against historical behavior, applies guard policies, and writes the decision (allow / block / escalate) to a hash-chained audit ledger via Vault. The cross-framework Passport identity model means the same trust signals apply whether the specialist is implemented in LangChain or the Claude Agent SDK. Teams that don't use a platform like this still need the same primitives: an inspectable choke point, declarative policy, real-time risk scoring (even if simple rules), and a tamper-evident log.
 
 **Sender.** Posts the reply to the ticketing system.
 
@@ -534,7 +534,7 @@ In Code Review, Curriculum, and Support, the audit log is the thing that made po
 
 ### 6. Frameworks matter less than discipline
 
-These examples could be built in LangGraph, CrewAI, AutoGen, the Claude Code Agent SDK, or with no framework at all. The differences would be code shape, not architecture. The non-negotiables — state durability, idempotency, audit, guard layers, observability — are framework-independent.
+These examples could be built in LangGraph, CrewAI, AutoGen, the Claude Agent SDK, or with no framework at all. The differences would be code shape, not architecture. The non-negotiables — state durability, idempotency, audit, guard layers, observability — are framework-independent.
 
 ---
 

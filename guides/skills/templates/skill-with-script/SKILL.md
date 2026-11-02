@@ -1,39 +1,31 @@
 ---
-name: skill-with-script-template
+name: skill-with-script
 description: |
   TEMPLATE: replace with a sharp description. This template is for skills
   that bundle one or more helper scripts (Bash, Python, Node) and orchestrate
   them as part of a multi-step workflow. Triggers: replace these with the
   concrete phrases, file types, or commands that should cause the skill to
   load. Add "Skip when..." anti-triggers if needed to suppress false matches.
-version: 0.1.0
-requires:
-  external-tools:
-    - bash
-    - python3
+compatibility: Requires bash, python3, and git
+# Pre-approve only the bundled scripts, scoped to this skill's own folder.
+# Everything else (Write, Edit, other Bash) still goes through normal
+# permission checks. ${CLAUDE_SKILL_DIR} is a Claude Code substitution.
+allowed-tools: Read Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/validate.py *) Bash(bash ${CLAUDE_SKILL_DIR}/scripts/verify.sh *)
+# Claude Code extensions (remove before uploading to claude.ai / the Skills API):
+disable-model-invocation: true
+argument-hint: "[target-path]"
 metadata:
-  allowed-tools:
-    - Read
-    - Edit
-    - Write
-    - Bash
-    - Grep
+  version: "0.1.0"
   category: example
-  tags: [template, advanced, scripts, multi-step]
-  author: your-team
-inputs:
-  - name: target_path
-    description: |
-      The file or directory the skill should operate on. Optional; if not
-      provided, the skill prompts the user.
-    required: false
-    type: string
+  tags: "template, advanced, scripts, multi-step"
+  owner: your-team
 ---
 
 # Skill With Script Template
 
 A more advanced skill scaffold demonstrating bundled scripts, multi-step
-workflows, declared inputs, and explicit verification.
+workflows, arguments, and explicit verification. Invoke as
+`/skill-with-script <target-path>`; the path arrives as `$ARGUMENTS`.
 
 ## When to Use
 
@@ -57,7 +49,7 @@ Check at the start of the procedure:
 2. `python3` is available on PATH (run `which python3`).
 3. The repo has a clean working tree (run `git status --porcelain`); if not,
    ask the user whether to proceed.
-4. If `inputs.target_path` was not provided, prompt the user for it.
+4. If no target path was passed (`$ARGUMENTS` is empty), ask the user for it.
 
 If any prerequisite fails, stop and report. Do not improvise.
 
@@ -82,7 +74,7 @@ Save a short discovery summary to a temp file at `/tmp/skill-discovery-{ts}.json
 Run the bundled validation script:
 
 ```bash
-python3 scripts/validate.py --input <target_path> --discovery /tmp/skill-discovery-{ts}.json
+python3 ${CLAUDE_SKILL_DIR}/scripts/validate.py --input <target_path> --discovery /tmp/skill-discovery-{ts}.json
 ```
 
 The script exits 0 on success, non-zero on failure. On failure, read the
@@ -117,7 +109,7 @@ so the workflow can be resumed if interrupted.
 Run the bundled verification script:
 
 ```bash
-bash scripts/verify.sh <target_path>
+bash ${CLAUDE_SKILL_DIR}/scripts/verify.sh <target_path>
 ```
 
 The script checks the post-condition. Exit 0 means the changes are in place
@@ -126,7 +118,7 @@ issue and roll back the most recent changes if possible (see Rollback).
 
 ### Step 6: Report
 
-Generate a summary using `templates/report.md.tmpl`. Fill placeholders with
+Generate a summary using `${CLAUDE_SKILL_DIR}/templates/report.md.tmpl`. Fill placeholders with
 values from discovery, plan, and execution. Show the report to the user.
 
 ## Verification
@@ -214,6 +206,9 @@ Iteration tips:
 4. **Iterate on the description** — see `creating.md`. The most common bug
    is the description, not the body.
 
-Before shipping: delete this section, narrow `allowed-tools`, populate
-`references/` and `examples/`, add to your catalog or plugin manifest, and
-bump `version` to `1.0.0`.
+Before shipping: delete this section, re-check that `allowed-tools` lists only
+the exact script invocations the body runs (it pre-approves them; it is not a
+restriction), populate `references/` and `examples/`, add to your catalog or
+plugin, and bump `metadata.version` to `"1.0.0"`. If the skill must also work
+on claude.ai or the Skills API, drop the Claude Code-only keys
+(`disable-model-invocation`, `argument-hint`).
